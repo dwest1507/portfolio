@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+indexes/*.index
+indexes/*.pkl
+indexes/*.json
+!indexes/.gitkeep
+.venv/
+venv/
+dist/
+*.egg-info/

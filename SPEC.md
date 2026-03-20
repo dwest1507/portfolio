@@ -630,32 +630,32 @@ pytest tests/ -v --cov=app     # With coverage
 
 ### Phase 3: Project Detail Pages
 
-- [ ] Create `/projects/[slug]` dynamic route with `generateStaticParams`
-- [ ] Build `ProjectDetail` layout component (renders MDX)
-- [ ] Write MDX content for each project (overview, architecture, learnings)
-- [ ] Add project screenshots/images to `/public`
-- [ ] Host diamonds R notebook HTML as static asset, link from detail page
-- [ ] Link cards on home page to detail pages
-- [ ] Add SEO metadata to all pages (§9)
+- [X] Create `/projects/[slug]` dynamic route with `generateStaticParams`
+- [X] Build `ProjectDetail` layout component (renders MDX)
+- [X] Write MDX content for each project (overview, architecture, learnings)
+- [X] Add project screenshots/images to `/public`
+- [X] Host diamonds R notebook HTML as static asset, link from detail page
+- [X] Link cards on home page to detail pages
+- [X] Add SEO metadata to all pages (§9)
 
 ### Phase 4: AI Chatbot Backend (Python FastAPI)
 
-- [ ] Initialize FastAPI project with project structure
-- [ ] Build RAG pre-processing script (`scripts/build_index.py`):
-  - [ ] Chunk resume and project descriptions
-  - [ ] Generate embeddings with `sentence-transformers` (`all-mpnet-base-v2`)
-  - [ ] Build FAISS index + BM25 index
-  - [ ] Save indexes and chunks to disk
-- [ ] Implement `POST /api/chat` endpoint:
-  - [ ] Query embedding
-  - [ ] Hybrid search (FAISS 70% + BM25 30%)
-  - [ ] Cross-encoder re-ranking (`ms-marco-MiniLM-L-6-v2`)
-  - [ ] Prompt construction with context + history
-  - [ ] Groq API streaming response
-- [ ] Implement `GET /api/health` endpoint
-- [ ] Add rate limiting (`slowapi`, 30 req/min per IP)
-- [ ] Add CORS configuration
-- [ ] Write backend tests
+- [x] Initialize FastAPI project with project structure
+- [x] Build RAG pre-processing script (`scripts/build_index.py`):
+  - [x] Chunk resume and project descriptions
+  - [x] Generate embeddings with `sentence-transformers` (`all-mpnet-base-v2`)
+  - [x] Build FAISS index + BM25 index
+  - [x] Save indexes and chunks to disk
+- [x] Implement `POST /api/chat` endpoint:
+  - [x] Query embedding
+  - [x] Hybrid search (FAISS 70% + BM25 30%)
+  - [x] Cross-encoder re-ranking (`ms-marco-MiniLM-L-6-v2`)
+  - [x] Prompt construction with context + history
+  - [x] Groq API streaming response
+- [x] Implement `GET /api/health` endpoint
+- [x] Add rate limiting (`slowapi`, 30 req/min per IP)
+- [x] Add CORS configuration
+- [x] Write backend tests
 
 ### Phase 5: AI Chatbot Frontend
 
