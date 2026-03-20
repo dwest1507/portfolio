@@ -1,0 +1,119 @@
+DAVID P WEST
+6482 Misty Ct, Waterford, MI 48327  ●  (586) 549-3786  ●  david.p.west2@gmail.com 
+Data Science Portfolio ●  LinkedIn
+
+EXPERIENCE
+
+Data Scientist, Lead
+January 2025 – Present (40 Hrs/Week)
+Booz Allen Hamilton
+Troy MI Office
+
+
+
+Lead technical teams by designing solution architectures, delegating tasks, mentoring junior staff, and writing code (Python/R) that automates inefficient government processes.
+Lead and manage the technical development of the trademarked capability Data ReconnAIssance™ which specializes in extracting information from technical documents, like engineering drawings, and is utilized by multiple Army and Air Force customers.
+Integrate the government-approved Large Language Model, AWS GovCloud Claude 3.5 Sonnet, into Data ReconnAIssance™ to enhance its capabilities and accuracy.
+Manage the GitHub repository for Data ReconnAIssance™ and review/approve pull requests.
+Develop a technical roadmap for the future of Data ReconnAIssance™ to ensure further growth.
+Present technical findings to non-technical customers via dashboards and PowerPoint.
+Propose projects to potential customers to win work, increase revenue, and ensure staff is billable.
+Lead a team of 4 for the development of an automation process that detects whether a part can be additively manufactured reducing engineering efforts ten-fold.
+Lead a team of 2 for the development of an automation process that builds a Bill of Material (BOM) using engineering drawings and detects which parts contain hazardous materials.
+Manage two full-time employees, help foster career growth, and trouble-shoot technical problems.
+
+Data Scientist III
+January 2022 – December 2024 (40 Hrs/Week)
+Booz Allen Hamilton
+Troy MI Office
+
+Creation of a supply chain risk management (SCRM) database and dashboard.
+Anomaly detection within Army Garrison financial data for the Installation Management Command.
+Created an automated web scraper using R and Selenium to aggregate material information.
+Lead a team of 3 for the development of an advanced manufacturing database and dashboard.
+Lead a team of 4 interns for the development of a classification machine learning algorithm that predicts when parts will fail on Army ground combat systems.
+Managed two full-time employees, helped foster career growth, and trouble-shoot technical problems.
+
+Data Scientist II
+January 2021 – January 2022 (40 Hrs/Week)
+Booz Allen Hamilton
+Troy MI Office
+
+Leverage R to identify hazardous materials within several Army Bills of Materials (BOMs).
+Create a SQL-based relational database to manage and organize analysis results. 
+Mentor a data analyst intern.
+
+Operations Research Analyst
+May 2018 – January 2021 (40 Hrs/Week)
+Army Tank-Automotive & Armaments Command
+Program Executive Office: Ground Combat Systems
+
+Promoted twice from GS-1515-07 to GS-1515-09 to GS-1515-11.
+Stood up and led the Data Analytics Working Group to encourage the use of R, Power BI, and other data analytics tools across the organization. Held lunch and learn sessions.
+
+Utilized R to clean and merge multiple cost reports for a contract, conducted an exploratory data analysis, and projected the future requirements of the follow-on contract. 
+
+Developed a BOM analysis tool using R that validated contractor-submitted data.
+
+Created Independent Government Cost Estimates (IGCEs) for price analysts to reference during their evaluations of proposed contractor prices.
+
+EDUCATION														
+
+Western Michigan University (WMU)
+Kalamazoo, MI
+Graduation: December 2017
+GPA: 3.57
+
+Bachelor of Science
+Major: Biochemistry
+Minor: Psychology
+
+
+
+CompTIA
+Comptia.org
+Completion: June 2025
+
+Certificate of Completion
+Security+
+
+
+
+Data Camp
+
+Datacamp.com
+Completion: July 2020
+Certificate of Completion
+Data Scientist with R
+
+
+Machine Learning with Andrew Ng
+
+Coursera.org
+Completion: June 2021
+Certificate of Completion
+Stanford Online
+
+
+
+
+SKILLS / ADDITIONAL QUALIFICATIONS
+Security clearance: Secret
+Python: Pandas, PyMuPDF, boto3, Scikit-Learn, and more
+R: Tidyverse, ggplot2, plotly, caret, isotree, and more
+Large Language Models (LLMs): DoD-approved Claude 3.7 Sonnet and OpenAI GPT4
+Machine Learning: Optical Character Recognition, anomaly detection, Supervised regression and classification
+AWS GovCloud: Bedrock, Textract, S3, Lambda, SageMaker 
+Data Dashboards: Streamlit, RShiny, Qlik
+Data Notebooks: Jupyter, RMarkdown, Quarto
+SQL: Writing queries, developing database architectures, and managing database inputs and outputs
+Program Management: GitHub, Jira, Confluence
+DoD Databases/Environments: haystack, FLIS, Vantage, ADVANA, and engineering workbench
+Microsoft: Word, PowerPoint, Outlook, Teams, SharePoint
+Operating System: Windows, Windows Subsystem for Linux (WSL), Linux (Ubuntu)
+
+LEADERSHIP
+Career Manager for two full-time employees and summer interns
+Data Science team lead for multiple projects for Booz Allen Hamilton
+Head of the Data Analytics Working Group for the Detroit Chapter of the International Cost Estimating and Analysis Association (ICEAA)
+General Chemistry I, General Physics I, and Research Method & Statistics Teaching Assistant; WMU

@@ -1,0 +1,361 @@
+@import "tailwindcss";
+
+/* ============================================================
+   CYBERPUNK DESIGN TOKENS
+   ============================================================ */
+
+@theme inline {
+  /* Colors */
+  --color-background: #0a0a0f;
+  --color-foreground: #e0e0e0;
+  --color-card: #12121a;
+  --color-muted: #1c1c2e;
+  --color-muted-foreground: #6b7280;
+  --color-accent: #00ff88;
+  --color-accent-secondary: #ff00ff;
+  --color-accent-tertiary: #00d4ff;
+  --color-border: #2a2a3a;
+  --color-destructive: #ff3366;
+
+  /* Fonts */
+  --font-heading: var(--font-orbitron), "Share Tech Mono", monospace;
+  --font-body: var(--font-jetbrains-mono), "Fira Code", "Consolas", monospace;
+  --font-label: "Share Tech Mono", monospace;
+}
+
+/* ============================================================
+   GLOBAL BASE STYLES
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #0a0a0f;
+  color: #e0e0e0;
+  font-family: var(--font-jetbrains-mono), "Fira Code", "Consolas", monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   CIRCUIT GRID BACKGROUND
+   ============================================================ */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+    linear-gradient(rgba(0, 212, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.015) 1px, transparent 1px);
+  background-size:
+    80px 80px,
+    80px 80px,
+    16px 16px,
+    16px 16px;
+  background-position:
+    -1px -1px,
+    -1px -1px,
+    -1px -1px,
+    -1px -1px;
+}
+
+/* ============================================================
+   SCANLINE OVERLAY
+   ============================================================ */
+
+.scanlines {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.05) 2px,
+    rgba(0, 0, 0, 0.05) 4px
+  );
+  animation: scanline-drift 8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanlines {
+    animation: none;
+  }
+}
+
+@keyframes scanline-drift {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 100px;
+  }
+}
+
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-orbitron), "Share Tech Mono", monospace;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.1;
+}
+
+/* ============================================================
+   CHROMATIC ABERRATION (hero glitch effect)
+   ============================================================ */
+
+.glitch-text {
+  position: relative;
+  color: #e0e0e0;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 40%, 0 40%);
+}
+
+.glitch-text::before {
+  color: #ff00ff;
+  transform: translateX(-2px);
+  opacity: 0.7;
+}
+
+.glitch-text::after {
+  color: #00d4ff;
+  transform: translateX(2px);
+  opacity: 0.7;
+  clip-path: polygon(0 60%, 100% 60%, 100% 100%, 0 100%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .glitch-animate {
+    animation: glitch 4s steps(1) infinite;
+  }
+
+  .glitch-animate::before {
+    animation: glitch-before 4s steps(1) infinite;
+  }
+
+  .glitch-animate::after {
+    animation: glitch-after 4s steps(1) infinite;
+  }
+}
+
+@keyframes glitch {
+  0%,
+  90%,
+  100% {
+    transform: none;
+  }
+  91% {
+    transform: skewX(-1deg);
+  }
+  92% {
+    transform: skewX(1deg);
+  }
+  93% {
+    transform: none;
+  }
+  95% {
+    transform: skewX(-0.5deg);
+  }
+}
+
+@keyframes glitch-before {
+  0%,
+  90%,
+  100% {
+    transform: translateX(-2px);
+    clip-path: polygon(0 0, 100% 0, 100% 40%, 0 40%);
+  }
+  91% {
+    transform: translateX(-4px);
+    clip-path: polygon(0 20%, 100% 20%, 100% 60%, 0 60%);
+  }
+  92% {
+    transform: translateX(2px);
+    clip-path: polygon(0 50%, 100% 50%, 100% 80%, 0 80%);
+  }
+  93% {
+    transform: translateX(-2px);
+    clip-path: polygon(0 0, 100% 0, 100% 40%, 0 40%);
+  }
+}
+
+@keyframes glitch-after {
+  0%,
+  90%,
+  100% {
+    transform: translateX(2px);
+    clip-path: polygon(0 60%, 100% 60%, 100% 100%, 0 100%);
+  }
+  91% {
+    transform: translateX(4px);
+    clip-path: polygon(0 40%, 100% 40%, 100% 70%, 0 70%);
+  }
+  92% {
+    transform: translateX(-2px);
+    clip-path: polygon(0 70%, 100% 70%, 100% 100%, 0 100%);
+  }
+  93% {
+    transform: translateX(2px);
+    clip-path: polygon(0 60%, 100% 60%, 100% 100%, 0 100%);
+  }
+}
+
+/* ============================================================
+   NEON GLOW UTILITIES
+   ============================================================ */
+
+.neon-glow-accent {
+  text-shadow:
+    0 0 7px #00ff88,
+    0 0 21px #00ff88,
+    0 0 42px rgba(0, 255, 136, 0.4);
+}
+
+.neon-glow-secondary {
+  text-shadow:
+    0 0 7px #ff00ff,
+    0 0 21px #ff00ff,
+    0 0 42px rgba(255, 0, 255, 0.4);
+}
+
+.neon-border-accent {
+  box-shadow:
+    0 0 5px #00ff88,
+    0 0 20px rgba(0, 255, 136, 0.3),
+    inset 0 0 5px rgba(0, 255, 136, 0.1);
+}
+
+.neon-border-hover {
+  transition: box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.neon-border-hover:hover {
+  box-shadow:
+    0 0 8px #00ff88,
+    0 0 30px rgba(0, 255, 136, 0.4),
+    inset 0 0 8px rgba(0, 255, 136, 0.15);
+}
+
+/* ============================================================
+   CHAMFERED CORNER UTILITY (clip-path)
+   ============================================================ */
+
+.clip-card {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 16px) 0,
+    100% 16px,
+    100% 100%,
+    16px 100%,
+    0 calc(100% - 16px)
+  );
+}
+
+.clip-card-sm {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% 100%,
+    10px 100%,
+    0 calc(100% - 10px)
+  );
+}
+
+/* ============================================================
+   BLINKING CURSOR
+   ============================================================ */
+
+.cursor-blink::after {
+  content: "_";
+  color: #00ff88;
+  animation: blink 1s step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor-blink::after {
+    animation: none;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ============================================================
+   FOCUS STYLES
+   ============================================================ */
+
+:focus-visible {
+  outline: 2px solid #00ff88;
+  outline-offset: 2px;
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+}
+
+/* ============================================================
+   SELECTION
+   ============================================================ */
+
+::selection {
+  background-color: rgba(0, 255, 136, 0.2);
+  color: #e0e0e0;
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a3a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00ff88;
+  box-shadow: 0 0 6px rgba(0, 255, 136, 0.6);
+}

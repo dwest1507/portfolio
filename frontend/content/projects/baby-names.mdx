@@ -1,0 +1,39 @@
+## Overview
+
+Baby Name Popularity is an interactive data application for exploring 145 years of US baby name trends from the Social Security Administration, with machine learning models that forecast future name popularity. You can search any name, compare multiple names side by side, browse top names by gender and decade, and see a model-generated popularity prediction for the next several years.
+
+The project grew from a simple question: *is a name getting more or less popular, and will that trend continue?* The SSA publishes name data going back to 1880, but raw data files are not interactive. Building this meant designing a data pipeline, training and evaluating multiple forecasting models, and wrapping it all in a UI that makes the analysis accessible.
+
+## Data Pipeline
+
+The SSA doesn't offer a direct API download — the data comes as a ZIP archive from a web page that requires JavaScript rendering. The pipeline handles this with Selenium to automate the download, then processes all ~145 annual text files into a single normalized dataset.
+
+For each name-sex-year combination, the pipeline computes:
+
+- `total_count` — raw number of births with that name
+- `popularity_percent` — count as a fraction of all births that year and sex, correcting for population growth
+- `popularity_rank` — ranking within year and sex (1 = most popular)
+
+Relative metrics matter more than raw counts here: *Jennifer* peaked at 3.4% of all female births in 1947, which is a more meaningful measure of cultural dominance than the absolute number. The processed data is stored in a SQLite database for fast query access from the Streamlit app.
+
+## Machine Learning Models
+
+The forecasting task is time-series prediction: given a name's historical popularity trajectory, predict its popularity in future years. The pipeline trains and evaluates four models on this task:
+
+- **Linear Regression** — fast, interpretable baseline
+- **Random Forest** — captures non-linear relationships between features
+- **XGBoost** — gradient-boosted trees, generally the strongest performer on tabular time series
+- **LSTM** — recurrent neural network for modeling sequential dependencies over long windows
+
+**Feature engineering** is the core of each model. Rather than feeding raw time series to the models, the pipeline constructs:
+
+- 5-year lookback windows for popularity percentage, total count, and rank
+- Linear trend features (slope over recent years)
+- Volatility features (standard deviation of recent popularity)
+- Normalized year (to handle the full 1880–2024 range)
+
+Models are evaluated by RMSE on a held-out test set, and the best-performing model is persisted with joblib for serving. The pipeline includes a full comparison report so the tradeoffs between models are transparent.
+
+## Skills Demonstrated
+
+This project demonstrates the full data science lifecycle: raw data acquisition (web scraping under JavaScript rendering), data engineering (multi-file parsing, normalization, SQLite storage), feature engineering for time series forecasting, comparative model evaluation, and interactive visualization. The choice to train and compare four different model families — rather than jumping straight to XGBoost — reflects how I approach model selection: empirically, with reproducible evaluation, rather than by default.

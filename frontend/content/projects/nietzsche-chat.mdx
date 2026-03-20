@@ -1,0 +1,29 @@
+## Overview
+
+Chat with Nietzsche is a conversational AI that channels Friedrich Nietzsche's philosophical voice using Retrieval-Augmented Generation over his complete written works. You can ask it about the Will to Power, Eternal Recurrence, master-slave morality, or why it thinks modern social media would have disgusted him — and get answers grounded in Nietzsche's actual writings, with source citations to the passages used.
+
+The goal was never to make a philosophical trivia bot. It was to build a system where responses are *demonstrably* faithful to the source material. Every answer the system produces can be traced back to real text from the 19 works in the corpus.
+
+## The RAG Pipeline
+
+The retrieval pipeline is multi-stage, designed to maximize the quality of context passed to the LLM rather than relying on the model alone.
+
+1. **Query expansion**: Philosophical terminology is expanded to related concepts before retrieval — *"Übermensch"* maps to related ideas like self-overcoming, will to power, and the slave revolt in morality.
+2. **Multi-query generation**: The LLM reformulates the user's question three different ways. Each reformulation is used for independent retrieval, then results are merged. This captures relevant passages that a single query might miss.
+3. **Hybrid search**: Each query hits both a FAISS semantic index (70% weight) and a BM25 keyword index (30% weight). Semantic search handles conceptual overlap; BM25 ensures exact philosophical terms like *"Ressentiment"* or *"Zarathustra"* are matched precisely.
+4. **Cross-encoder re-ranking**: Retrieved passages are re-ranked using `ms-marco-MiniLM-L-6-v2`, a cross-encoder model that scores each passage against the original question jointly, not independently. This separates genuinely relevant passages from those that merely share vocabulary.
+5. **Grounded generation**: The top 5 re-ranked passages are passed to `llama-3.1-8b-instant` via Groq. Temperature is set to 0.3 — low enough to suppress creative invention, high enough to avoid robotic phrasing.
+
+## Technical Implementation
+
+**Corpus and chunking**: All 19 works were sourced from Project Gutenberg public domain translations. Text is split at paragraph boundaries with a 1200-character target and 150-character overlap. Paragraph-based chunking preserves argumentative flow — Nietzsche's writing often builds meaning across a full paragraph, and mid-sentence splits would corrupt the context.
+
+**Embeddings**: `sentence-transformers/all-mpnet-base-v2` generates 768-dimensional dense vectors for each chunk. The same model embeds user queries at inference time, ensuring semantic alignment between document and query spaces.
+
+**Stack**: LangChain orchestrates the retrieval chain. FAISS stores the dense index. BM25 (rank-bm25) handles the sparse index. Both indexes are built locally and committed to the repo, so Streamlit Cloud cold-starts don't require re-indexing.
+
+**Source citations**: The UI surfaces the specific Nietzsche passages used to generate each response in an expandable section below the answer. This transparency serves two purposes: it lets users verify authenticity, and it demonstrates that the retrieval pipeline found genuinely relevant context rather than hallucinating.
+
+## Skills Demonstrated
+
+This project required implementing every component of an advanced RAG pipeline from first principles — no managed vector database, no off-the-shelf retrieval API. The multi-query and cross-encoder stages reflect real production RAG patterns used in enterprise retrieval systems. Deploying it on Streamlit Cloud for free, with a corpus and indexes committed to the repo, demonstrates cost-aware deployment thinking — a skill that matters as much in early-stage AI products as in large enterprises.

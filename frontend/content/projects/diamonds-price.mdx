@@ -1,0 +1,27 @@
+## Overview
+
+Diamonds: Predicting Price is a regression analysis project that models diamond prices from physical and quality attributes using a combination of statistical analysis in R and machine learning in Python. The analysis covers a dataset of ~54,000 diamonds with features including carat weight, cut grade, color grade, clarity grade, and physical dimensions (length, width, depth).
+
+This was my earliest end-to-end data science project. I'm including it here not as a showcase of technical sophistication, but as evidence of where I started — and because the analytical thinking it required is genuinely interesting.
+
+The full R notebook with all exploratory analysis, visualizations, and statistical modeling is available below.
+
+[View Original Analysis →](/projects/diamonds-predicting-price.html)
+
+## The Analysis
+
+The central challenge is that diamond price is not linear in any single feature. Carat weight has the strongest correlation with price, but two diamonds with the same carat weight can differ in price by an order of magnitude based on cut, color, and clarity. These quality grades interact with each other and with size in complex ways.
+
+The analysis proceeded in several phases:
+
+**Exploratory data analysis**: Distribution analysis revealed that carat weight clusters at round values (0.5, 0.75, 1.0, 1.5) due to market conventions. Price distributions are right-skewed. Log transformation of price and carat improves model fit substantially and is a standard approach in gemological pricing models.
+
+**Feature engineering**: The raw quality grades (cut: Fair → Ideal, color: J → D, clarity: I1 → IF) are ordinal categories with non-uniform spacing. Encoding them as ordered numerics with interaction terms between carat and quality captures more of the pricing structure than one-hot encoding alone.
+
+**Modeling**: The analysis compared multiple regression approaches — from basic OLS through regularized regression (Ridge, Lasso) to ensemble methods — evaluating each by RMSE and R² on a held-out test set. The log-linear model on transformed features served as the interpretable baseline; gradient boosting models captured the non-linear interactions more accurately at the cost of interpretability.
+
+## What I Learned
+
+The most important thing this project taught me wasn't a modeling technique — it was that the structure of the prediction problem determines which features matter and how they should be encoded. Raw carat weight and price look exponentially related. Log-transformed, they look linear. That insight changed how I think about preprocessing: transformation isn't just normalization, it's a way of encoding domain knowledge into the model's feature space.
+
+This project also gave me an appreciation for the difference between correlation and causal structure. The data shows that *Ideal* cut diamonds are sometimes *cheaper* than *Fair* cut diamonds of the same carat weight. This seems counterintuitive until you realize that buyers seeking large stones (high carat) are often willing to sacrifice cut quality — the feature interactions tell a story about market behavior, not just gemology.
