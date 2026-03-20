@@ -13,7 +13,9 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@ai-sdk/react": "^3.0.136",
     "@vercel/analytics": "^2.0.1",
+    "ai": "^6.0.134",
     "next": "16.2.0",
     "next-mdx-remote": "^6.0.0",
     "react": "19.2.4",

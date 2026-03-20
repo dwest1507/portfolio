@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/react'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import ScanlineOverlay from '@/components/layout/ScanlineOverlay'
+import ChatbotWidget from '@/components/chatbot/ChatbotWidget'
 import './globals.css'
 
 const orbitron = Orbitron({
@@ -49,6 +50,7 @@ export default function RootLayout({
         <Header />
         <main className="relative z-10 flex-1">{children}</main>
         <Footer />
+        <ChatbotWidget />
         <Analytics />
       </body>
     </html>

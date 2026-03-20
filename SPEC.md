@@ -659,14 +659,14 @@ pytest tests/ -v --cov=app     # With coverage
 
 ### Phase 5: AI Chatbot Frontend
 
-- [ ] Build Next.js `/api/chat` proxy route
-- [ ] Build `ChatbotWidget` (floating button with neon glow, expandable panel)
-- [ ] Build `ChatMessage` and `ChatInput` components (terminal style)
-- [ ] Implement client-side streaming display (Vercel AI SDK `useChat`)
-- [ ] Add loading state (typing indicator with blinking cursor)
-- [ ] Add error state (user-friendly message on failure)
-- [ ] Add timeout handling (append "..." on truncation)
-- [ ] Add session message limit (50) and input debounce (3s)
+- [x] Build Next.js `/api/chat` proxy route
+- [x] Build `ChatbotWidget` (floating button with neon glow, expandable panel)
+- [x] Build `ChatMessage` and `ChatInput` components (terminal style)
+- [x] Implement client-side streaming display (Vercel AI SDK `useChat`)
+- [x] Add loading state (typing indicator with blinking cursor)
+- [x] Add error state (user-friendly message on failure)
+- [x] Add timeout handling (append "..." on truncation)
+- [x] Add session message limit (50) and input debounce (3s)
 
 ### Phase 6: Polish & Testing
 
