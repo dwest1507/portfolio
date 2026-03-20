@@ -2,7 +2,7 @@
 import json
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from groq import AsyncGroq
 from pydantic import BaseModel, Field

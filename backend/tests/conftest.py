@@ -1,9 +1,7 @@
 """Shared fixtures for the test suite."""
-import json
 import os
 from unittest.mock import MagicMock, patch
 
-import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 

@@ -168,7 +168,7 @@ def main() -> None:
     # Save chunks
     with open(INDEXES_DIR / "chunks.json", "w") as f:
         json.dump(all_chunks, f, ensure_ascii=False, indent=2)
-    print(f"\nSaved chunks.json")
+    print("\nSaved chunks.json")
 
     # Embed with sentence-transformers
     print("\nGenerating embeddings (sentence-transformers/all-mpnet-base-v2)...")
@@ -189,7 +189,7 @@ def main() -> None:
     bm25 = BM25Okapi(tokenized_corpus)
     with open(INDEXES_DIR / "bm25.pkl", "wb") as f:
         pickle.dump(bm25, f)
-    print(f"Saved bm25.pkl")
+    print("Saved bm25.pkl")
 
     print("\nDone. Ready to start the FastAPI server.")
 

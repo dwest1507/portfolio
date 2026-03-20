@@ -1,7 +1,6 @@
 """RAG pipeline: hybrid search (FAISS + BM25) + cross-encoder re-ranking."""
 import json
 import pickle
-from pathlib import Path
 
 import faiss
 import numpy as np

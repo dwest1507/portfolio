@@ -2,7 +2,6 @@
 import json
 import pickle
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
