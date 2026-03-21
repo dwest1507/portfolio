@@ -12,11 +12,27 @@ const DEBOUNCE_MS = 3000
 
 export default function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false)
+  const [showTooltip, setShowTooltip] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [lastSubmitTime, setLastSubmitTime] = useState(0)
   const [debounced, setDebounced] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Show tooltip after 3s, auto-hide after 8s; only once per session
+  useEffect(() => {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('chatTooltipSeen')) return
+    const show = setTimeout(() => {
+      setShowTooltip(true)
+      tooltipTimerRef.current = setTimeout(() => setShowTooltip(false), 8000)
+    }, 4000)
+    return () => {
+      clearTimeout(show)
+      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+    }
+  }, [])
 
   const { messages, sendMessage, status, error, stop } = useChat({
     transport: new TextStreamChatTransport({ api: '/api/chat' }),
@@ -35,12 +51,26 @@ export default function ChatbotWidget() {
     }
   }, [messages, isOpen, status])
 
-  // Clean up debounce timer on unmount
+  // Refocus input when the input becomes enabled again (loading done + debounce cleared)
+  useEffect(() => {
+    if (!isLoading && !debounced && !limitReached && isOpen) {
+      inputRef.current?.focus()
+    }
+  }, [isLoading, debounced, limitReached, isOpen])
+
+  // Clean up timers on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
     }
   }, [])
+
+  function dismissTooltip() {
+    setShowTooltip(false)
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('chatTooltipSeen', '1')
+  }
 
   function handleInputChange(e: ChangeEvent<HTMLInputElement>) {
     setInputValue(e.target.value)
@@ -63,6 +93,7 @@ export default function ChatbotWidget() {
     sendMessage({ text })
     setInputValue('')
     setLastSubmitTime(now)
+    inputRef.current?.focus()
 
     // Re-arm debounce after sending
     setDebounced(true)
@@ -81,13 +112,44 @@ export default function ChatbotWidget() {
 
   return (
     <>
-      {/* Floating trigger button */}
-      <button
-        onClick={() => setIsOpen((prev) => !prev)}
-        aria-label={isOpen ? 'Close chat assistant' : 'Open chat assistant'}
-        aria-expanded={isOpen}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center clip-card border-2 border-[#00ff88] bg-[#0a0a0f] text-[#00ff88] shadow-[0_0_12px_#00ff88,0_0_30px_rgba(0,255,136,0.3)] transition-all duration-150 hover:bg-[#00ff88] hover:text-[#0a0a0f] hover:shadow-[0_0_20px_#00ff88,0_0_50px_rgba(0,255,136,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]"
+      {/* Tooltip bubble */}
+      <div
+        aria-hidden={!showTooltip}
+        className={`fixed bottom-24 right-6 z-50 flex items-start gap-2 transition-all duration-200
+          ${showTooltip ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-2 opacity-0 pointer-events-none'}
+        `}
       >
+        <div className="clip-card-sm border border-[#00ff88] bg-[#0a0a0f] px-3 py-2 shadow-[0_0_12px_rgba(0,255,136,0.2)]">
+          <p className="text-[12px] font-[family-name:var(--font-label)] tracking-wide text-[#e0e0e0]">
+            <span className="text-[#00ff88]">&gt;</span> Ask my AI assistant about my qualifications
+          </p>
+        </div>
+        <button
+          onClick={dismissTooltip}
+          aria-label="Dismiss tooltip"
+          className="mt-1 shrink-0 text-[#6b7280] transition-colors hover:text-[#00ff88]"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Floating trigger button + pulse ring wrapper */}
+      <div className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center">
+        {/* Pulse ring — separate element so clip-path on button doesn't clip it */}
+        {!isOpen && (
+          <span
+            aria-hidden="true"
+            className="chatbot-pulse-ring clip-card absolute inset-0 border-2 border-[#00ff88]"
+          />
+        )}
+        <button
+          onClick={() => { setIsOpen((prev) => !prev); dismissTooltip() }}
+          aria-label={isOpen ? 'Close chat assistant' : 'Open chat assistant'}
+          aria-expanded={isOpen}
+          className="relative flex h-14 w-14 items-center justify-center clip-card border-2 border-[#00ff88] bg-[#0a0a0f] text-[#00ff88] shadow-[0_0_12px_#00ff88,0_0_30px_rgba(0,255,136,0.3)] transition-all duration-150 hover:bg-[#00ff88] hover:text-[#0a0a0f] hover:shadow-[0_0_20px_#00ff88,0_0_50px_rgba(0,255,136,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]"
+        >
         {isOpen ? (
           /* Close X */
           <svg
@@ -119,7 +181,8 @@ export default function ChatbotWidget() {
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
         )}
-      </button>
+        </button>
+      </div>
 
       {/* Chat panel */}
       <div
@@ -222,6 +285,7 @@ export default function ChatbotWidget() {
         {/* Input */}
         <div className="shrink-0 border-t border-[#2a2a3a] p-3">
           <ChatInput
+            ref={inputRef}
             value={inputValue}
             onChange={handleInputChange}
             onSubmit={handleSubmit}

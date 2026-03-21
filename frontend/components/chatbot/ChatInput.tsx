@@ -1,5 +1,6 @@
 'use client'
 
+import { forwardRef } from 'react'
 import type { FormEvent, ChangeEvent, KeyboardEvent } from 'react'
 
 interface ChatInputProps {
@@ -11,14 +12,14 @@ interface ChatInputProps {
   limitReached: boolean
 }
 
-export default function ChatInput({
+const ChatInput = forwardRef<HTMLInputElement, ChatInputProps>(function ChatInput({
   value,
   onChange,
   onSubmit,
   disabled,
   debounced,
   limitReached,
-}: ChatInputProps) {
+}, ref) {
   const isDisabled = disabled || debounced || limitReached
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -49,6 +50,7 @@ export default function ChatInput({
         </span>
 
         <input
+          ref={ref}
           type="text"
           value={value}
           onChange={onChange}
@@ -87,4 +89,6 @@ export default function ChatInput({
       </button>
     </form>
   )
-}
+})
+
+export default ChatInput
