@@ -66,7 +66,7 @@ export default function AboutSection() {
                 ))}
                 <div className="mt-6 border-t border-[#2a2a3a] pt-4">
                   <a
-                    href="https://linkedin.com/in/david-west"
+                    href="https://www.linkedin.com/in/david-west-277509b1/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="clip-card-sm inline-flex items-center gap-2 border border-[#2a2a3a] px-4 py-2 font-[family-name:var(--font-label)] text-[10px] uppercase tracking-[0.2em] text-[#6b7280] transition-all duration-150 hover:border-[#00d4ff]/50 hover:text-[#00d4ff]"

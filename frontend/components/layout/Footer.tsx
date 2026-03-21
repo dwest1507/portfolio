@@ -20,7 +20,7 @@ export default function Footer() {
             Email
           </Link>
           <Link
-            href="https://linkedin.com/in/davidwest1507"
+            href="https://www.linkedin.com/in/david-west-277509b1/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs tracking-widest text-[#6b7280] transition-colors duration-150 hover:text-[#00ff88]"

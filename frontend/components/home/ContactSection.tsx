@@ -37,10 +37,10 @@ export default function ContactSection() {
                       Email
                     </span>
                     <a
-                      href="mailto:david@davidwest.dev"
+                      href="mailto:david.p.west2@gmail.com"
                       className="text-[#00ff88] transition-all duration-150 hover:neon-glow-accent"
                     >
-                      david@davidwest.dev
+                      david.p.west2@gmail.com
                     </a>
                   </div>
                   <div className="flex items-center gap-4">
@@ -48,12 +48,12 @@ export default function ContactSection() {
                       LinkedIn
                     </span>
                     <a
-                      href="https://linkedin.com/in/david-west"
+                      href="https://www.linkedin.com/in/david-west-277509b1/"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[#00d4ff] transition-colors duration-150 hover:text-[#00ff88]"
                     >
-                      linkedin.com/in/david-west ↗
+                      linkedin.com/in/david-west-277509b1 ↗
                     </a>
                   </div>
                 </div>
