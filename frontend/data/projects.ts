@@ -16,7 +16,7 @@ export const projects: Project[] = [
     title: 'Generate Music with AI',
     shortDescription:
       'Full-stack app that generates original music from text prompts using LLMs and Modal for serverless GPU inference.',
-    thumbnail: '/projects/ai-music-gen.png',
+    thumbnail: '/projects/ai-music-gen2.png',
     tags: ['Next.js', 'TypeScript', 'FastAPI', 'Python', 'Modal', 'Groq', 'LLM'],
     liveUrl: 'https://ai-music-gen.vercel.app',
     repoUrl: 'https://github.com/davidawest/ai-music-gen',
@@ -28,7 +28,7 @@ export const projects: Project[] = [
     title: 'Chat with Nietzsche',
     shortDescription:
       'Conversational AI that channels Nietzsche using RAG over his complete works for philosophically grounded responses.',
-    thumbnail: '/projects/nietzsche-chat.png',
+    thumbnail: '/projects/nietzsche-chat3.png',
     tags: ['Streamlit', 'Python', 'Groq', 'LLM/RAG', 'LangChain', 'FAISS'],
     liveUrl: 'https://nietzsche-chat.streamlit.app',
     repoUrl: 'https://github.com/davidawest/nietzsche-chat',
@@ -40,7 +40,7 @@ export const projects: Project[] = [
     title: 'Baby Name Popularity',
     shortDescription:
       'Interactive explorer for US baby name trends with ML-powered popularity forecasting using XGBoost.',
-    thumbnail: '/projects/baby-names.png',
+    thumbnail: '/projects/baby-names2.png',
     tags: ['Streamlit', 'Python', 'Pandas', 'Scikit-Learn', 'XGBoost', 'Data Visualization'],
     liveUrl: 'https://baby-names.streamlit.app',
     repoUrl: 'https://github.com/davidawest/baby-names',
@@ -52,12 +52,12 @@ export const projects: Project[] = [
     title: 'Diamonds: Predicting Price',
     shortDescription:
       'Regression analysis and ML modeling to predict diamond prices from physical attributes, with full EDA in R.',
-    thumbnail: '/projects/diamonds-price.png',
+    thumbnail: '/projects/diamonds-price2.png',
     tags: ['R', 'Scikit-Learn', 'Jupyter', 'Data Science'],
     liveUrl: '/projects/diamonds-predicting-price.html',
     repoUrl: 'https://github.com/davidawest/diamonds-price',
     featured: false,
-    year: 2023,
+    year: 2020,
   },
 ]
 

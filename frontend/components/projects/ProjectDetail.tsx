@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { type Project } from '@/data/projects'
 import Button from '@/components/ui/Button'
@@ -75,6 +76,21 @@ export default function ProjectDetail({ project, content }: ProjectDetailProps) 
         />
 
         <div className="relative mx-auto max-w-7xl px-6">
+          {/* Mobile thumbnail — shown only below lg */}
+          {project.thumbnail && (
+            <div className="relative mb-10 h-52 w-full overflow-hidden clip-card border border-[#2a2a3a] lg:hidden">
+              <Image
+                src={project.thumbnail}
+                alt={project.title}
+                fill
+                className="object-cover opacity-90"
+                sizes="100vw"
+                priority
+              />
+              <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f]/60 to-transparent" />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-12 lg:grid-cols-5">
             {/* Left: title + meta */}
             <div className="lg:col-span-3">
@@ -148,8 +164,23 @@ export default function ProjectDetail({ project, content }: ProjectDetailProps) 
               </FadeIn>
             </div>
 
-            {/* Right: system info terminal card (desktop) */}
-            <div className="hidden lg:col-span-2 lg:flex lg:items-start lg:pt-14">
+            {/* Right: thumbnail + system info terminal card (desktop) */}
+            <div className="hidden lg:col-span-2 lg:flex lg:flex-col lg:gap-4 lg:items-start lg:pt-14">
+              {project.thumbnail && (
+                <FadeIn delay={80} className="w-full">
+                  <div className="relative h-44 w-full overflow-hidden clip-card border border-[#2a2a3a] shadow-[0_0_20px_rgba(0,255,136,0.08)]">
+                    <Image
+                      src={project.thumbnail}
+                      alt={project.title}
+                      fill
+                      className="object-cover opacity-90"
+                      sizes="40vw"
+                      priority
+                    />
+                    <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f]/40 to-transparent" />
+                  </div>
+                </FadeIn>
+              )}
               <FadeIn delay={120} className="w-full">
                 <div className="clip-card border border-[#2a2a3a] bg-[#12121a]">
                   {/* Terminal header */}

@@ -11,6 +11,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
   const isExternalLive = project.liveUrl.startsWith('http')
 
   return (
+    <Link href={`/projects/${project.slug}`} className="block">
     <article className="clip-card group relative flex flex-col border border-[#2a2a3a] bg-[#12121a] transition-all duration-300 hover:-translate-y-1 hover:border-[#00ff88]/60 hover:shadow-[0_0_20px_rgba(0,255,136,0.12),0_8px_32px_rgba(0,0,0,0.4)]">
       {/* Thumbnail */}
       <div className="relative h-44 w-full overflow-hidden border-b border-[#2a2a3a] bg-[#0a0a0f]">
@@ -68,17 +69,11 @@ export default function ProjectCard({ project }: ProjectCardProps) {
 
         {/* Links */}
         <div className="mt-auto flex items-center gap-3 border-t border-[#2a2a3a] pt-4">
-          <Link
-            href={`/projects/${project.slug}`}
-            className="font-[family-name:var(--font-label)] text-[10px] uppercase tracking-[0.2em] text-[#00ff88] transition-all duration-150 hover:neon-glow-accent"
-          >
-            Case Study →
-          </Link>
-          <span className="text-[#2a2a3a]">|</span>
           <a
             href={project.liveUrl}
             target={isExternalLive ? '_blank' : '_self'}
             rel={isExternalLive ? 'noopener noreferrer' : undefined}
+            onClick={(e) => e.stopPropagation()}
             className="font-[family-name:var(--font-label)] text-[10px] uppercase tracking-[0.2em] text-[#00d4ff] transition-all duration-150 hover:text-[#00ff88]"
           >
             Live App ↗
@@ -87,6 +82,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
             href={project.repoUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="ml-auto font-[family-name:var(--font-label)] text-[10px] uppercase tracking-[0.2em] text-[#6b7280] transition-colors duration-150 hover:text-[#e0e0e0]"
           >
             GitHub
@@ -94,5 +90,6 @@ export default function ProjectCard({ project }: ProjectCardProps) {
         </div>
       </div>
     </article>
+    </Link>
   )
 }
