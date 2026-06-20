@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 INDEXES_DIR = BACKEND_ROOT / "indexes"
 RESUME_PATH = REPO_ROOT / "docs" / "resume.txt"
+QA_PATH = REPO_ROOT / "docs" / "chatbot-questions.md"
 MDX_DIR = REPO_ROOT / "frontend" / "content" / "projects"
 
 CHUNK_SIZE = 1000   # characters (~250-300 tokens)
@@ -129,6 +130,15 @@ def load_documents() -> list[dict]:
         text = RESUME_PATH.read_text(encoding="utf-8")
         docs.append({"text": text, "source": "resume"})
         print(f"  Loaded resume ({len(text)} chars)")
+
+    # Chatbot Q&A
+    if not QA_PATH.exists():
+        print(f"WARNING: Q&A file not found at {QA_PATH}", file=sys.stderr)
+    else:
+        raw = QA_PATH.read_text(encoding="utf-8")
+        text = _strip_mdx(raw)
+        docs.append({"text": text, "source": "qa"})
+        print(f"  Loaded chatbot-questions.md ({len(text)} chars)")
 
     # MDX project write-ups
     mdx_files = sorted(MDX_DIR.glob("*.mdx"))
