@@ -1,6 +1,7 @@
 """RAG pipeline: hybrid search (FAISS + BM25) + cross-encoder re-ranking."""
 import json
 import pickle
+from pathlib import Path
 
 import faiss
 import numpy as np
@@ -11,20 +12,25 @@ from ..config import INDEXES_DIR
 
 
 class RAGPipeline:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        indexes_dir: Path = INDEXES_DIR,
+        embedder: SentenceTransformer | None = None,
+        cross_encoder: CrossEncoder | None = None,
+    ) -> None:
         # Load chunks
-        with open(INDEXES_DIR / "chunks.json") as f:
+        with open(indexes_dir / "chunks.json") as f:
             self.chunks: list[dict] = json.load(f)
 
         # Load FAISS index (inner product = cosine sim on normalized vectors)
-        self.faiss_index = faiss.read_index(str(INDEXES_DIR / "faiss.index"))
+        self.faiss_index = faiss.read_index(str(indexes_dir / "faiss.index"))
 
         # Load BM25 index
-        with open(INDEXES_DIR / "bm25.pkl", "rb") as f:
+        with open(indexes_dir / "bm25.pkl", "rb") as f:
             self.bm25: BM25Okapi = pickle.load(f)
 
-        self.embedder = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
-        self.cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+        self.embedder = embedder or SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+        self.cross_encoder = cross_encoder or CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
     def retrieve(self, query: str, top_k: int = 5) -> list[str]:
         """Full pipeline: hybrid search → cross-encoder re-ranking → top_k chunks."""

@@ -55,7 +55,7 @@ def test_valid_request_streams_response(client, mock_pipeline):
     tokens = ["David", " is", " an", " AI", " Engineer."]
     mock_groq = _mock_groq_stream(tokens)
 
-    with patch("app.routes.chat.AsyncGroq", return_value=mock_groq):
+    with patch("app.llm.AsyncGroq", return_value=mock_groq):
         response = client.post(
             "/api/chat",
             json={"message": "What is David's background?"},
@@ -69,14 +69,14 @@ def test_valid_request_streams_response(client, mock_pipeline):
 
 def test_response_content_type(client, mock_pipeline):
     mock_groq = _mock_groq_stream(["ok"])
-    with patch("app.routes.chat.AsyncGroq", return_value=mock_groq):
+    with patch("app.llm.AsyncGroq", return_value=mock_groq):
         response = client.post("/api/chat", json={"message": "Hello"})
     assert "text/plain" in response.headers["content-type"]
 
 
 def test_stream_ends_with_finish_marker(client, mock_pipeline):
     mock_groq = _mock_groq_stream(["done"])
-    with patch("app.routes.chat.AsyncGroq", return_value=mock_groq):
+    with patch("app.llm.AsyncGroq", return_value=mock_groq):
         response = client.post("/api/chat", json={"message": "Hello"})
     assert 'd:{"finishReason": "stop"}' in response.text
 
@@ -102,7 +102,7 @@ def test_conversation_history_is_forwarded(client, mock_pipeline):
         {"role": "assistant", "content": "Python, FastAPI, FAISS..."},
     ]
 
-    with patch("app.routes.chat.AsyncGroq", return_value=mock_groq):
+    with patch("app.llm.AsyncGroq", return_value=mock_groq):
         client.post(
             "/api/chat",
             json={"message": "Tell me more", "history": history},
@@ -130,7 +130,7 @@ def test_rag_context_included_in_system_prompt(client, mock_pipeline):
     mock_groq = AsyncMock()
     mock_groq.chat.completions.create = AsyncMock(side_effect=_fake_create)
 
-    with patch("app.routes.chat.AsyncGroq", return_value=mock_groq):
+    with patch("app.llm.AsyncGroq", return_value=mock_groq):
         client.post("/api/chat", json={"message": "What is David's background?"})
 
     system_msg = next(m for m in captured_messages if m["role"] == "system")
@@ -147,7 +147,7 @@ def test_groq_error_yields_error_event(client, mock_pipeline):
     mock_groq = AsyncMock()
     mock_groq.chat.completions.create = AsyncMock(side_effect=Exception("API down"))
 
-    with patch("app.routes.chat.AsyncGroq", return_value=mock_groq):
+    with patch("app.llm.AsyncGroq", return_value=mock_groq):
         response = client.post("/api/chat", json={"message": "Hello"})
 
     # HTTP 200 because the response already started streaming

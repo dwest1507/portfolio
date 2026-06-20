@@ -3,7 +3,7 @@ import json
 import pickle
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -102,13 +102,9 @@ def test_hybrid_search_returns_chunks(fake_indexes):
     mock_cross_encoder = MagicMock()
     mock_cross_encoder.predict.return_value = np.array([0.9, 0.7, 0.5])
 
-    with patch("app.rag.pipeline.INDEXES_DIR", indexes_dir), \
-         patch("app.rag.pipeline.SentenceTransformer", return_value=mock_embedder), \
-         patch("app.rag.pipeline.CrossEncoder", return_value=mock_cross_encoder):
-        from app.rag.pipeline import RAGPipeline
-        pipeline = RAGPipeline()
-
-        results = pipeline._hybrid_search("AI Engineer experience", top_k=3)
+    from app.rag.pipeline import RAGPipeline
+    pipeline = RAGPipeline(indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder)
+    results = pipeline._hybrid_search("AI Engineer experience", top_k=3)
 
     assert len(results) > 0
     assert all("text" in r for r in results)
@@ -125,14 +121,10 @@ def test_reranking_orders_by_cross_encoder_score(fake_indexes):
     mock_cross_encoder = MagicMock()
     mock_cross_encoder.predict.return_value = np.array([0.1, 0.5, 0.9])
 
-    with patch("app.rag.pipeline.INDEXES_DIR", indexes_dir), \
-         patch("app.rag.pipeline.SentenceTransformer", return_value=mock_embedder), \
-         patch("app.rag.pipeline.CrossEncoder", return_value=mock_cross_encoder):
-        from app.rag.pipeline import RAGPipeline
-        pipeline = RAGPipeline()
-
-        candidates = list(chunks)  # use all 3
-        reranked = pipeline._rerank("query", candidates, top_k=3)
+    from app.rag.pipeline import RAGPipeline
+    pipeline = RAGPipeline(indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder)
+    candidates = list(chunks)  # use all 3
+    reranked = pipeline._rerank("query", candidates, top_k=3)
 
     # The candidate that got score 0.9 (index 2 in candidates) should be first
     assert reranked[0] == chunks[2]
@@ -147,43 +139,30 @@ def test_retrieve_returns_top_k(fake_indexes):
     mock_cross_encoder = MagicMock()
     mock_cross_encoder.predict.side_effect = lambda pairs: np.random.rand(len(pairs))
 
-    with patch("app.rag.pipeline.INDEXES_DIR", indexes_dir), \
-         patch("app.rag.pipeline.SentenceTransformer", return_value=mock_embedder), \
-         patch("app.rag.pipeline.CrossEncoder", return_value=mock_cross_encoder):
-        from app.rag.pipeline import RAGPipeline
-        pipeline = RAGPipeline()
-
-        results = pipeline.retrieve("What is David's background?", top_k=2)
+    from app.rag.pipeline import RAGPipeline
+    pipeline = RAGPipeline(indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder)
+    results = pipeline.retrieve("What is David's background?", top_k=2)
 
     assert len(results) <= 2
     assert all(isinstance(r, str) for r in results)
 
 
 def test_prompt_includes_context_and_history(fake_indexes):
-    """The system message constructed in the chat route must include context and history."""
-    # This is an integration-level check on the prompt construction logic in chat.py
-    context_chunks = [
-        "David is an AI Engineer.",
-        "David has worked on RAG pipelines.",
-    ]
+    """build_messages includes context in the system message and preserves history order."""
+    from app.llm import Message, build_messages, SYSTEM_PROMPT
+
+    context = "David is an AI Engineer.\n\n---\n\nDavid has worked on RAG pipelines."
     history = [
-        {"role": "user", "content": "What skills does David have?"},
-        {"role": "assistant", "content": "Python, FastAPI, FAISS."},
+        Message(role="user", content="What skills does David have?"),
+        Message(role="assistant", content="Python, FastAPI, FAISS."),
     ]
     new_message = "Tell me about his projects."
 
-    from app.routes.chat import SYSTEM_PROMPT
-    context = "\n\n---\n\n".join(context_chunks)
-    system_content = f"{SYSTEM_PROMPT}\n\nContext:\n{context}"
+    messages = build_messages(context, history, new_message)
 
-    messages = [{"role": "system", "content": system_content}]
-    for msg in history:
-        messages.append({"role": msg["role"], "content": msg["content"]})
-    messages.append({"role": "user", "content": new_message})
-
-    # Verify structure
     assert messages[0]["role"] == "system"
+    assert SYSTEM_PROMPT in messages[0]["content"]
     assert "David is an AI Engineer" in messages[0]["content"]
-    assert messages[1]["role"] == "user"
-    assert messages[2]["role"] == "assistant"
-    assert messages[-1]["content"] == new_message
+    assert messages[1] == {"role": "user", "content": "What skills does David have?"}
+    assert messages[2] == {"role": "assistant", "content": "Python, FastAPI, FAISS."}
+    assert messages[-1] == {"role": "user", "content": new_message}
