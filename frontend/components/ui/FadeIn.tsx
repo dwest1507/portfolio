@@ -41,7 +41,7 @@ export default function FadeIn({
       style={{
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : `translateY(${distance}px)`,
-        transition: `opacity 600ms ease, transform 600ms ease`,
+        transition: `opacity 600ms cubic-bezier(0.16, 1, 0.3, 1), transform 600ms cubic-bezier(0.16, 1, 0.3, 1)`,
         transitionDelay: `${delay}ms`,
       }}
     >

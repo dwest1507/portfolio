@@ -1,23 +1,15 @@
 import type { Metadata } from 'next'
-import { Orbitron, JetBrains_Mono } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
-import ScanlineOverlay from '@/components/layout/ScanlineOverlay'
+import AmbientBackground from '@/components/layout/ScanlineOverlay'
 import ChatbotWidget from '@/components/chatbot/ChatbotWidget'
 import './globals.css'
 
-const orbitron = Orbitron({
-  variable: '--font-orbitron',
+const inter = Inter({
+  variable: '--font-inter',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
-  display: 'swap',
-})
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: '--font-jetbrains-mono',
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
   display: 'swap',
 })
 
@@ -44,9 +36,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${orbitron.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={inter.variable}>
       <body className="flex min-h-screen flex-col">
-        <ScanlineOverlay />
+        <AmbientBackground />
         <Header />
         <main className="relative z-10 flex-1">{children}</main>
         <Footer />

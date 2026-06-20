@@ -89,7 +89,7 @@ I have extensive experience with AWS GovCloud and Impact Level 5 authorized envi
 David has worked with SQLite and DynamoDB. He starting to develop skills with graph databases as well, specifically AWS Neptune.
 
 **What is David's experience with APIs and backend development?**
-I have experience building APIs using FastAPI and Flask. I've also worked with AWS API Gateway and Lambda to create serverless APIs. I'm comfortable with backend development and have built RESTful APIs for various applications.
+I have experience building APIs using FastAPI. I've also worked with AWS API Gateway and Lambda to create serverless APIs. I'm comfortable with backend development and have built RESTful APIs for various applications.
 
 **Does David have any frontend experience?**
 I have some frontend experience using React and Typescript. I've built a few web applications and I'm comfortable with modern frontend development practices. I'm not a frontend expert but I can build a functional frontend for most applications.

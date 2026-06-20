@@ -6,7 +6,8 @@ import { TextStreamChatTransport } from 'ai'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 
-const WELCOME_MESSAGE = "Hi! I'm David's AI assistant. Ask me anything about his experience, skills, or projects."
+const WELCOME_MESSAGE =
+  "Hi! I'm David's AI assistant. Ask me anything about his experience, skills, or projects."
 const SESSION_LIMIT = 50
 const DEBOUNCE_MS = 3000
 
@@ -40,25 +41,21 @@ export default function ChatbotWidget() {
 
   const isLoading = status === 'submitted' || status === 'streaming'
 
-  // Count non-welcome user messages toward the limit
   const userMessageCount = messages.filter((m) => m.role === 'user').length
   const limitReached = userMessageCount >= SESSION_LIMIT
 
-  // Scroll to bottom whenever messages change or streaming updates
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isOpen, status])
 
-  // Refocus input when the input becomes enabled again (loading done + debounce cleared)
   useEffect(() => {
     if (!isLoading && !debounced && !limitReached && isOpen) {
       inputRef.current?.focus()
     }
   }, [isLoading, debounced, limitReached, isOpen])
 
-  // Clean up timers on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
@@ -95,12 +92,10 @@ export default function ChatbotWidget() {
     setLastSubmitTime(now)
     inputRef.current?.focus()
 
-    // Re-arm debounce after sending
     setDebounced(true)
     debounceTimerRef.current = setTimeout(() => setDebounced(false), DEBOUNCE_MS)
   }
 
-  // Streaming message text (assistant message being written right now)
   const streamingMessage = status === 'streaming' ? messages[messages.length - 1] : null
   const streamingText =
     streamingMessage?.role === 'assistant'
@@ -115,72 +110,82 @@ export default function ChatbotWidget() {
       {/* Tooltip bubble */}
       <div
         aria-hidden={!showTooltip}
-        className={`fixed bottom-24 right-6 z-50 flex items-start gap-2 transition-all duration-200
-          ${showTooltip ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-2 opacity-0 pointer-events-none'}
-        `}
+        className={`fixed bottom-24 right-6 z-50 flex items-start gap-2 transition-all duration-200 ${
+          showTooltip
+            ? 'pointer-events-auto translate-y-0 opacity-100'
+            : 'pointer-events-none translate-y-2 opacity-0'
+        }`}
       >
-        <div className="clip-card-sm border border-[#00ff88] bg-[#0a0a0f] px-3 py-2 shadow-[0_0_12px_rgba(0,255,136,0.2)]">
-          <p className="text-[12px] font-[family-name:var(--font-label)] tracking-wide text-[#e0e0e0]">
-            <span className="text-[#00ff88]">&gt;</span> Ask my AI assistant about my qualifications
+        <div className="rounded-xl border border-white/[0.08] bg-[#0a0a0c]/95 px-3 py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+          <p className="text-[12px] text-[#ededef]">
+            Ask my AI assistant about my qualifications
           </p>
         </div>
         <button
           onClick={dismissTooltip}
           aria-label="Dismiss tooltip"
-          className="mt-1 shrink-0 text-[#6b7280] transition-colors hover:text-[#00ff88]"
+          className="mt-1 shrink-0 text-[#8a8f98] transition-colors hover:text-[#ededef]"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className="h-3.5 w-3.5"
+            aria-hidden="true"
+          >
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         </button>
       </div>
 
-      {/* Floating trigger button + pulse ring wrapper */}
-      <div className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center">
-        {/* Pulse ring — separate element so clip-path on button doesn't clip it */}
+      {/* Floating trigger button */}
+      <div className="fixed bottom-6 right-6 z-50">
+        {/* Pulse ring — visible when closed */}
         {!isOpen && (
           <span
             aria-hidden="true"
-            className="chatbot-pulse-ring clip-card absolute inset-0 border-2 border-[#00ff88]"
+            className="absolute inset-0 animate-ping rounded-full bg-[#0ea5e9] opacity-20"
           />
         )}
         <button
-          onClick={() => { setIsOpen((prev) => !prev); dismissTooltip() }}
+          onClick={() => {
+            setIsOpen((prev) => !prev)
+            dismissTooltip()
+          }}
           aria-label={isOpen ? 'Close chat assistant' : 'Open chat assistant'}
           aria-expanded={isOpen}
-          className="relative flex h-14 w-14 items-center justify-center clip-card border-2 border-[#00ff88] bg-[#0a0a0f] text-[#00ff88] shadow-[0_0_12px_#00ff88,0_0_30px_rgba(0,255,136,0.3)] transition-all duration-150 hover:bg-[#00ff88] hover:text-[#0a0a0f] hover:shadow-[0_0_20px_#00ff88,0_0_50px_rgba(0,255,136,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]"
+          className="relative flex h-14 w-14 items-center justify-center rounded-full bg-[#0ea5e9] text-white shadow-[0_0_0_1px_rgba(14,165,233,0.5),0_4px_20px_rgba(14,165,233,0.4)] transition-all duration-200 hover:bg-[#38bdf8] hover:shadow-[0_0_0_1px_rgba(14,165,233,0.6),0_4px_30px_rgba(14,165,233,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0ea5e9] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050506] active:scale-[0.97]"
         >
-        {isOpen ? (
-          /* Close X */
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-5 w-5"
-            aria-hidden="true"
-          >
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        ) : (
-          /* Chat bubble icon */
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-5 w-5"
-            aria-hidden="true"
-          >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-        )}
+          {isOpen ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          )}
         </button>
       </div>
 
@@ -189,27 +194,41 @@ export default function ChatbotWidget() {
         role="dialog"
         aria-label="AI chat assistant"
         aria-hidden={!isOpen}
-        className={`fixed bottom-24 right-6 z-50 flex flex-col clip-card border border-[#2a2a3a] bg-[#0a0a0f] shadow-[0_0_30px_rgba(0,255,136,0.08)] transition-all duration-200
-          w-[calc(100vw-3rem)] sm:w-[400px]
-          ${isOpen ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-4 opacity-0 pointer-events-none'}
-        `}
+        className={`fixed bottom-24 right-6 z-50 flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0a0a0c]/95 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl transition-all duration-200 w-[calc(100vw-3rem)] sm:w-[400px] ${
+          isOpen
+            ? 'pointer-events-auto translate-y-0 opacity-100'
+            : 'pointer-events-none translate-y-4 opacity-0'
+        }`}
         style={{ height: '500px' }}
       >
-        {/* Terminal header */}
-        <div className="flex shrink-0 items-center gap-2 border-b border-[#2a2a3a] px-4 py-2.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ff3366] opacity-80" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ff9900] opacity-80" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#00ff88] opacity-80" />
-          <span className="ml-2 flex-1 text-[10px] font-[family-name:var(--font-label)] uppercase tracking-[0.2em] text-[#6b7280]">
-            assistant.exe
-          </span>
+        {/* Panel header */}
+        <div className="relative flex shrink-0 items-center gap-3 border-b border-white/[0.06] px-4 py-3">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0ea5e9]/15">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-3.5 w-3.5 text-[#0ea5e9]"
+              aria-hidden="true"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-[#ededef]">AI Assistant</p>
+            <p className="font-mono text-[10px] tracking-widest text-[#8a8f98]">David West</p>
+          </div>
           {isLoading && (
             <button
               onClick={stop}
               aria-label="Stop generating"
-              className="text-[10px] font-[family-name:var(--font-label)] uppercase tracking-[0.15em] text-[#ff3366] hover:text-[#ff3366]/80 transition-colors"
+              className="ml-auto rounded-md border border-white/[0.08] px-2.5 py-1 font-mono text-[10px] tracking-widest text-[#8a8f98] transition-colors hover:text-[#ededef]"
             >
-              ■ STOP
+              Stop
             </button>
           )}
         </div>
@@ -223,11 +242,11 @@ export default function ChatbotWidget() {
         >
           {/* Welcome message */}
           <div className="flex justify-start gap-2">
-            <span className="mt-1 shrink-0 text-[10px] font-[family-name:var(--font-label)] uppercase tracking-[0.2em] text-[#00ff88]">
+            <span className="mt-1 shrink-0 font-mono text-[10px] tracking-widest text-[#0ea5e9]">
               AI
             </span>
-            <div className="max-w-[85%] clip-card-sm border border-[#2a2a3a] bg-[#0a0a0f] px-3 py-2 text-[13px] leading-relaxed text-[#e0e0e0]">
-              <span>{WELCOME_MESSAGE}</span>
+            <div className="max-w-[85%] rounded-xl bg-white/[0.05] px-3 py-2 text-[13px] leading-relaxed text-[#ededef] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]">
+              {WELCOME_MESSAGE}
             </div>
           </div>
 
@@ -236,26 +255,29 @@ export default function ChatbotWidget() {
             <ChatMessage key={message.id} message={message} />
           ))}
 
-          {/* Loading indicator — show when submitted but no streaming yet */}
+          {/* Loading indicator */}
           {status === 'submitted' && (
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-[family-name:var(--font-label)] uppercase tracking-[0.2em] text-[#00ff88]">
-                AI
-              </span>
-              <div className="clip-card-sm border border-[#2a2a3a] bg-[#0a0a0f] px-3 py-2">
-                <span className="cursor-blink text-[13px] text-[#6b7280]" aria-label="Assistant is thinking" />
+              <span className="font-mono text-[10px] tracking-widest text-[#0ea5e9]">AI</span>
+              <div className="rounded-xl bg-white/[0.05] px-3 py-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]">
+                <span
+                  className="inline-block h-3 w-3 animate-[blink_1s_step-end_infinite] text-[13px] text-[#8a8f98]"
+                  aria-label="Assistant is thinking"
+                >
+                  ●
+                </span>
               </div>
             </div>
           )}
 
-          {/* Streaming — append "..." if truncated on timeout (trailing cursor shown while streaming) */}
+          {/* Streaming — show cursor while empty */}
           {status === 'streaming' && streamingText === '' && (
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-[family-name:var(--font-label)] uppercase tracking-[0.2em] text-[#00ff88]">
-                AI
-              </span>
-              <div className="clip-card-sm border border-[#2a2a3a] bg-[#0a0a0f] px-3 py-2">
-                <span className="cursor-blink text-[13px] text-[#6b7280]" />
+              <span className="font-mono text-[10px] tracking-widest text-[#0ea5e9]">AI</span>
+              <div className="rounded-xl bg-white/[0.05] px-3 py-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]">
+                <span className="inline-block h-3 animate-[blink_1s_step-end_infinite] text-[13px] text-[#8a8f98]">
+                  ●
+                </span>
               </div>
             </div>
           )}
@@ -263,10 +285,10 @@ export default function ChatbotWidget() {
           {/* Error state */}
           {status === 'error' && error && (
             <div className="flex justify-start gap-2">
-              <span className="mt-1 shrink-0 text-[10px] font-[family-name:var(--font-label)] uppercase tracking-[0.2em] text-[#ff3366]">
+              <span className="mt-1 shrink-0 font-mono text-[10px] tracking-widest text-red-400">
                 ERR
               </span>
-              <div className="max-w-[85%] clip-card-sm border border-[#ff3366]/40 bg-[#0a0a0f] px-3 py-2 text-[13px] text-[#ff3366]">
+              <div className="max-w-[85%] rounded-xl bg-red-500/5 px-3 py-2 text-[13px] text-red-400 shadow-[inset_0_0_0_1px_rgba(239,68,68,0.2)]">
                 Sorry, I&apos;m having trouble responding right now. Please try again.
               </div>
             </div>
@@ -274,7 +296,7 @@ export default function ChatbotWidget() {
 
           {/* Session limit reached */}
           {limitReached && (
-            <div className="text-center text-[11px] font-[family-name:var(--font-label)] uppercase tracking-[0.15em] text-[#6b7280]">
+            <div className="text-center font-mono text-[11px] tracking-widest text-[#8a8f98]">
               — session limit reached —
             </div>
           )}
@@ -283,7 +305,7 @@ export default function ChatbotWidget() {
         </div>
 
         {/* Input */}
-        <div className="shrink-0 border-t border-[#2a2a3a] p-3">
+        <div className="shrink-0 border-t border-white/[0.06] p-3">
           <ChatInput
             ref={inputRef}
             value={inputValue}
