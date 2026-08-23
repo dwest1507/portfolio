@@ -6,7 +6,7 @@ type Code = HTMLAttributes<HTMLElement> & { children?: ReactNode; className?: st
 
 function H2({ children, ...props }: Block) {
   return (
-    <div className="mb-6 mt-14 first:mt-0">
+    <div className="mt-14 mb-6 first:mt-0">
       <h2
         className="text-xl font-semibold tracking-tight text-[#ededef]"
         {...(props as HTMLAttributes<HTMLHeadingElement>)}
@@ -24,7 +24,7 @@ function H2({ children, ...props }: Block) {
 function H3({ children, ...props }: Block) {
   return (
     <h3
-      className="mb-3 mt-8 text-base font-medium text-[#ededef]"
+      className="mt-8 mb-3 text-base font-medium text-[#ededef]"
       {...(props as HTMLAttributes<HTMLHeadingElement>)}
     >
       {children}
@@ -46,7 +46,7 @@ function P({ children, ...props }: Block) {
 function Blockquote({ children, ...props }: Block) {
   return (
     <blockquote
-      className="my-6 border-l-2 border-[#0ea5e9]/40 pl-5 text-sm italic text-[#8a8f98]"
+      className="my-6 border-l-2 border-[#0ea5e9]/40 pl-5 text-sm text-[#8a8f98] italic"
       {...(props as HTMLAttributes<HTMLQuoteElement>)}
     >
       {children}
@@ -64,7 +64,7 @@ function Strong({ children, ...props }: Block) {
 
 function Em({ children, ...props }: Block) {
   return (
-    <em className="italic text-[#ededef]/80" {...(props as HTMLAttributes<HTMLElement>)}>
+    <em className="text-[#ededef]/80 italic" {...(props as HTMLAttributes<HTMLElement>)}>
       {children}
     </em>
   )
@@ -73,7 +73,7 @@ function Em({ children, ...props }: Block) {
 function Ul({ children, ...props }: Block) {
   return (
     <ul
-      className="mb-5 space-y-1.5 pl-5 list-disc marker:text-[#0ea5e9]"
+      className="mb-5 list-disc space-y-1.5 pl-5 marker:text-[#0ea5e9]"
       {...(props as HTMLAttributes<HTMLUListElement>)}
     >
       {children}
@@ -84,7 +84,7 @@ function Ul({ children, ...props }: Block) {
 function Ol({ children, ...props }: Block) {
   return (
     <ol
-      className="mb-5 space-y-1.5 pl-5 list-decimal marker:font-mono marker:text-xs marker:text-[#8a8f98]"
+      className="mb-5 list-decimal space-y-1.5 pl-5 marker:font-mono marker:text-xs marker:text-[#8a8f98]"
       {...(props as HTMLAttributes<HTMLOListElement>)}
     >
       {children}

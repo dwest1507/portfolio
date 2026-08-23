@@ -19,7 +19,7 @@ export default function AmbientBackground() {
       />
       {/* Secondary blob — upper left, purple/pink */}
       <div
-        className="absolute -left-[300px] top-[10%] h-[600px] w-[800px] rounded-full opacity-[0.10]"
+        className="absolute top-[10%] -left-[300px] h-[600px] w-[800px] rounded-full opacity-[0.10]"
         style={{
           background: 'linear-gradient(to bottom right, #7c3aed, #db2777)',
           filter: 'blur(120px)',
@@ -28,7 +28,7 @@ export default function AmbientBackground() {
       />
       {/* Tertiary blob — right, indigo/blue */}
       <div
-        className="absolute -right-[200px] top-[35%] h-[500px] w-[700px] rounded-full opacity-[0.10]"
+        className="absolute top-[35%] -right-[200px] h-[500px] w-[700px] rounded-full opacity-[0.10]"
         style={{
           background: 'linear-gradient(to bottom left, #0ea5e9, #2563eb)',
           filter: 'blur(100px)',

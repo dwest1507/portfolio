@@ -61,7 +61,4 @@ export const projects: Project[] = [
   },
 ]
 
-export const allTags = [
-  'All',
-  ...Array.from(new Set(projects.flatMap((p) => p.tags))).sort(),
-]
+export const allTags = ['All', ...Array.from(new Set(projects.flatMap((p) => p.tags))).sort()]

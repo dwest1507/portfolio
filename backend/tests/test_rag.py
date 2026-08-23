@@ -1,4 +1,5 @@
 """Tests for the RAG pipeline components."""
+
 import json
 import pickle
 import sys
@@ -62,6 +63,7 @@ def test_strip_mdx_removes_links_keeps_text():
 # RAGPipeline unit tests (with mocked models/indexes)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def fake_indexes(tmp_path):
     """Create minimal fake indexes in a temp directory."""
@@ -85,6 +87,7 @@ def fake_indexes(tmp_path):
 
     # BM25 index
     from rank_bm25 import BM25Okapi
+
     corpus = [c["text"].lower().split() for c in chunks]
     bm25 = BM25Okapi(corpus)
     with open(tmp_path / "bm25.pkl", "wb") as f:
@@ -94,7 +97,7 @@ def fake_indexes(tmp_path):
 
 
 def test_hybrid_search_returns_chunks(fake_indexes):
-    indexes_dir, chunks = fake_indexes
+    indexes_dir, _chunks = fake_indexes
 
     mock_embedder = MagicMock()
     mock_embedder.encode.return_value = np.random.rand(1, 768).astype(np.float32)
@@ -103,7 +106,10 @@ def test_hybrid_search_returns_chunks(fake_indexes):
     mock_cross_encoder.predict.return_value = np.array([0.9, 0.7, 0.5])
 
     from app.rag.pipeline import RAGPipeline
-    pipeline = RAGPipeline(indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder)
+
+    pipeline = RAGPipeline(
+        indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
+    )
     results = pipeline._hybrid_search("AI Engineer experience", top_k=3)
 
     assert len(results) > 0
@@ -122,7 +128,10 @@ def test_reranking_orders_by_cross_encoder_score(fake_indexes):
     mock_cross_encoder.predict.return_value = np.array([0.1, 0.5, 0.9])
 
     from app.rag.pipeline import RAGPipeline
-    pipeline = RAGPipeline(indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder)
+
+    pipeline = RAGPipeline(
+        indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
+    )
     candidates = list(chunks)  # use all 3
     reranked = pipeline._rerank("query", candidates, top_k=3)
 
@@ -131,7 +140,7 @@ def test_reranking_orders_by_cross_encoder_score(fake_indexes):
 
 
 def test_retrieve_returns_top_k(fake_indexes):
-    indexes_dir, chunks = fake_indexes
+    indexes_dir, _chunks = fake_indexes
 
     mock_embedder = MagicMock()
     mock_embedder.encode.return_value = np.random.rand(1, 768).astype(np.float32)
@@ -140,7 +149,10 @@ def test_retrieve_returns_top_k(fake_indexes):
     mock_cross_encoder.predict.side_effect = lambda pairs: np.random.rand(len(pairs))
 
     from app.rag.pipeline import RAGPipeline
-    pipeline = RAGPipeline(indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder)
+
+    pipeline = RAGPipeline(
+        indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
+    )
     results = pipeline.retrieve("What is David's background?", top_k=2)
 
     assert len(results) <= 2
@@ -149,7 +161,7 @@ def test_retrieve_returns_top_k(fake_indexes):
 
 def test_prompt_includes_context_and_history(fake_indexes):
     """build_messages includes context in the system message and preserves history order."""
-    from app.llm import Message, build_messages, SYSTEM_PROMPT
+    from app.llm import SYSTEM_PROMPT, Message, build_messages
 
     context = "David is an AI Engineer.\n\n---\n\nDavid has worked on RAG pipelines."
     history = [
