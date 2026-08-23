@@ -1,0 +1,146 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # Manual redeploy of both services (e.g. after changing env vars)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two production deploys at once; never cancel one mid-flight
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      frontend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.frontend }}
+      backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/frontend-ci.yml'
+              - '.github/workflows/deploy.yml'
+            backend:
+              - 'backend/**'
+              - '.github/workflows/backend-ci.yml'
+              - '.github/workflows/deploy.yml'
+
+  frontend-ci:
+    name: Frontend CI
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    uses: ./.github/workflows/frontend-ci.yml
+
+  backend-ci:
+    name: Backend CI
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    uses: ./.github/workflows/backend-ci.yml
+
+  deploy-frontend:
+    name: Deploy frontend (Vercel)
+    needs: [changes, frontend-ci]
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production-frontend
+      url: ${{ steps.deploy.outputs.url }}
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 10); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.deploy.outputs.url }}")
+            if [ "$status" = "200" ]; then
+              echo "Frontend healthy (HTTP $status)"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $status — retrying in 10s"
+            sleep 10
+          done
+          echo "Frontend never became healthy" >&2
+          exit 1
+
+  deploy-backend:
+    name: Deploy backend (Railway)
+    needs: [changes, backend-ci]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production-backend
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli
+
+      - name: Deploy
+        run: railway up --service "${{ vars.RAILWAY_SERVICE }}" --ci
+
+      - name: Health check
+        if: vars.BACKEND_URL != ''
+        run: |
+          # Allow time for model loading on startup
+          for i in $(seq 1 30); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.BACKEND_URL }}/api/health" || true)
+            if [ "$status" = "200" ]; then
+              echo "Backend healthy (HTTP $status)"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $status — retrying in 10s"
+            sleep 10
+          done
+          echo "Backend never became healthy" >&2
+          exit 1
