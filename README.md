@@ -87,5 +87,6 @@ make stop            # Kill dev servers
 | [docs/chatbot-rag.md](docs/chatbot-rag.md) | RAG pipeline details (chunking, embedding, search, re-ranking) |
 | [docs/design-system.md](docs/design-system.md) | Cyberpunk design tokens, typography, animations |
 | [docs/deployment.md](docs/deployment.md) | Deploying to Vercel + Railway, environment variables |
+| [docs/ci-cd.md](docs/ci-cd.md) | GitHub Actions pipeline — CI, security scans, Lighthouse, deploys |
 | [docs/testing.md](docs/testing.md) | Test coverage approach, running tests |
 | [SPEC.md](SPEC.md) | Full project specification |
