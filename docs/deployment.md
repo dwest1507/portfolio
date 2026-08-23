@@ -52,14 +52,26 @@ Do the backend first: the frontend needs the backend's URL.
 1. Sign in at [railway.com](https://railway.com) with GitHub.
 2. **New Project → Deploy from GitHub repo** → select this repository. Authorize the
    Railway GitHub App for the repo if prompted.
-3. Open the created service → **Settings**:
-   - **Root Directory**: `backend`
-     Railway then picks up `backend/railway.json` automatically, which sets the
-     Dockerfile builder, the `/api/health` healthcheck (300s startup budget), and the
-     restart policy. Do not set a custom build or start command.
-   - **Watch Paths**: `backend/**`
-     Keeps frontend-only pushes from rebuilding the container.
-   - **Branch**: `main`
+3. Open the created service → **Settings** and set these. There is no config file in
+   the repo — Railway's Config as Code (`railway.json` / `railway.toml`) is deprecated
+   and stops being read on 2026-12-01, so the service is configured here:
+
+   | Setting | Value | Section |
+   |---------|-------|---------|
+   | Root Directory | `backend` | Source |
+   | Branch | `main` | Source |
+   | Watch Paths | `backend/**` | Source |
+   | Healthcheck Path | `/api/health` | Deploy |
+   | Healthcheck Timeout | `300` | Deploy |
+   | Restart Policy | On Failure, 3 max retries | Deploy |
+
+   - The builder needs no setting: with the root directory at `backend`, Railway
+     detects `backend/Dockerfile` and uses it. Leave build and start commands empty —
+     the Dockerfile's `CMD` starts uvicorn on `$PORT`.
+   - **Set the healthcheck timeout explicitly.** The image bakes the embedding and
+     cross-encoder models, so first boot is slow; the default timeout is far shorter
+     and is the most likely cause of a deploy stalling on "waiting for healthcheck".
+   - Watch paths keep frontend-only pushes from rebuilding the container.
 4. **Variables** tab → add:
 
    | Variable | Value |
@@ -175,7 +187,7 @@ CHAT_API_URL=http://localhost:8000
 ## Checklist
 
 - [ ] `make build-index` run and `backend/indexes/` committed
-- [ ] Railway project created from the GitHub repo; root directory `backend`, watch paths `backend/**`
+- [ ] Railway project created from the GitHub repo; root directory `backend`, watch paths `backend/**`, healthcheck `/api/health` with a 300s timeout
 - [ ] `GROQ_API_KEY` set in Railway; public domain generated
 - [ ] `/api/health` returns 200 on the Railway URL
 - [ ] Vercel project imported; root directory `frontend`

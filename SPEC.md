@@ -550,7 +550,7 @@ Deploys use the platforms' native git integrations — both Vercel and Railway w
 
 **Backend (Railway):**
 - Root directory: `backend`; watch paths `backend/**`
-- Build: `backend/Dockerfile` (uv + `python:3.14-slim`; embedding/re-ranking models baked into the image), configured by `backend/railway.json`
+- Build: `backend/Dockerfile` (uv + `python:3.14-slim`; embedding/re-ranking models baked into the image), auto-detected from the root directory
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - Python version: 3.14
 - Production deploy: Push to `main` (Railway git integration), gated on the `/api/health` healthcheck before the new container takes traffic
@@ -683,7 +683,7 @@ pytest tests/ -v --cov=app     # With coverage
 ### Phase 7: Deploy
 
 - [x] Set up CI pipeline (GitHub Actions: CI, security scans, Lighthouse — see `docs/ci-cd.md`)
-- [x] Create Railway deploy config (`backend/Dockerfile`, `backend/railway.json`, models baked into image)
+- [x] Create Railway deploy config (`backend/Dockerfile`, models baked into image; service settings live in the Railway dashboard — Config as Code is deprecated)
 - [x] Add security headers to Next.js responses (`next.config.ts`)
 - [ ] Create Railway project from the GitHub repo (root directory `backend`) and set `GROQ_API_KEY`, `ALLOWED_ORIGINS`
 - [ ] Import the repo into Vercel (root directory `frontend`) and set `CHAT_API_URL`
