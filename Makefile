@@ -1,6 +1,6 @@
 .PHONY: help install dev dev-frontend dev-backend build-index test lint clean stop \
 	frontend-quality frontend-test frontend-build backend-lint backend-test \
-	security-audit lighthouse ci-cd deploy-frontend deploy-frontend-preview deploy-backend
+	security-audit lighthouse ci-cd
 
 help:
 	@echo "Available commands:"
@@ -15,7 +15,7 @@ help:
 	@echo "  make clean                   - Remove caches and build artifacts"
 	@echo ""
 	@echo "CI checks (same scripts GitHub Actions runs — see scripts/):"
-	@echo "  make ci-cd                   - Run ALL CI checks locally (no deploys)"
+	@echo "  make ci-cd                   - Run ALL CI checks locally"
 	@echo "  make frontend-quality        - ESLint + Prettier check + TypeScript check"
 	@echo "  make frontend-test           - Vitest (single run)"
 	@echo "  make frontend-build          - Next.js production build"
@@ -24,10 +24,8 @@ help:
 	@echo "  make security-audit          - npm audit + pip-audit"
 	@echo "  make lighthouse              - Lighthouse CI budget check (needs Chrome)"
 	@echo ""
-	@echo "Deploys (run by GitHub Actions on main; local runs need the same env vars):"
-	@echo "  make deploy-frontend         - Deploy frontend to Vercel (production)"
-	@echo "  make deploy-frontend-preview - Deploy frontend to Vercel (preview)"
-	@echo "  make deploy-backend          - Deploy backend to Railway"
+	@echo "Deploys are handled by the Vercel and Railway git integrations"
+	@echo "(push to main) — see docs/deployment.md."
 
 install:
 	@echo "Installing backend dependencies..."
@@ -80,8 +78,8 @@ security-audit:
 lighthouse:
 	./scripts/lighthouse.sh
 
-# Everything the PR/push gates run, in one command. Deploys are intentionally
-# excluded — those only run from GitHub Actions on main.
+# Everything the PR/push gates run, in one command. There is nothing to deploy
+# here — Vercel and Railway deploy from main via their git integrations.
 ci-cd: frontend-quality frontend-test frontend-build backend-lint backend-test security-audit lighthouse
 	@echo ""
 	@echo "ci-cd: all checks passed ✔"
@@ -90,20 +88,6 @@ ci-cd: frontend-quality frontend-test frontend-build backend-lint backend-test s
 test: backend-test frontend-test
 
 lint: frontend-quality backend-lint
-
-# ---------------------------------------------------------------------------
-# Deploys — NOT part of ci-cd. GitHub Actions runs these on push to main;
-# the make targets exist so the logic can be exercised locally.
-# ---------------------------------------------------------------------------
-
-deploy-frontend:
-	./scripts/deploy-frontend.sh production
-
-deploy-frontend-preview:
-	./scripts/deploy-frontend.sh preview
-
-deploy-backend:
-	./scripts/deploy-backend.sh
 
 clean:
 	@echo "Cleaning up..."

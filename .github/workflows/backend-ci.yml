@@ -9,7 +9,13 @@ on:
       - 'backend/**'
       - 'scripts/backend-*.sh'
       - '.github/workflows/backend-ci.yml'
-  workflow_call:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'scripts/backend-*.sh'
+      - '.github/workflows/backend-ci.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -49,7 +49,7 @@ ALLOWED_ORIGINS=http://localhost:3000
 portfolio/
 ├── frontend/          Next.js 15 app (pages, components, styles)
 ├── backend/           Python FastAPI (RAG pipeline, chat endpoint)
-├── scripts/           CI/CD check + deploy scripts (shared by make and GitHub Actions)
+├── scripts/           CI check scripts (shared by make and GitHub Actions)
 ├── docs/              Detailed documentation
 │   └── resume.txt     Resume source used for RAG indexing
 └── Makefile           Dev automation commands
@@ -74,7 +74,7 @@ make dev-frontend    # Next.js on :3000
 make dev-backend     # FastAPI on :8000
 make test            # Run all tests (pytest + vitest)
 make lint            # Ruff + ESLint + Prettier + tsc
-make ci-cd           # Run every CI check locally (no deploys) — same scripts CI runs
+make ci-cd           # Run every CI check locally — same scripts CI runs
 make build-index     # Rebuild RAG search indexes
 make stop            # Kill dev servers
 ```
@@ -92,7 +92,7 @@ See [docs/ci-cd.md](docs/ci-cd.md) for the full target ↔ workflow mapping.
 | [docs/architecture.md](docs/architecture.md) | System design, data flow, tech decisions |
 | [docs/chatbot-rag.md](docs/chatbot-rag.md) | RAG pipeline details (chunking, embedding, search, re-ranking) |
 | [docs/design-system.md](docs/design-system.md) | Cyberpunk design tokens, typography, animations |
-| [docs/deployment.md](docs/deployment.md) | Deploying to Vercel + Railway, environment variables |
-| [docs/ci-cd.md](docs/ci-cd.md) | GitHub Actions pipeline — CI, security scans, Lighthouse, deploys |
+| [docs/deployment.md](docs/deployment.md) | Deploying to Vercel + Railway (native git integrations), environment variables |
+| [docs/ci-cd.md](docs/ci-cd.md) | GitHub Actions pipeline — CI, security scans, Lighthouse |
 | [docs/testing.md](docs/testing.md) | Test coverage approach, running tests |
 | [SPEC.md](SPEC.md) | Full project specification |

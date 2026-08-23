@@ -9,55 +9,149 @@
 | LLM | Groq | 14,400 requests/day, 30 req/min |
 | Analytics | Vercel Analytics | 2,500 events/month |
 
-Deploys are performed by GitHub Actions (`.github/workflows/deploy.yml`), **not** by the
-Vercel/Railway git integrations — see [ci-cd.md](ci-cd.md). The steps below are the
-one-time setup; after that, every push to `main` that passes CI deploys automatically.
+Deploys are handled by the **native Vercel and Railway git integrations**: both
+platforms watch this repo and redeploy on every push to `main`. GitHub Actions runs
+tests, linting, security scans, and Lighthouse (see [ci-cd.md](ci-cd.md)) but does not
+deploy — there are no deploy tokens in GitHub.
 
-## One-time setup: Vercel (frontend)
+```
+push / merge to main
+   │
+   ├─ GitHub Actions ─► CI + security + Lighthouse (quality signal)
+   ├─ Vercel          ─► builds frontend/  ─► production frontend
+   └─ Railway         ─► builds backend/Dockerfile ─► production backend
+```
 
-1. Create a Vercel account and install the Vercel CLI locally (`npm i -g vercel`)
-2. From `frontend/`, run `vercel link` and create a new project when prompted
-   - Do **not** connect the GitHub repo in the Vercel dashboard (Actions handles deploys)
-3. Copy `orgId` and `projectId` from the generated `frontend/.vercel/project.json`
-4. In the Vercel dashboard, add the production environment variable:
+Because the platforms deploy independently of CI, a red CI run does **not** block a
+deploy. Run `make ci-cd` before pushing, or merge through a PR with branch protection
+requiring the CI checks (see [Optional: gate deploys behind CI](#optional-gate-deploys-behind-ci)).
 
-   | Variable | Value |
-   |----------|-------|
-   | `CHAT_API_URL` | Railway backend URL (e.g. `https://your-app.up.railway.app`) |
+This is a monorepo, so each platform is pointed at its own subdirectory and told to
+ignore changes outside it.
 
-5. Create an access token (Account Settings → Tokens)
-6. Add GitHub repo secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
+---
 
-## One-time setup: Railway (backend)
+## Step 1 — Before anything else: build the indexes
 
-1. Create a Railway account and a new project with an **empty service**
-   (no repo connection — Actions pushes the code with `railway up`)
-2. The service builds from `backend/Dockerfile` automatically
-   (`backend/railway.json` sets the builder, `/api/health` healthcheck, and restart policy)
-3. Add service environment variables:
+The RAG indexes are committed to the repo and copied into the backend image at build
+time. Without them the backend starts but cannot answer questions.
+
+```bash
+make build-index
+git add backend/indexes && git commit -m "chore: rebuild RAG indexes"
+```
+
+Re-run this whenever `backend/data/` changes.
+
+---
+
+## Step 2 — Deploy the backend (Railway)
+
+Do the backend first: the frontend needs the backend's URL.
+
+1. Sign in at [railway.com](https://railway.com) with GitHub.
+2. **New Project → Deploy from GitHub repo** → select this repository. Authorize the
+   Railway GitHub App for the repo if prompted.
+3. Open the created service → **Settings**:
+   - **Root Directory**: `backend`
+     Railway then picks up `backend/railway.json` automatically, which sets the
+     Dockerfile builder, the `/api/health` healthcheck (300s startup budget), and the
+     restart policy. Do not set a custom build or start command.
+   - **Watch Paths**: `backend/**`
+     Keeps frontend-only pushes from rebuilding the container.
+   - **Branch**: `main`
+4. **Variables** tab → add:
 
    | Variable | Value |
    |----------|-------|
    | `GROQ_API_KEY` | From [console.groq.com](https://console.groq.com) |
-   | `ALLOWED_ORIGINS` | Vercel production URL (e.g. `https://your-site.vercel.app`) |
+   | `ALLOWED_ORIGINS` | Vercel production URL — fill in after Step 3, e.g. `https://your-site.vercel.app` |
 
-4. Generate a project token (Project Settings → Tokens) and add it as the GitHub repo
-   secret `RAILWAY_TOKEN`
-5. Add GitHub repo variables: `RAILWAY_SERVICE` (the service name) and `BACKEND_URL`
-   (the public Railway URL, once known)
-6. **Before deploying:** run `make build-index` locally and commit the generated index
-   files in `backend/indexes/`. They are baked into the container image.
+   `PORT` is injected by Railway; the container reads it. Leave it unset.
+5. **Settings → Networking → Generate Domain** to get a public URL
+   (`https://<something>.up.railway.app`). Copy it.
+6. Wait for the first build. It takes several minutes — the image bakes the embedding
+   and cross-encoder models in so cold starts never hit Hugging Face.
+7. Verify:
 
-## First deploy
+   ```bash
+   curl https://<your-app>.up.railway.app/api/health
+   ```
 
-1. Merge/push to `main` (or run the **Deploy** workflow manually from the Actions tab)
-2. The backend deploy waits for `/api/health` to return 200 (model loading can take a bit)
-3. Once the Railway URL is live, confirm `CHAT_API_URL` in Vercel and `BACKEND_URL` in
-   GitHub variables point at it, then redeploy the frontend if needed (manual dispatch)
+   Expect `200` with a JSON body. If the deploy is stuck "waiting for healthcheck",
+   check the deploy logs for a model-download or index-missing error.
+
+---
+
+## Step 3 — Deploy the frontend (Vercel)
+
+1. Sign in at [vercel.com](https://vercel.com) with GitHub.
+2. **Add New → Project** → import this repository.
+3. In the import screen:
+   - **Root Directory**: `frontend` — and tick **Include files outside the root
+     directory** off (nothing outside `frontend/` is needed).
+   - **Framework Preset**: Next.js (auto-detected). Leave build/output settings alone.
+4. **Environment Variables** — add before the first build:
+
+   | Variable | Environments | Value |
+   |----------|--------------|-------|
+   | `CHAT_API_URL` | Production, Preview | The Railway URL from Step 2 |
+
+   This is server-only (used by the `/api/chat` route handler), so it is deliberately
+   *not* `NEXT_PUBLIC_`.
+5. **Deploy**. Copy the production URL.
+6. **Settings → Git → Ignored Build Step**: choose *"Only build if there are changes in
+   the Root Directory"* (or the command `git diff --quiet HEAD^ HEAD -- .`), so
+   backend-only pushes don't burn build minutes.
+
+---
+
+## Step 4 — Close the CORS loop
+
+Back in Railway → **Variables**, set `ALLOWED_ORIGINS` to the Vercel production URL
+(no trailing slash, comma-separated if you add a custom domain later):
+
+```
+ALLOWED_ORIGINS=https://your-site.vercel.app
+```
+
+Saving a variable triggers a redeploy. Once it's live, open the site and send a message
+in the chatbot — if the request fails with a CORS error in the browser console,
+`ALLOWED_ORIGINS` doesn't match the origin exactly.
+
+---
+
+## Everyday deploys
+
+Push to `main` (directly or by merging a PR):
+
+- Vercel builds `frontend/` and promotes it to production; PRs get an automatic
+  **preview deployment** with the URL commented on the PR by Vercel's GitHub app.
+- Railway rebuilds the backend image only if files under `backend/**` changed.
+
+Both platforms support rollback from their dashboards: Vercel → Deployments →
+*Promote to Production* on an earlier build; Railway → Deployments → *Redeploy* on an
+earlier one.
+
+To force a redeploy without a code change: Vercel → Deployments → *Redeploy*;
+Railway → *Deploy* on the service (or just save a variable).
+
+## Optional: gate deploys behind CI
+
+The platforms deploy on push regardless of CI status. To make CI actually blocking,
+protect `main` in GitHub → **Settings → Branches → Add rule**:
+
+- Require a pull request before merging
+- Require status checks to pass: `Lint, format & types`, `Unit tests`,
+  `Production build`, `Ruff lint & format`, `Pytest`, `Lighthouse CI`,
+  `CodeQL (javascript-typescript)`, `CodeQL (python)`, `npm audit (frontend)`,
+  `pip-audit (backend)`
+
+Then nothing reaches `main` — and therefore neither platform — without green CI.
 
 ## Cold start handling
 
-Railway free tier sleeps services after inactivity (~30–60s cold start). Options:
+Railway's free tier sleeps services after inactivity (~30–60s cold start). Options:
 
 - **Accept it** — the frontend shows a loading state while the backend wakes up
 - **Keep-warm pings** — use [UptimeRobot](https://uptimerobot.com) (free) to ping
@@ -72,7 +166,7 @@ GROQ_API_KEY=your_key_here
 ALLOWED_ORIGINS=http://localhost:3000
 ```
 
-The frontend reads `CHAT_API_URL` from `.env.local` in `frontend/`:
+And `frontend/.env.local`:
 
 ```
 CHAT_API_URL=http://localhost:8000
@@ -80,11 +174,13 @@ CHAT_API_URL=http://localhost:8000
 
 ## Checklist
 
-- [ ] `make build-index` run and indexes committed
-- [ ] Vercel project linked; `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` GitHub secrets set
-- [ ] Railway service created; `RAILWAY_TOKEN` secret and `RAILWAY_SERVICE` / `BACKEND_URL` variables set
-- [ ] `GROQ_API_KEY` + `ALLOWED_ORIGINS` set in Railway
-- [ ] `CHAT_API_URL` set to Railway URL in Vercel
-- [ ] Deploy workflow green; smoke test and health check passed
-- [ ] Chatbot end-to-end tested in production
+- [ ] `make build-index` run and `backend/indexes/` committed
+- [ ] Railway project created from the GitHub repo; root directory `backend`, watch paths `backend/**`
+- [ ] `GROQ_API_KEY` set in Railway; public domain generated
+- [ ] `/api/health` returns 200 on the Railway URL
+- [ ] Vercel project imported; root directory `frontend`
+- [ ] `CHAT_API_URL` set in Vercel (Production + Preview) to the Railway URL
+- [ ] `ALLOWED_ORIGINS` in Railway set to the Vercel production URL
+- [ ] Chatbot tested end-to-end in production
+- [ ] (Optional) Branch protection on `main` requiring the CI checks
 - [ ] (Optional) UptimeRobot keep-warm monitor configured

@@ -9,7 +9,13 @@ on:
       - 'frontend/**'
       - 'scripts/frontend-*.sh'
       - '.github/workflows/frontend-ci.yml'
-  workflow_call:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'scripts/frontend-*.sh'
+      - '.github/workflows/frontend-ci.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

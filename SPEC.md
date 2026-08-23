@@ -538,20 +538,22 @@ export default function RootLayout({ children }) {
 
 ### Build & Deploy
 
-Deploys are driven by GitHub Actions (`.github/workflows/deploy.yml`) rather than the platforms' git integrations, so nothing ships without CI passing. See `docs/ci-cd.md` for the full pipeline.
+Deploys use the platforms' native git integrations — both Vercel and Railway watch `main` and redeploy on push. GitHub Actions runs CI, security scans, and Lighthouse but never deploys. See `docs/deployment.md` for setup and `docs/ci-cd.md` for the pipeline.
 
 **Frontend (Vercel):**
-- Build command: `next build` (via `vercel build` + `vercel deploy --prebuilt` in CI)
+- Root directory: `frontend`
+- Build command: `next build` (Vercel's Next.js preset)
 - Output: Hybrid — static pages (SSG) + one serverless function (`/api/chat` proxy)
-- Node.js version: 22.x
-- Production deploy: Push to `main` (gated on frontend CI) via the Deploy workflow
-- Preview: PRs touching `frontend/**` get a Vercel preview deployment with the URL commented on the PR
+- Node.js version: pinned by `frontend/.nvmrc`
+- Production deploy: Push to `main` (Vercel git integration)
+- Preview: PRs get an automatic Vercel preview deployment, URL commented by the Vercel GitHub app
 
 **Backend (Railway):**
+- Root directory: `backend`; watch paths `backend/**`
 - Build: `backend/Dockerfile` (uv + `python:3.14-slim`; embedding/re-ranking models baked into the image), configured by `backend/railway.json`
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - Python version: 3.14
-- Production deploy: Push to `main` (gated on backend CI) via `railway up` in the Deploy workflow, followed by a `/api/health` check
+- Production deploy: Push to `main` (Railway git integration), gated on the `/api/health` healthcheck before the new container takes traffic
 - Pre-processing: Run `python scripts/build_index.py` locally before deploying to generate FAISS/BM25 indexes (committed, copied into the image)
 
 ---
@@ -680,12 +682,11 @@ pytest tests/ -v --cov=app     # With coverage
 
 ### Phase 7: Deploy
 
-- [x] Set up CI/CD pipeline (GitHub Actions: CI, security scans, Lighthouse, preview + production deploys — see `docs/ci-cd.md`)
+- [x] Set up CI pipeline (GitHub Actions: CI, security scans, Lighthouse — see `docs/ci-cd.md`)
 - [x] Create Railway deploy config (`backend/Dockerfile`, `backend/railway.json`, models baked into image)
 - [x] Add security headers to Next.js responses (`next.config.ts`)
-- [ ] Create Vercel project (`vercel link`) and set GitHub secrets (`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`)
-- [ ] Create Railway project/service and set GitHub secret `RAILWAY_TOKEN` + variables (`RAILWAY_SERVICE`, `BACKEND_URL`)
-- [ ] Set Railway environment variables (`GROQ_API_KEY`, `ALLOWED_ORIGINS`)
-- [ ] Set Vercel environment variables (`CHAT_API_URL`)
-- [ ] First deploy via the Deploy workflow; verify production build, static pages, and chatbot functionality
+- [ ] Create Railway project from the GitHub repo (root directory `backend`) and set `GROQ_API_KEY`, `ALLOWED_ORIGINS`
+- [ ] Import the repo into Vercel (root directory `frontend`) and set `CHAT_API_URL`
+- [ ] Verify production build, static pages, and chatbot functionality end-to-end
+- [ ] (Optional) Protect `main` with required CI status checks so deploys are gated
 - [ ] (Optional) Set up uptime monitor for Railway keep-warm pings
