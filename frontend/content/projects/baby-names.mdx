@@ -2,7 +2,7 @@
 
 Baby Name Popularity is an interactive data application for exploring 145 years of US baby name trends from the Social Security Administration, with machine learning models that forecast future name popularity. You can search any name, compare multiple names side by side, browse top names by gender and decade, and see a model-generated popularity prediction for the next several years.
 
-The project grew from a simple question: *is a name getting more or less popular, and will that trend continue?* The SSA publishes name data going back to 1880, but raw data files are not interactive. Building this meant designing a data pipeline, training and evaluating multiple forecasting models, and wrapping it all in a UI that makes the analysis accessible.
+The project grew from a simple question: _is a name getting more or less popular, and will that trend continue?_ The SSA publishes name data going back to 1880, but raw data files are not interactive. Building this meant designing a data pipeline, training and evaluating multiple forecasting models, and wrapping it all in a UI that makes the analysis accessible.
 
 ## Data Pipeline
 
@@ -14,7 +14,7 @@ For each name-sex-year combination, the pipeline computes:
 - `popularity_percent` — count as a fraction of all births that year and sex, correcting for population growth
 - `popularity_rank` — ranking within year and sex (1 = most popular)
 
-Relative metrics matter more than raw counts here: *Jennifer* peaked at 3.4% of all female births in 1947, which is a more meaningful measure of cultural dominance than the absolute number. The processed data is stored in a SQLite database for fast query access from the Streamlit app.
+Relative metrics matter more than raw counts here: _Jennifer_ peaked at 3.4% of all female births in 1947, which is a more meaningful measure of cultural dominance than the absolute number. The processed data is stored in a SQLite database for fast query access from the Streamlit app.
 
 ## Machine Learning Models
 

@@ -1,10 +1,12 @@
 """Tests for POST /api/chat."""
+
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
 def _mock_groq_stream(tokens: list[str]):
     """Build an async mock that yields token chunks like the real Groq stream."""
+
     async def _stream():
         for token in tokens:
             chunk = MagicMock()
@@ -30,6 +32,7 @@ def _parse_data_stream(text: str) -> list[str]:
 # Input validation
 # ---------------------------------------------------------------------------
 
+
 def test_empty_message_returns_422(client):
     """Pydantic min_length=1 rejects empty strings."""
     response = client.post("/api/chat", json={"message": ""})
@@ -50,6 +53,7 @@ def test_missing_message_field_returns_422(client):
 # ---------------------------------------------------------------------------
 # Valid request
 # ---------------------------------------------------------------------------
+
 
 def test_valid_request_streams_response(client, mock_pipeline):
     tokens = ["David", " is", " an", " AI", " Engineer."]
@@ -141,6 +145,7 @@ def test_rag_context_included_in_system_prompt(client, mock_pipeline):
 # ---------------------------------------------------------------------------
 # Groq API error
 # ---------------------------------------------------------------------------
+
 
 def test_groq_error_yields_error_event(client, mock_pipeline):
     """When Groq fails, the stream signals an error via the data stream protocol."""

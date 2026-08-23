@@ -1,4 +1,5 @@
 """LLM generation: prompt construction + Groq streaming."""
+
 from collections.abc import AsyncIterator
 from typing import Literal
 

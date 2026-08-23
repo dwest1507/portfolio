@@ -9,45 +9,195 @@
 | LLM | Groq | 14,400 requests/day, 30 req/min |
 | Analytics | Vercel Analytics | 2,500 events/month |
 
-## Frontend (Vercel)
+Deploys are handled by the **native Vercel and Railway git integrations**: both
+platforms watch this repo and redeploy on every push to `main`. GitHub Actions runs
+tests, linting, security scans, and Lighthouse (see [ci-cd.md](ci-cd.md)) but does not
+deploy — there are no deploy tokens in GitHub.
 
-1. Connect the repo to Vercel (import from GitHub)
-2. Set build settings:
-   - **Root directory:** `frontend`
-   - **Build command:** `next build`
-   - **Node.js version:** 20.x
-3. Add environment variable:
+```
+push / merge to main
+   │
+   ├─ GitHub Actions ─► CI + security + Lighthouse (quality signal)
+   ├─ Vercel          ─► builds frontend/  ─► production frontend
+   └─ Railway         ─► builds backend/Dockerfile ─► production backend
+```
 
-   | Variable | Value |
-   |----------|-------|
-   | `CHAT_API_URL` | Railway backend URL (e.g. `https://your-app.railway.app`) |
+Because the platforms deploy independently of CI, a red CI run does **not** block a
+deploy. Run `make ci-cd` before pushing, or merge through a PR with branch protection
+requiring the CI checks (see [Optional: gate deploys behind CI](#optional-gate-deploys-behind-ci)).
 
-4. Push to `main` to trigger a production deploy. Any other branch creates a preview deployment.
+This is a monorepo, so each platform is pointed at its own subdirectory and told to
+ignore changes outside it.
 
-## Backend (Railway)
+---
 
-1. Create a new Railway project, add a service from the repo
-2. Set service settings:
-   - **Root directory:** `backend`
-   - **Start command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-   - **Python version:** 3.11+
-3. Add environment variables:
+## Step 1 — Before anything else: build the indexes
+
+The RAG indexes are committed to the repo and copied into the backend image at build
+time. Without them the backend starts but cannot answer questions.
+
+```bash
+make build-index
+git add backend/indexes && git commit -m "chore: rebuild RAG indexes"
+```
+
+Re-run this whenever `backend/data/` changes.
+
+---
+
+## Step 2 — Deploy the backend (Railway)
+
+Do the backend first: the frontend needs the backend's URL.
+
+1. Sign in at [railway.com](https://railway.com) with GitHub.
+2. **New Project → Deploy from GitHub repo** → select this repository. Authorize the
+   Railway GitHub App for the repo if prompted.
+3. Open the created service → **Settings** and set these. There is no config file in
+   the repo — Railway's Config as Code (`railway.json` / `railway.toml`) is deprecated
+   and stops being read on 2026-12-01, so the service is configured here:
+
+   | Setting | Value | Section |
+   |---------|-------|---------|
+   | Root Directory | `backend` | Source |
+   | Branch | `main` | Source |
+   | Watch Paths | `backend/**` | Source |
+   | **Builder** | **Dockerfile** | Build |
+   | Dockerfile Path | `Dockerfile` | Build |
+   | Healthcheck Path | `/api/health` | Deploy |
+   | Healthcheck Timeout | `300` | Deploy |
+   | Restart Policy | On Failure, 3 max retries | Deploy |
+
+   - **You must set the builder to Dockerfile.** New services default to Railpack,
+     Railway's auto-detecting builder, and Railpack *wins over* a Dockerfile in the
+     source directory — it is not auto-detected. If the build log opens with
+     `↳ Detected Python / ↳ Using pip` and then
+     `✖ No start command detected`, the builder is still Railpack.
+     `Dockerfile Path` is relative to the root directory, so `Dockerfile` resolves to
+     `backend/Dockerfile`; if Railway reports it can't find it, try `backend/Dockerfile`
+     instead (the field's base directory has changed across Railway versions).
+   - Leave build and start commands empty — the Dockerfile's `CMD` starts uvicorn
+     on `$PORT`.
+   - **Set the healthcheck timeout explicitly.** The image bakes the embedding and
+     cross-encoder models, so first boot is slow; the default timeout is far shorter
+     and is the most likely cause of a deploy stalling on "waiting for healthcheck".
+   - Watch paths keep frontend-only pushes from rebuilding the container.
+
+   Railpack is not a viable fallback here: it would install dependencies at runtime
+   and pull the models from Hugging Face on first request instead of at build time,
+   which makes cold starts long enough to fail the healthcheck.
+4. **Variables** tab → add:
 
    | Variable | Value |
    |----------|-------|
    | `GROQ_API_KEY` | From [console.groq.com](https://console.groq.com) |
-   | `ALLOWED_ORIGINS` | Vercel production URL (e.g. `https://your-site.vercel.app`) |
+   | `ALLOWED_ORIGINS` | Vercel production URL — fill in after Step 3, e.g. `https://your-site.vercel.app` |
+   | `PORT` | `8000` |
 
-4. **Before deploying:** run `make build-index` locally and commit the generated index files in `backend/indexes/`. They are loaded at startup.
+   The Dockerfile starts uvicorn on `${PORT:-8000}`, so 8000 is also the fallback —
+   pinning `PORT` just keeps the app and the domain's target port from ever disagreeing.
+5. **Settings → Networking → Generate Domain** to get a public URL
+   (`https://<something>.up.railway.app`). When prompted for a **target port**, enter
+   **`8000`** — the port the container listens on (`EXPOSE 8000` in the Dockerfile).
+   Copy the generated URL.
+6. Wait for the first build. It takes several minutes — the image bakes the embedding
+   and cross-encoder models in so cold starts never hit Hugging Face. The log should
+   show Docker build steps; if it shows Railpack detection instead, revisit the builder
+   setting in step 3.
+7. Verify:
 
-## Cold Start Handling
+   ```bash
+   curl https://<your-app>.up.railway.app/api/health
+   ```
 
-Railway free tier sleeps services after inactivity (~30–60s cold start). Options:
+   Expect `200` with a JSON body.
+
+### If the backend deploy fails
+
+| Symptom in the deploy log | Cause |
+|---------------------------|-------|
+| `↳ Detected Python` / `↳ Using pip` / `✖ No start command detected` | Builder is Railpack, not Dockerfile — the Dockerfile was never used (step 3) |
+| `Dockerfile does not exist` | `Dockerfile Path` doesn't resolve; try the other of `Dockerfile` / `backend/Dockerfile` |
+| Build succeeds, then stalls on "waiting for healthcheck" | Healthcheck timeout too low for model load, or `/api/health` path not set |
+| Container starts, health check 404s or times out | Domain target port ≠ the port uvicorn bound; both should be 8000 |
+| `FileNotFoundError` on an index file at startup | `backend/indexes/` wasn't built and committed (step 1) |
+
+---
+
+## Step 3 — Deploy the frontend (Vercel)
+
+1. Sign in at [vercel.com](https://vercel.com) with GitHub.
+2. **Add New → Project** → import this repository.
+3. In the import screen:
+   - **Root Directory**: `frontend` — and tick **Include files outside the root
+     directory** off (nothing outside `frontend/` is needed).
+   - **Framework Preset**: Next.js (auto-detected). Leave build/output settings alone.
+4. **Environment Variables** — add before the first build:
+
+   | Variable | Environments | Value |
+   |----------|--------------|-------|
+   | `CHAT_API_URL` | Production, Preview | The Railway URL from Step 2 |
+
+   This is server-only (used by the `/api/chat` route handler), so it is deliberately
+   *not* `NEXT_PUBLIC_`.
+5. **Deploy**. Copy the production URL.
+6. **Settings → Git → Ignored Build Step**: choose *"Only build if there are changes in
+   the Root Directory"* (or the command `git diff --quiet HEAD^ HEAD -- .`), so
+   backend-only pushes don't burn build minutes.
+
+---
+
+## Step 4 — Close the CORS loop
+
+Back in Railway → **Variables**, set `ALLOWED_ORIGINS` to the Vercel production URL
+(no trailing slash, comma-separated if you add a custom domain later):
+
+```
+ALLOWED_ORIGINS=https://your-site.vercel.app
+```
+
+Saving a variable triggers a redeploy. Once it's live, open the site and send a message
+in the chatbot — if the request fails with a CORS error in the browser console,
+`ALLOWED_ORIGINS` doesn't match the origin exactly.
+
+---
+
+## Everyday deploys
+
+Push to `main` (directly or by merging a PR):
+
+- Vercel builds `frontend/` and promotes it to production; PRs get an automatic
+  **preview deployment** with the URL commented on the PR by Vercel's GitHub app.
+- Railway rebuilds the backend image only if files under `backend/**` changed.
+
+Both platforms support rollback from their dashboards: Vercel → Deployments →
+*Promote to Production* on an earlier build; Railway → Deployments → *Redeploy* on an
+earlier one.
+
+To force a redeploy without a code change: Vercel → Deployments → *Redeploy*;
+Railway → *Deploy* on the service (or just save a variable).
+
+## Optional: gate deploys behind CI
+
+The platforms deploy on push regardless of CI status. To make CI actually blocking,
+protect `main` in GitHub → **Settings → Branches → Add rule**:
+
+- Require a pull request before merging
+- Require status checks to pass: `Lint, format & types`, `Unit tests`,
+  `Production build`, `Ruff lint & format`, `Pytest`, `Lighthouse CI`,
+  `CodeQL (javascript-typescript)`, `CodeQL (python)`, `npm audit (frontend)`,
+  `pip-audit (backend)`
+
+Then nothing reaches `main` — and therefore neither platform — without green CI.
+
+## Cold start handling
+
+Railway's free tier sleeps services after inactivity (~30–60s cold start). Options:
 
 - **Accept it** — the frontend shows a loading state while the backend wakes up
-- **Keep-warm pings** — use [UptimeRobot](https://uptimerobot.com) (free) to ping `GET /api/health` every 5 minutes during business hours
+- **Keep-warm pings** — use [UptimeRobot](https://uptimerobot.com) (free) to ping
+  `GET /api/health` every 5 minutes during business hours
 
-## Local Environment
+## Local environment
 
 Create `backend/.env`:
 
@@ -56,7 +206,7 @@ GROQ_API_KEY=your_key_here
 ALLOWED_ORIGINS=http://localhost:3000
 ```
 
-The frontend reads `CHAT_API_URL` from `.env.local` in `frontend/`:
+And `frontend/.env.local`:
 
 ```
 CHAT_API_URL=http://localhost:8000
@@ -64,10 +214,14 @@ CHAT_API_URL=http://localhost:8000
 
 ## Checklist
 
-- [ ] `make build-index` run and indexes committed
-- [ ] `GROQ_API_KEY` set in Railway
-- [ ] `ALLOWED_ORIGINS` set to Vercel production URL in Railway
-- [ ] `CHAT_API_URL` set to Railway URL in Vercel
-- [ ] Production build verified (`next build` passes)
-- [ ] Chatbot end-to-end tested in production
+- [ ] `make build-index` run and `backend/indexes/` committed
+- [ ] Railway project created from the GitHub repo; root directory `backend`, watch paths `backend/**`
+- [ ] Railway builder set to **Dockerfile** (not the default Railpack); healthcheck `/api/health` with a 300s timeout
+- [ ] `GROQ_API_KEY` set in Railway; public domain generated
+- [ ] `/api/health` returns 200 on the Railway URL
+- [ ] Vercel project imported; root directory `frontend`
+- [ ] `CHAT_API_URL` set in Vercel (Production + Preview) to the Railway URL
+- [ ] `ALLOWED_ORIGINS` in Railway set to the Vercel production URL
+- [ ] Chatbot tested end-to-end in production
+- [ ] (Optional) Branch protection on `main` requiring the CI checks
 - [ ] (Optional) UptimeRobot keep-warm monitor configured

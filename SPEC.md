@@ -538,19 +538,23 @@ export default function RootLayout({ children }) {
 
 ### Build & Deploy
 
+Deploys use the platforms' native git integrations — both Vercel and Railway watch `main` and redeploy on push. GitHub Actions runs CI, security scans, and Lighthouse but never deploys. See `docs/deployment.md` for setup and `docs/ci-cd.md` for the pipeline.
+
 **Frontend (Vercel):**
-- Build command: `next build`
+- Root directory: `frontend`
+- Build command: `next build` (Vercel's Next.js preset)
 - Output: Hybrid — static pages (SSG) + one serverless function (`/api/chat` proxy)
-- Node.js version: 20.x
-- Auto-deploy: Push to `main` triggers production deploy
-- Preview: Push to any other branch creates a preview deployment
+- Node.js version: pinned by `frontend/.nvmrc`
+- Production deploy: Push to `main` (Vercel git integration)
+- Preview: PRs get an automatic Vercel preview deployment, URL commented by the Vercel GitHub app
 
 **Backend (Railway):**
-- Build command: `pip install -r requirements.txt`
+- Root directory: `backend`; watch paths `backend/**`
+- Build: `backend/Dockerfile` (uv + `python:3.14-slim`; embedding/re-ranking models baked into the image) — the service's builder must be set to Dockerfile in the Railway dashboard, since new services default to Railpack
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- Python version: 3.11+
-- Auto-deploy: Push to `main` triggers production deploy
-- Pre-processing: Run `python scripts/build_index.py` locally before deploying to generate FAISS/BM25 indexes
+- Python version: 3.14
+- Production deploy: Push to `main` (Railway git integration), gated on the `/api/health` healthcheck before the new container takes traffic
+- Pre-processing: Run `python scripts/build_index.py` locally before deploying to generate FAISS/BM25 indexes (committed, copied into the image)
 
 ---
 
@@ -670,17 +674,19 @@ pytest tests/ -v --cov=app     # With coverage
 
 ### Phase 6: Polish & Testing
 
-- [ ] Write frontend tests for interactive components (§12)
-- [ ] Responsive testing across breakpoints
-- [ ] Lighthouse audit — target > 90 on all categories
-- [ ] Accessibility audit (contrast, focus, semantics, reduced-motion)
-- [ ] Final content review (bio, project descriptions, chatbot system prompt)
+- [x] Write frontend tests for interactive components (§12)
+- [x] Responsive testing across breakpoints (Lighthouse mobile emulation + mobile-first breakpoints verified)
+- [x] Lighthouse audit — target > 90 on all categories (Perf 92+, A11y 100, BP 96, SEO 100 locally; enforced in CI)
+- [x] Accessibility audit (contrast, focus, semantics, reduced-motion) — fixed button contrast, `inert` on hidden chat panel, sr-only tagline, 44px nav targets
+- [x] Final content review (bio, project descriptions, chatbot system prompt)
 
 ### Phase 7: Deploy
 
-- [ ] Deploy FastAPI backend to Railway
-- [ ] Set Railway environment variables (`GROQ_API_KEY`, `ALLOWED_ORIGINS`)
-- [ ] Connect Next.js repo to Vercel
-- [ ] Set Vercel environment variables (`CHAT_API_URL`)
-- [ ] Verify production build, static pages, and chatbot functionality
+- [x] Set up CI pipeline (GitHub Actions: CI, security scans, Lighthouse — see `docs/ci-cd.md`)
+- [x] Create Railway deploy config (`backend/Dockerfile`, models baked into image; service settings live in the Railway dashboard — Config as Code is deprecated)
+- [x] Add security headers to Next.js responses (`next.config.ts`)
+- [ ] Create Railway project from the GitHub repo (root directory `backend`) and set `GROQ_API_KEY`, `ALLOWED_ORIGINS`
+- [ ] Import the repo into Vercel (root directory `frontend`) and set `CHAT_API_URL`
+- [ ] Verify production build, static pages, and chatbot functionality end-to-end
+- [ ] (Optional) Protect `main` with required CI status checks so deploys are gated
 - [ ] (Optional) Set up uptime monitor for Railway keep-warm pings

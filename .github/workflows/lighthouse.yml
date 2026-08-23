@@ -1,0 +1,40 @@
+name: Lighthouse
+
+# Performance / accessibility / SEO budget check on every frontend PR.
+# Logic lives in scripts/lighthouse.sh (shared with `make lighthouse`);
+# assertions in frontend/lighthouserc.json. SPEC target: > 90 in all categories.
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'scripts/lighthouse.sh'
+      - '.github/workflows/lighthouse.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lighthouse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    name: Lighthouse CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Lighthouse budget check
+        run: ./scripts/lighthouse.sh

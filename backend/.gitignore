@@ -4,10 +4,9 @@ __pycache__/
 *.pyo
 .pytest_cache/
 .ruff_cache/
-indexes/*.index
-indexes/*.pkl
-indexes/*.json
-!indexes/.gitkeep
+# NOTE: indexes/ is deliberately committed — the Dockerfile copies it into the
+# image, so the built FAISS/BM25 files must be in the repo. Rebuild with
+# `make build-index` whenever backend/data/ changes.
 .venv/
 venv/
 dist/

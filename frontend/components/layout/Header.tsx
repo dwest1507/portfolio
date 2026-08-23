@@ -14,11 +14,11 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#050506]/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-2">
         {/* Logo */}
         <Link
           href="/"
-          className="text-lg font-semibold tracking-tight text-[#ededef] transition-colors duration-200 hover:text-white"
+          className="inline-flex min-h-[44px] items-center text-lg font-semibold tracking-tight text-[#ededef] transition-colors duration-200 hover:text-white"
         >
           DW
           <span className="text-[#0ea5e9]">.</span>
@@ -30,7 +30,7 @@ export default function Header() {
             <Link
               key={href}
               href={href}
-              className="text-sm text-[#8a8f98] transition-colors duration-200 hover:text-[#ededef]"
+              className="inline-flex min-h-[44px] items-center text-sm text-[#8a8f98] transition-colors duration-200 hover:text-[#ededef]"
             >
               {label}
             </Link>
@@ -41,7 +41,7 @@ export default function Header() {
         <div className="hidden md:block">
           <a
             href="mailto:david.p.west2@gmail.com"
-            className="rounded-lg bg-[#0ea5e9] px-4 py-2 text-sm font-medium text-white shadow-[0_0_0_1px_rgba(14,165,233,0.5),0_4px_12px_rgba(14,165,233,0.25),inset_0_1px_0_0_rgba(255,255,255,0.15)] transition-all duration-200 hover:bg-[#38bdf8] hover:shadow-[0_0_0_1px_rgba(14,165,233,0.6),0_4px_20px_rgba(14,165,233,0.35),inset_0_1px_0_0_rgba(255,255,255,0.15)] active:scale-[0.98]"
+            className="rounded-lg bg-[#0ea5e9] px-4 py-2 text-sm font-medium text-[#082f49] shadow-[0_0_0_1px_rgba(14,165,233,0.5),0_4px_12px_rgba(14,165,233,0.25),inset_0_1px_0_0_rgba(255,255,255,0.15)] transition-all duration-200 hover:bg-[#38bdf8] hover:shadow-[0_0_0_1px_rgba(14,165,233,0.6),0_4px_20px_rgba(14,165,233,0.35),inset_0_1px_0_0_rgba(255,255,255,0.15)] active:scale-[0.98]"
           >
             Get in Touch
           </a>
@@ -98,7 +98,7 @@ export default function Header() {
             <div className="mt-4 border-t border-white/[0.06] pt-4">
               <a
                 href="mailto:david.p.west2@gmail.com"
-                className="block rounded-lg bg-[#0ea5e9] px-4 py-3 text-center text-sm font-medium text-white shadow-[0_0_0_1px_rgba(14,165,233,0.5),0_4px_12px_rgba(14,165,233,0.25)] transition-all duration-200 hover:bg-[#38bdf8]"
+                className="block rounded-lg bg-[#0ea5e9] px-4 py-3 text-center text-sm font-medium text-[#082f49] shadow-[0_0_0_1px_rgba(14,165,233,0.5),0_4px_12px_rgba(14,165,233,0.25)] transition-all duration-200 hover:bg-[#38bdf8]"
               >
                 Get in Touch
               </a>

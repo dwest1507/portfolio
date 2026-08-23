@@ -98,7 +98,7 @@ export default function ProjectDetail({ project, content }: ProjectDetailProps) 
 
                 {/* Title */}
                 <h1
-                  className="text-4xl font-semibold leading-tight tracking-tight text-[#ededef] sm:text-5xl lg:text-6xl"
+                  className="text-4xl leading-tight font-semibold tracking-tight text-[#ededef] sm:text-5xl lg:text-6xl"
                   style={{
                     background:
                       'linear-gradient(to bottom, #ffffff 0%, rgba(255,255,255,0.80) 100%)',
@@ -174,10 +174,7 @@ export default function ProjectDetail({ project, content }: ProjectDetailProps) 
                   <div className="space-y-3 p-5">
                     <InfoRow label="Project" value={project.slug.toUpperCase()} />
                     <InfoRow label="Year" value={project.year.toString()} />
-                    <InfoRow
-                      label="Tech stack"
-                      value={`${project.tags.length} technologies`}
-                    />
+                    <InfoRow label="Tech stack" value={`${project.tags.length} technologies`} />
                     <InfoRow
                       label="Status"
                       value={isExternalLive ? 'Live' : 'Static'}

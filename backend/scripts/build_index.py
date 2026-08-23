@@ -13,6 +13,7 @@ Writes to indexes/:
   - faiss.index     FAISS inner-product index (cosine sim on normalised vecs)
   - bm25.pkl        BM25Okapi index
 """
+
 import json
 import pickle
 import re
@@ -31,13 +32,14 @@ RESUME_PATH = REPO_ROOT / "docs" / "resume.txt"
 QA_PATH = REPO_ROOT / "docs" / "chatbot-questions.md"
 MDX_DIR = REPO_ROOT / "frontend" / "content" / "projects"
 
-CHUNK_SIZE = 1000   # characters (~250-300 tokens)
+CHUNK_SIZE = 1000  # characters (~250-300 tokens)
 CHUNK_OVERLAP = 100
 
 
 # ---------------------------------------------------------------------------
 # Text utilities
 # ---------------------------------------------------------------------------
+
 
 def _strip_mdx(text: str) -> str:
     """Remove markdown/MDX syntax, keeping plain prose."""
@@ -105,7 +107,9 @@ def _chunk_text(text: str, source: str) -> list[dict]:
     for i, chunk in enumerate(chunks):
         if i > 0:
             prev_text = chunks[i - 1]["text"]
-            overlap_text = prev_text[-CHUNK_OVERLAP:] if len(prev_text) > CHUNK_OVERLAP else prev_text
+            overlap_text = (
+                prev_text[-CHUNK_OVERLAP:] if len(prev_text) > CHUNK_OVERLAP else prev_text
+            )
             # Only add overlap if it doesn't push us way over the limit
             merged = (overlap_text + " " + chunk["text"]).strip()
             if len(merged) <= CHUNK_SIZE * 1.3:
@@ -119,6 +123,7 @@ def _chunk_text(text: str, source: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Document loading
 # ---------------------------------------------------------------------------
+
 
 def load_documents() -> list[dict]:
     docs: list[dict] = []
@@ -158,6 +163,7 @@ def load_documents() -> list[dict]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     INDEXES_DIR.mkdir(exist_ok=True)
 
@@ -173,7 +179,9 @@ def main() -> None:
 
     print(f"\nTotal chunks: {len(all_chunks)}")
     lengths = [len(c["text"]) for c in all_chunks]
-    print(f"  Avg: {sum(lengths)/len(lengths):.0f} chars, Min: {min(lengths)}, Max: {max(lengths)}")
+    print(
+        f"  Avg: {sum(lengths) / len(lengths):.0f} chars, Min: {min(lengths)}, Max: {max(lengths)}"
+    )
 
     # Save chunks
     with open(INDEXES_DIR / "chunks.json", "w") as f:

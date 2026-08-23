@@ -9,7 +9,15 @@ const BIO_LINES = [
 
 const SKILLS = {
   Languages: ['Python', 'TypeScript', 'JavaScript', 'R', 'SQL', 'Bash'],
-  'AI / ML': ['LLMs', 'RAG', 'FAISS', 'Sentence Transformers', 'XGBoost', 'Scikit-Learn', 'PyTorch'],
+  'AI / ML': [
+    'LLMs',
+    'RAG',
+    'FAISS',
+    'Sentence Transformers',
+    'XGBoost',
+    'Scikit-Learn',
+    'PyTorch',
+  ],
   Frameworks: ['FastAPI', 'Next.js', 'React', 'LangChain', 'Streamlit'],
   'Cloud / Infra': ['AWS', 'Vercel', 'Railway', 'Modal', 'Docker'],
   APIs: ['Groq', 'OpenAI', 'Anthropic'],

@@ -33,7 +33,12 @@ uv run pytest tests/ -v --cov=app
 | Medium | `ChatMessage` | User vs assistant message rendering |
 | Low | `Header` | Nav links render; mobile menu works |
 
-Test files live alongside source files or in `frontend/__tests__/`.
+Test files live in `frontend/__tests__/` (one file per component). jsdom shims for
+`IntersectionObserver` and `scrollIntoView` are provided by `frontend/vitest.setup.ts`;
+the `useChat` hook from `@ai-sdk/react` is mocked in `ChatbotWidget.test.tsx`.
+
+All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
+`backend-ci.yml`) and gate production deploys — see [ci-cd.md](ci-cd.md).
 
 ## Backend Tests (pytest)
 

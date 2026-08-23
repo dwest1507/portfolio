@@ -32,7 +32,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             : 'bg-white/[0.05] text-[#ededef] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]'
         }`}
       >
-        <span className="whitespace-pre-wrap break-words">{text}</span>
+        <span className="break-words whitespace-pre-wrap">{text}</span>
       </div>
 
       {isUser && (

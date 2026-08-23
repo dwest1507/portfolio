@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* ============================================================
    LINEAR DESIGN TOKENS
@@ -43,7 +43,7 @@ body {
 
 /* Subtle grid overlay */
 body::before {
-  content: "";
+  content: '';
   position: fixed;
   inset: 0;
   z-index: 0;

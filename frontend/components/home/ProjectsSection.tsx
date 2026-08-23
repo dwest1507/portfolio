@@ -19,9 +19,7 @@ export default function ProjectsSection() {
         <FadeIn className="mb-12">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="mb-2 font-mono text-[11px] tracking-widest text-[#0ea5e9]">
-                Projects
-              </p>
+              <p className="mb-2 font-mono text-[11px] tracking-widest text-[#0ea5e9]">Projects</p>
               <h2 className="text-4xl font-semibold tracking-tight text-[#ededef] md:text-5xl">
                 Selected work
               </h2>

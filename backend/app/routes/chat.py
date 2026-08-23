@@ -1,4 +1,5 @@
 """POST /api/chat — RAG retrieval + LLM generation + SSE streaming."""
+
 import json
 
 from fastapi import APIRouter, Request
@@ -32,8 +33,8 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
         try:
             async for token in generate_stream(messages):
                 yield f"0:{json.dumps(token)}\n"
-            yield f'd:{json.dumps({"finishReason": "stop"})}\n'
-        except Exception:
+            yield f"d:{json.dumps({'finishReason': 'stop'})}\n"
+        except Exception:  # noqa: BLE001 — never leak provider errors into the stream
             yield '3:"Generation failed"\n'
 
     return StreamingResponse(

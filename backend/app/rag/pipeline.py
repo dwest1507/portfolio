@@ -1,4 +1,5 @@
 """RAG pipeline: hybrid search (FAISS + BM25) + cross-encoder re-ranking."""
+
 import json
 import pickle
 from pathlib import Path
@@ -41,9 +42,7 @@ class RAGPipeline:
     def _hybrid_search(self, query: str, top_k: int = 10) -> list[dict]:
         """70% semantic (FAISS) + 30% keyword (BM25)."""
         # --- Semantic search ---
-        query_vec = self.embedder.encode([query], normalize_embeddings=True).astype(
-            np.float32
-        )
+        query_vec = self.embedder.encode([query], normalize_embeddings=True).astype(np.float32)
         faiss_scores, faiss_indices = self.faiss_index.search(query_vec, top_k)
         faiss_scores = faiss_scores[0]
         faiss_indices = faiss_indices[0]
@@ -70,14 +69,10 @@ class RAGPipeline:
         for idx, score in zip(bm25_top_indices, bm25_norm):
             combined[int(idx)] = combined.get(int(idx), 0.0) + 0.3 * float(score)
 
-        sorted_items = sorted(combined.items(), key=lambda x: x[1], reverse=True)[
-            :top_k
-        ]
+        sorted_items = sorted(combined.items(), key=lambda x: x[1], reverse=True)[:top_k]
         return [self.chunks[idx] for idx, _ in sorted_items]
 
-    def _rerank(
-        self, query: str, candidates: list[dict], top_k: int = 5
-    ) -> list[dict]:
+    def _rerank(self, query: str, candidates: list[dict], top_k: int = 5) -> list[dict]:
         """Cross-encoder re-ranking."""
         if len(candidates) <= 1:
             return candidates[:top_k]
