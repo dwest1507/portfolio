@@ -110,16 +110,15 @@ export default function ChatbotWidget() {
       {/* Tooltip bubble */}
       <div
         aria-hidden={!showTooltip}
-        className={`fixed bottom-24 right-6 z-50 flex items-start gap-2 transition-all duration-200 ${
+        inert={!showTooltip}
+        className={`fixed right-6 bottom-24 z-50 flex items-start gap-2 transition-all duration-200 ${
           showTooltip
             ? 'pointer-events-auto translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-2 opacity-0'
         }`}
       >
         <div className="rounded-xl border border-white/[0.08] bg-[#0a0a0c]/95 px-3 py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-          <p className="text-[12px] text-[#ededef]">
-            Ask my AI assistant about my qualifications
-          </p>
+          <p className="text-[12px] text-[#ededef]">Ask my AI assistant about my qualifications</p>
         </div>
         <button
           onClick={dismissTooltip}
@@ -140,7 +139,7 @@ export default function ChatbotWidget() {
       </div>
 
       {/* Floating trigger button */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed right-6 bottom-6 z-50">
         {/* Pulse ring — visible when closed */}
         {!isOpen && (
           <span
@@ -155,7 +154,7 @@ export default function ChatbotWidget() {
           }}
           aria-label={isOpen ? 'Close chat assistant' : 'Open chat assistant'}
           aria-expanded={isOpen}
-          className="relative flex h-14 w-14 items-center justify-center rounded-full bg-[#0ea5e9] text-white shadow-[0_0_0_1px_rgba(14,165,233,0.5),0_4px_20px_rgba(14,165,233,0.4)] transition-all duration-200 hover:bg-[#38bdf8] hover:shadow-[0_0_0_1px_rgba(14,165,233,0.6),0_4px_30px_rgba(14,165,233,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0ea5e9] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050506] active:scale-[0.97]"
+          className="relative flex h-14 w-14 items-center justify-center rounded-full bg-[#0ea5e9] text-[#082f49] shadow-[0_0_0_1px_rgba(14,165,233,0.5),0_4px_20px_rgba(14,165,233,0.4)] transition-all duration-200 hover:bg-[#38bdf8] hover:shadow-[0_0_0_1px_rgba(14,165,233,0.6),0_4px_30px_rgba(14,165,233,0.5)] focus-visible:ring-2 focus-visible:ring-[#0ea5e9] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050506] focus-visible:outline-none active:scale-[0.97]"
         >
           {isOpen ? (
             <svg
@@ -194,7 +193,8 @@ export default function ChatbotWidget() {
         role="dialog"
         aria-label="AI chat assistant"
         aria-hidden={!isOpen}
-        className={`fixed bottom-24 right-6 z-50 flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0a0a0c]/95 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl transition-all duration-200 w-[calc(100vw-3rem)] sm:w-[400px] ${
+        inert={!isOpen}
+        className={`fixed right-6 bottom-24 z-50 flex w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0a0a0c]/95 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_8px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl transition-all duration-200 sm:w-[400px] ${
           isOpen
             ? 'pointer-events-auto translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-4 opacity-0'

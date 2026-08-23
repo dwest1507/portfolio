@@ -14,7 +14,8 @@ const PROFILE_STATS = [
 const STACK = ['Python', 'TypeScript', 'FastAPI', 'Next.js', 'LLMs', 'RAG', 'AWS', 'Groq']
 
 const HEADLINE_GRADIENT = {
-  background: 'linear-gradient(to bottom, #ffffff 0%, rgba(255,255,255,0.95) 40%, rgba(255,255,255,0.70) 100%)',
+  background:
+    'linear-gradient(to bottom, #ffffff 0%, rgba(255,255,255,0.95) 40%, rgba(255,255,255,0.70) 100%)',
   WebkitBackgroundClip: 'text' as const,
   WebkitTextFillColor: 'transparent' as const,
   backgroundClip: 'text' as const,
@@ -55,7 +56,7 @@ export default function Hero() {
             {/* Headline */}
             <div>
               <h1
-                className="text-5xl font-semibold leading-none tracking-[-0.03em] md:text-7xl lg:text-8xl"
+                className="text-5xl leading-none font-semibold tracking-[-0.03em] md:text-7xl lg:text-8xl"
                 style={HEADLINE_GRADIENT}
               >
                 David West
@@ -69,14 +70,14 @@ export default function Hero() {
             </div>
 
             {/* Typewriter tagline */}
-            <p
-              className="min-h-[3.5rem] max-w-xl text-base leading-relaxed text-[#8a8f98] md:text-lg"
-              aria-label={TAGLINE}
-            >
-              {typed}
-              {typed.length < TAGLINE.length && (
-                <span className="ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 animate-[blink_1s_step-end_infinite] bg-[#0ea5e9] align-middle" />
-              )}
+            <p className="min-h-[3.5rem] max-w-xl text-base leading-relaxed text-[#8a8f98] md:text-lg">
+              <span className="sr-only">{TAGLINE}</span>
+              <span aria-hidden="true">
+                {typed}
+                {typed.length < TAGLINE.length && (
+                  <span className="ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 animate-[blink_1s_step-end_infinite] bg-[#0ea5e9] align-middle" />
+                )}
+              </span>
             </p>
 
             {/* CTAs */}

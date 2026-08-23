@@ -35,7 +35,7 @@ const sizes: Record<ButtonSize, string> = {
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    'bg-[#0ea5e9] text-white shadow-[0_0_0_1px_rgba(14,165,233,0.5),0_4px_12px_rgba(14,165,233,0.25),inset_0_1px_0_0_rgba(255,255,255,0.15)] hover:bg-[#38bdf8] hover:shadow-[0_0_0_1px_rgba(14,165,233,0.6),0_4px_20px_rgba(14,165,233,0.4),inset_0_1px_0_0_rgba(255,255,255,0.15)]',
+    'bg-[#0ea5e9] text-[#082f49] shadow-[0_0_0_1px_rgba(14,165,233,0.5),0_4px_12px_rgba(14,165,233,0.25),inset_0_1px_0_0_rgba(255,255,255,0.15)] hover:bg-[#38bdf8] hover:shadow-[0_0_0_1px_rgba(14,165,233,0.6),0_4px_20px_rgba(14,165,233,0.4),inset_0_1px_0_0_rgba(255,255,255,0.15)]',
   secondary:
     'bg-white/[0.05] text-[#ededef] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:bg-white/[0.08] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]',
   outline:
