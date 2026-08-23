@@ -1,9 +1,13 @@
 name: Frontend CI
 
+# All check logic lives in scripts/ (shared with `make ci-cd`); jobs here only
+# provision the environment and run the scripts.
+
 on:
   pull_request:
     paths:
       - 'frontend/**'
+      - 'scripts/frontend-*.sh'
       - '.github/workflows/frontend-ci.yml'
   workflow_call:
 
@@ -13,10 +17,6 @@ permissions:
 concurrency:
   group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-defaults:
-  run:
-    working-directory: frontend
 
 jobs:
   quality:
@@ -34,15 +34,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        working-directory: frontend
 
-      - name: ESLint
-        run: npm run lint
-
-      - name: Prettier check
-        run: npm run format:check
-
-      - name: TypeScript check
-        run: npm run typecheck
+      - name: Quality checks
+        run: ./scripts/frontend-quality.sh
 
   test:
     name: Unit tests
@@ -59,9 +54,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        working-directory: frontend
 
-      - name: Vitest
-        run: npm run test -- --run
+      - name: Tests
+        run: ./scripts/frontend-test.sh
 
   build:
     name: Production build
@@ -78,9 +74,7 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        working-directory: frontend
 
-      - name: Next.js build
-        run: npm run build
-        env:
-          # Dummy value so the /api/chat proxy route compiles without a real backend
-          CHAT_API_URL: http://localhost:8000
+      - name: Build
+        run: ./scripts/frontend-build.sh

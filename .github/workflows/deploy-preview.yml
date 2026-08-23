@@ -1,12 +1,15 @@
 name: Preview Deploy
 
 # Vercel preview deployment for every PR that touches the frontend.
-# Skipped automatically for PRs from forks (secrets are unavailable there).
+# Deploy logic lives in scripts/deploy-frontend.sh (preview mode); this workflow
+# adds the GitHub-only glue (PR comment). Skipped automatically for PRs from
+# forks (secrets are unavailable there).
 
 on:
   pull_request:
     paths:
       - 'frontend/**'
+      - 'scripts/deploy-frontend.sh'
 
 permissions:
   contents: read
@@ -22,9 +25,6 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: frontend
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -36,21 +36,9 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
-
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
-
-      - name: Build
-        run: vercel build --token="$VERCEL_TOKEN"
-
       - name: Deploy preview
         id: deploy
-        run: |
-          url=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
+        run: ./scripts/deploy-frontend.sh preview
 
       - name: Comment preview URL on PR
         uses: actions/github-script@v7

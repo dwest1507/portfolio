@@ -1,5 +1,10 @@
 name: Deploy
 
+# Deploy logic lives in scripts/deploy-frontend.sh and scripts/deploy-backend.sh
+# (also runnable locally via `make deploy-frontend` / `make deploy-backend` with
+# the same env vars). Deploys are intentionally NOT part of `make ci-cd` — they
+# only run here, gated on the same CI scripts a local `make ci-cd` executes.
+
 on:
   push:
     branches: [main]
@@ -31,10 +36,14 @@ jobs:
           filters: |
             frontend:
               - 'frontend/**'
+              - 'scripts/frontend-*.sh'
+              - 'scripts/deploy-frontend.sh'
               - '.github/workflows/frontend-ci.yml'
               - '.github/workflows/deploy.yml'
             backend:
               - 'backend/**'
+              - 'scripts/backend-*.sh'
+              - 'scripts/deploy-backend.sh'
               - '.github/workflows/backend-ci.yml'
               - '.github/workflows/deploy.yml'
 
@@ -59,9 +68,6 @@ jobs:
     environment:
       name: production-frontend
       url: ${{ steps.deploy.outputs.url }}
-    defaults:
-      run:
-        working-directory: frontend
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -73,35 +79,9 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
-
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-
-      - name: Build
-        run: vercel build --prod --token="$VERCEL_TOKEN"
-
       - name: Deploy
         id: deploy
-        run: |
-          url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Deployed to $url" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Smoke test
-        run: |
-          for i in $(seq 1 10); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.deploy.outputs.url }}")
-            if [ "$status" = "200" ]; then
-              echo "Frontend healthy (HTTP $status)"
-              exit 0
-            fi
-            echo "Attempt $i: HTTP $status — retrying in 10s"
-            sleep 10
-          done
-          echo "Frontend never became healthy" >&2
-          exit 1
+        run: ./scripts/deploy-frontend.sh production
 
   deploy-backend:
     name: Deploy backend (Railway)
@@ -111,11 +91,10 @@ jobs:
     timeout-minutes: 30
     environment:
       name: production-backend
-    defaults:
-      run:
-        working-directory: backend
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE }}
+      BACKEND_URL: ${{ vars.BACKEND_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -123,24 +102,5 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli
-
       - name: Deploy
-        run: railway up --service "${{ vars.RAILWAY_SERVICE }}" --ci
-
-      - name: Health check
-        if: vars.BACKEND_URL != ''
-        run: |
-          # Allow time for model loading on startup
-          for i in $(seq 1 30); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.BACKEND_URL }}/api/health" || true)
-            if [ "$status" = "200" ]; then
-              echo "Backend healthy (HTTP $status)"
-              exit 0
-            fi
-            echo "Attempt $i: HTTP $status — retrying in 10s"
-            sleep 10
-          done
-          echo "Backend never became healthy" >&2
-          exit 1
+        run: ./scripts/deploy-backend.sh

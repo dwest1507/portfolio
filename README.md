@@ -49,6 +49,7 @@ ALLOWED_ORIGINS=http://localhost:3000
 portfolio/
 ├── frontend/          Next.js 15 app (pages, components, styles)
 ├── backend/           Python FastAPI (RAG pipeline, chat endpoint)
+├── scripts/           CI/CD check + deploy scripts (shared by make and GitHub Actions)
 ├── docs/              Detailed documentation
 │   └── resume.txt     Resume source used for RAG indexing
 └── Makefile           Dev automation commands
@@ -72,10 +73,15 @@ See [docs/architecture.md](docs/architecture.md) for the full system design.
 make dev-frontend    # Next.js on :3000
 make dev-backend     # FastAPI on :8000
 make test            # Run all tests (pytest + vitest)
-make lint            # Ruff + ESLint
+make lint            # Ruff + ESLint + Prettier + tsc
+make ci-cd           # Run every CI check locally (no deploys) — same scripts CI runs
 make build-index     # Rebuild RAG search indexes
 make stop            # Kill dev servers
 ```
+
+The CI pipeline's logic lives in `scripts/` and is shared verbatim between `make`
+targets and GitHub Actions, so `make ci-cd` reproduces the PR gates locally.
+See [docs/ci-cd.md](docs/ci-cd.md) for the full target ↔ workflow mapping.
 
 ---
 

@@ -1,9 +1,13 @@
 name: Backend CI
 
+# All check logic lives in scripts/ (shared with `make ci-cd`); jobs here only
+# provision the environment and run the scripts.
+
 on:
   pull_request:
     paths:
       - 'backend/**'
+      - 'scripts/backend-*.sh'
       - '.github/workflows/backend-ci.yml'
   workflow_call:
 
@@ -13,10 +17,6 @@ permissions:
 concurrency:
   group: backend-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-defaults:
-  run:
-    working-directory: backend
 
 jobs:
   lint:
@@ -34,12 +34,10 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --frozen
+        working-directory: backend
 
-      - name: Ruff check
-        run: uv run ruff check .
-
-      - name: Ruff format check
-        run: uv run ruff format --check .
+      - name: Lint checks
+        run: ./scripts/backend-lint.sh
 
   test:
     name: Pytest
@@ -56,9 +54,7 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --frozen
+        working-directory: backend
 
-      - name: Run tests
-        run: uv run pytest tests/ -v
-        env:
-          GROQ_API_KEY: test_key
-          ALLOWED_ORIGINS: http://localhost:3000
+      - name: Tests
+        run: ./scripts/backend-test.sh
