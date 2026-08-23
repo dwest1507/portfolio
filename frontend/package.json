@@ -13,32 +13,31 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@ai-sdk/react": "^3.0.136",
+    "@ai-sdk/react": "^4.0.80",
     "@vercel/analytics": "^2.0.1",
-    "ai": "^6.0.134",
-    "next": "16.2.0",
+    "ai": "^7.0.77",
+    "next": "^16.3.2",
     "next-mdx-remote": "^6.0.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@types/testing-library__jest-dom": "^5.14.9",
-    "@vitejs/plugin-react": "^6.0.1",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.0",
-    "jsdom": "^29.0.1",
-    "prettier": "^3.8.1",
-    "prettier-plugin-tailwindcss": "^0.7.2",
-    "tailwindcss": "^4",
-    "typescript": "^5",
+    "@testing-library/user-event": "^14.6.6",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.2",
+    "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.11"
   }
 }
