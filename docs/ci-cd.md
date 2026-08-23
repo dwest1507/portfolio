@@ -55,9 +55,10 @@ merge through PRs — the setup is in
 
 ## Backend container
 
-Railway builds `backend/Dockerfile`, auto-detected because the service's root
-directory is `backend`. Deploy settings (healthcheck, restart policy) live in the
-Railway dashboard — see [deployment.md](deployment.md#step-2--deploy-the-backend-railway):
+Railway builds `backend/Dockerfile`. The service's builder must be set to **Dockerfile**
+in the dashboard — new services default to Railpack, which ignores the Dockerfile and
+would install dependencies and download models at runtime. Build and deploy settings all
+live in the dashboard; see [deployment.md](deployment.md#step-2--deploy-the-backend-railway):
 
 - `python:3.14-slim` + `uv sync --frozen --no-dev` from `uv.lock`
 - Embedding + cross-encoder models are **baked into the image**, so cold starts never

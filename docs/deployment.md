@@ -61,17 +61,30 @@ Do the backend first: the frontend needs the backend's URL.
    | Root Directory | `backend` | Source |
    | Branch | `main` | Source |
    | Watch Paths | `backend/**` | Source |
+   | **Builder** | **Dockerfile** | Build |
+   | Dockerfile Path | `Dockerfile` | Build |
    | Healthcheck Path | `/api/health` | Deploy |
    | Healthcheck Timeout | `300` | Deploy |
    | Restart Policy | On Failure, 3 max retries | Deploy |
 
-   - The builder needs no setting: with the root directory at `backend`, Railway
-     detects `backend/Dockerfile` and uses it. Leave build and start commands empty —
-     the Dockerfile's `CMD` starts uvicorn on `$PORT`.
+   - **You must set the builder to Dockerfile.** New services default to Railpack,
+     Railway's auto-detecting builder, and Railpack *wins over* a Dockerfile in the
+     source directory — it is not auto-detected. If the build log opens with
+     `↳ Detected Python / ↳ Using pip` and then
+     `✖ No start command detected`, the builder is still Railpack.
+     `Dockerfile Path` is relative to the root directory, so `Dockerfile` resolves to
+     `backend/Dockerfile`; if Railway reports it can't find it, try `backend/Dockerfile`
+     instead (the field's base directory has changed across Railway versions).
+   - Leave build and start commands empty — the Dockerfile's `CMD` starts uvicorn
+     on `$PORT`.
    - **Set the healthcheck timeout explicitly.** The image bakes the embedding and
      cross-encoder models, so first boot is slow; the default timeout is far shorter
      and is the most likely cause of a deploy stalling on "waiting for healthcheck".
    - Watch paths keep frontend-only pushes from rebuilding the container.
+
+   Railpack is not a viable fallback here: it would install dependencies at runtime
+   and pull the models from Hugging Face on first request instead of at build time,
+   which makes cold starts long enough to fail the healthcheck.
 4. **Variables** tab → add:
 
    | Variable | Value |
@@ -87,15 +100,26 @@ Do the backend first: the frontend needs the backend's URL.
    **`8000`** — the port the container listens on (`EXPOSE 8000` in the Dockerfile).
    Copy the generated URL.
 6. Wait for the first build. It takes several minutes — the image bakes the embedding
-   and cross-encoder models in so cold starts never hit Hugging Face.
+   and cross-encoder models in so cold starts never hit Hugging Face. The log should
+   show Docker build steps; if it shows Railpack detection instead, revisit the builder
+   setting in step 3.
 7. Verify:
 
    ```bash
    curl https://<your-app>.up.railway.app/api/health
    ```
 
-   Expect `200` with a JSON body. If the deploy is stuck "waiting for healthcheck",
-   check the deploy logs for a model-download or index-missing error.
+   Expect `200` with a JSON body.
+
+### If the backend deploy fails
+
+| Symptom in the deploy log | Cause |
+|---------------------------|-------|
+| `↳ Detected Python` / `↳ Using pip` / `✖ No start command detected` | Builder is Railpack, not Dockerfile — the Dockerfile was never used (step 3) |
+| `Dockerfile does not exist` | `Dockerfile Path` doesn't resolve; try the other of `Dockerfile` / `backend/Dockerfile` |
+| Build succeeds, then stalls on "waiting for healthcheck" | Healthcheck timeout too low for model load, or `/api/health` path not set |
+| Container starts, health check 404s or times out | Domain target port ≠ the port uvicorn bound; both should be 8000 |
+| `FileNotFoundError` on an index file at startup | `backend/indexes/` wasn't built and committed (step 1) |
 
 ---
 
@@ -191,7 +215,8 @@ CHAT_API_URL=http://localhost:8000
 ## Checklist
 
 - [ ] `make build-index` run and `backend/indexes/` committed
-- [ ] Railway project created from the GitHub repo; root directory `backend`, watch paths `backend/**`, healthcheck `/api/health` with a 300s timeout
+- [ ] Railway project created from the GitHub repo; root directory `backend`, watch paths `backend/**`
+- [ ] Railway builder set to **Dockerfile** (not the default Railpack); healthcheck `/api/health` with a 300s timeout
 - [ ] `GROQ_API_KEY` set in Railway; public domain generated
 - [ ] `/api/health` returns 200 on the Railway URL
 - [ ] Vercel project imported; root directory `frontend`

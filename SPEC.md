@@ -550,7 +550,7 @@ Deploys use the platforms' native git integrations — both Vercel and Railway w
 
 **Backend (Railway):**
 - Root directory: `backend`; watch paths `backend/**`
-- Build: `backend/Dockerfile` (uv + `python:3.14-slim`; embedding/re-ranking models baked into the image), auto-detected from the root directory
+- Build: `backend/Dockerfile` (uv + `python:3.14-slim`; embedding/re-ranking models baked into the image) — the service's builder must be set to Dockerfile in the Railway dashboard, since new services default to Railpack
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - Python version: 3.14
 - Production deploy: Push to `main` (Railway git integration), gated on the `/api/health` healthcheck before the new container takes traffic
