@@ -78,10 +78,14 @@ Do the backend first: the frontend needs the backend's URL.
    |----------|-------|
    | `GROQ_API_KEY` | From [console.groq.com](https://console.groq.com) |
    | `ALLOWED_ORIGINS` | Vercel production URL — fill in after Step 3, e.g. `https://your-site.vercel.app` |
+   | `PORT` | `8000` |
 
-   `PORT` is injected by Railway; the container reads it. Leave it unset.
+   The Dockerfile starts uvicorn on `${PORT:-8000}`, so 8000 is also the fallback —
+   pinning `PORT` just keeps the app and the domain's target port from ever disagreeing.
 5. **Settings → Networking → Generate Domain** to get a public URL
-   (`https://<something>.up.railway.app`). Copy it.
+   (`https://<something>.up.railway.app`). When prompted for a **target port**, enter
+   **`8000`** — the port the container listens on (`EXPOSE 8000` in the Dockerfile).
+   Copy the generated URL.
 6. Wait for the first build. It takes several minutes — the image bakes the embedding
    and cross-encoder models in so cold starts never hit Hugging Face.
 7. Verify:
