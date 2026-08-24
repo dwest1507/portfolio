@@ -42,7 +42,7 @@ export const projects: Project[] = [
       'Interactive explorer for US baby name trends with ML-powered popularity forecasting using XGBoost.',
     thumbnail: '/projects/baby-names3.png',
     tags: ['Streamlit', 'Python', 'Pandas', 'Scikit-Learn', 'XGBoost', 'Data Visualization'],
-    liveUrl: 'https://baby-names.streamlit.app',
+    liveUrl: 'https://baby-names-app.streamlit.app/',
     repoUrl: 'https://github.com/dwest1507/baby-names',
     featured: false,
     year: 2024,

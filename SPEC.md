@@ -364,7 +364,7 @@ interface Project {
 |---|------|-------|------|----------|
 | 1 | `ai-music-gen` | Generate Music with AI | `Next.js`, `TypeScript`, `FastAPI`, `Python`, `Modal`, `Groq`, `LLM` | ai-music-gen.vercel.app |
 | 2 | `nietzsche-chat` | Chat with Friedrich Nietzsche | `Streamlit`, `Python`, `Groq`, `LLM/RAG`, `LangChain`, `FAISS` | nietzsche-chat.streamlit.app |
-| 3 | `baby-names` | Baby Name Popularity | `Streamlit`, `Python`, `Pandas`, `Scikit-Learn`, `XGBoost`, `Data Visualization` | baby-names-app-*.streamlit.app |
+| 3 | `baby-names` | Baby Name Popularity | `Streamlit`, `Python`, `Pandas`, `Scikit-Learn`, `XGBoost`, `Data Visualization` | baby-names-app.streamlit.app |
 | 4 | `diamonds-price` | Diamonds: Predicting Price | `R`, `Scikit-Learn`, `Jupyter`, `Data Science` | (static HTML hosted on site) |
 
 > **Note:** Tags in the table above are approximate. Finalize during implementation based on the actual tech stacks. The filter bar should show the union of all tags across projects.
