@@ -130,7 +130,17 @@ Do the backend first: the frontend needs the backend's URL.
 3. In the import screen:
    - **Root Directory**: `frontend` — and tick **Include files outside the root
      directory** off (nothing outside `frontend/` is needed).
-   - **Framework Preset**: Next.js (auto-detected). Leave build/output settings alone.
+   - **Framework Preset**: must read **Next.js**. Set the root directory *first*, then
+     check this — framework detection runs against the root directory, and on a
+     monorepo it can settle on **Other** before you've pointed it at `frontend/`.
+     Leave Build Command, Output Directory, and Install Command on their defaults.
+
+   > **Why this matters.** With the preset on "Other", Vercel runs the build but then
+   > publishes the Output Directory (default `public/`) as flat static files, ignoring
+   > Next's routing manifest. The build log looks perfect — routes and all — yet every
+   > page returns `404: NOT_FOUND` while files in `public/` still serve, and
+   > `/api/chat` doesn't exist. If that happens, fix the preset and redeploy
+   > **without** the build cache. See [If the frontend 404s](#if-the-frontend-404s).
 4. **Environment Variables** — add before the first build:
 
    | Variable | Environments | Value |
@@ -143,6 +153,27 @@ Do the backend first: the frontend needs the backend's URL.
 6. **Settings → Git → Ignored Build Step**: choose *"Only build if there are changes in
    the Root Directory"* (or the command `git diff --quiet HEAD^ HEAD -- .`), so
    backend-only pushes don't burn build minutes.
+
+### If the frontend 404s
+
+Read the error code on Vercel's 404 page — the two codes mean different things:
+
+| Code | Meaning | Where to look |
+|------|---------|---------------|
+| `NOT_FOUND` | A deployment is serving, but its route table has no match for the URL | Framework Preset / Output Directory (step 3) |
+| `DEPLOYMENT_NOT_FOUND` | No deployment is attached to that hostname | Deployments tab — promote the right build to Production |
+
+For `NOT_FOUND` where the build log looks healthy (it lists `○ /`, the SSG project
+pages, and `ƒ /api/chat`), confirm the preset is the culprit by requesting a file that
+lives in `frontend/public/`:
+
+```bash
+curl -sI https://your-site.vercel.app/ | head -1                    # 404
+curl -sI https://your-site.vercel.app/<file-in-public> | head -1    # 200 → preset is "Other"
+```
+
+Static assets serving while every route 404s is the signature of the framework adapter
+never running. Fix the preset, then redeploy with the build cache disabled.
 
 ---
 
@@ -219,7 +250,7 @@ CHAT_API_URL=http://localhost:8000
 - [ ] Railway builder set to **Dockerfile** (not the default Railpack); healthcheck `/api/health` with a 300s timeout
 - [ ] `GROQ_API_KEY` set in Railway; public domain generated
 - [ ] `/api/health` returns 200 on the Railway URL
-- [ ] Vercel project imported; root directory `frontend`
+- [ ] Vercel project imported; root directory `frontend`, Framework Preset **Next.js** (not Other)
 - [ ] `CHAT_API_URL` set in Vercel (Production + Preview) to the Railway URL
 - [ ] `ALLOWED_ORIGINS` in Railway set to the Vercel production URL
 - [ ] Chatbot tested end-to-end in production
