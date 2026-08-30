@@ -1,6 +1,6 @@
 ## Overview
 
-Diamonds: Predicting Price is a regression analysis project that models diamond prices from physical and quality attributes using a combination of statistical analysis in R and machine learning in Python. The analysis covers a dataset of ~54,000 diamonds with features including carat weight, cut grade, color grade, clarity grade, and physical dimensions (length, width, depth).
+Diamonds: Predicting Price is a regression analysis project that models diamond prices from physical and quality attributes, written end to end in R. The analysis covers a dataset of ~54,000 diamonds with features including carat weight, cut grade, color grade, clarity grade, and physical dimensions (length, width, depth).
 
 This was my earliest end-to-end data science project. I'm including it here not as a showcase of technical sophistication, but as evidence of where I started — and because the analytical thinking it required is genuinely interesting.
 
@@ -14,14 +14,14 @@ The central challenge is that diamond price is not linear in any single feature.
 
 The analysis proceeded in several phases:
 
-**Exploratory data analysis**: Distribution analysis revealed that carat weight clusters at round values (0.5, 0.75, 1.0, 1.5) due to market conventions. Price distributions are right-skewed. Log transformation of price and carat improves model fit substantially and is a standard approach in gemological pricing models.
+**Exploratory data analysis**: Distribution analysis revealed that carat weight clusters at round values (0.5, 0.75, 1.0, 1.5) due to market conventions, and that price distributions are right-skewed. The EDA also surfaced a data quality problem worth handling before modeling: a small number of diamonds have a recorded length, width, or depth of exactly zero, which is physically impossible. Those were converted to NAs rather than silently left in as valid measurements.
 
-**Feature engineering**: The raw quality grades (cut: Fair → Ideal, color: J → D, clarity: I1 → IF) are ordinal categories with non-uniform spacing. Encoding them as ordered numerics with interaction terms between carat and quality captures more of the pricing structure than one-hot encoding alone.
+**Feature ordering**: The raw quality grades (cut: Fair → Ideal, color: J → D, clarity: I1 → IF) are ordinal categories, and color ships in an order that runs best-to-worst while the others run worst-to-best. Reordering it to match makes the model coefficients read consistently across all three grades instead of one of them pointing the opposite way.
 
-**Modeling**: The analysis compared multiple regression approaches — from basic OLS through regularized regression (Ridge, Lasso) to ensemble methods — evaluating each by RMSE and R² on a held-out test set. The log-linear model on transformed features served as the interpretable baseline; gradient boosting models captured the non-linear interactions more accurately at the cost of interpretability.
+**Modeling**: The analysis works through four families on an 80/20 train-test split — simple and multivariate linear regression, regression decision trees (with complexity-parameter tuning), random forests, and gradient boosting machines — fitting each against both the 4 C's alone and the full feature set, and scoring every one by MAE, RMSE, and adjusted R² on the held-out data. Linear regression is the interpretable baseline; the ensembles capture the non-linear interactions more accurately at the cost of interpretability. A final comparison table ranks all of them side by side.
 
 ## What I Learned
 
-The most important thing this project taught me wasn't a modeling technique — it was that the structure of the prediction problem determines which features matter and how they should be encoded. Raw carat weight and price look exponentially related. Log-transformed, they look linear. That insight changed how I think about preprocessing: transformation isn't just normalization, it's a way of encoding domain knowledge into the model's feature space.
+The most important thing this project taught me wasn't a modeling technique — it was that fitting the model is the small part. Most of the work was upstream of it: deciding what a zero-length diamond means, getting the ordinal grades into a consistent order, and choosing which features a given model should even see. By the time the data was right, swapping between a linear model and a random forest was a few lines. That ratio has held on every project since.
 
-This project also gave me an appreciation for the difference between correlation and causal structure. The data shows that _Ideal_ cut diamonds are sometimes _cheaper_ than _Fair_ cut diamonds of the same carat weight. This seems counterintuitive until you realize that buyers seeking large stones (high carat) are often willing to sacrifice cut quality — the feature interactions tell a story about market behavior, not just gemology.
+It also gave me an early appreciation for confounding. Plot price against cut on its own and the trend is missing — _Ideal_ diamonds don't command an obvious premium over _Fair_ ones, which is the opposite of what the grade is supposed to mean. The explanation isn't gemological, it's compositional: buyers chasing large stones tend to trade away cut quality, so the poorly cut diamonds in the data are also the biggest ones, and carat swamps the effect being measured. Any single feature plotted against price in this dataset is really showing you carat until you control for it.

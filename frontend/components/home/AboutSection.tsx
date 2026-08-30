@@ -1,9 +1,9 @@
 import FadeIn from '@/components/ui/FadeIn'
 
 const BIO_LINES = [
-  "I'm an AI Engineer with 5+ years building production ML systems and LLM-powered applications.",
-  'My background spans the full AI stack — from RAG pipelines and fine-tuning to frontend interfaces that make AI accessible.',
-  'Before pivoting to AI, I spent 8+ years in the defense industry, where precision, security, and reliability were non-negotiable.',
+  "I'm an AI Engineer who has been building production ML systems since 2020 and LLM-powered applications since 2025.",
+  'My work spans the full AI stack — from RAG pipelines and time-series forecasting to the frontend interfaces that make them usable.',
+  "I've spent my whole career in the defense industry, where precision, security, and reliability are non-negotiable.",
   'I bring that same rigor to every system I build.',
 ]
 
@@ -12,14 +12,17 @@ const SKILLS = {
   'AI / ML': [
     'LLMs',
     'RAG',
+    'Hybrid Search',
     'FAISS',
+    'BM25',
+    'Cross-Encoder Re-ranking',
     'Sentence Transformers',
-    'XGBoost',
+    'Prompt Engineering',
     'Scikit-Learn',
-    'PyTorch',
+    'Time Series / ARIMA',
   ],
-  Frameworks: ['FastAPI', 'Next.js', 'React', 'LangChain', 'Streamlit'],
-  'Cloud / Infra': ['AWS', 'Vercel', 'Railway', 'Modal', 'Docker'],
+  Frameworks: ['FastAPI', 'Next.js', 'React', 'Tailwind CSS', 'Streamlit'],
+  'Cloud / Infra': ['AWS', 'Vercel', 'Railway', 'Modal', 'Docker', 'GitHub Actions'],
   APIs: ['Groq', 'OpenAI', 'Anthropic'],
 }
 
