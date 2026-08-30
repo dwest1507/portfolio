@@ -1,5 +1,8 @@
+# `dev` and `stop` use bash builtins (wait -n, trap).
+SHELL := /bin/bash
+
 .PHONY: help install dev dev-frontend dev-backend build-index test lint clean stop \
-	frontend-quality frontend-test frontend-build backend-lint backend-test \
+	frontend-quality frontend-test frontend-build backend-lint backend-test frontend-deps \
 	security-audit lighthouse ci-cd
 
 help:
@@ -33,24 +36,62 @@ install:
 	@echo "Installing frontend dependencies..."
 	cd frontend && npm install
 
-dev-frontend:
+# Reinstall frontend deps when node_modules is missing (e.g. after `make clean`)
+# or when package-lock.json has actually changed. The stamp records the lockfile's
+# hash rather than its mtime, so `git checkout`/`git pull` touching the file does
+# not trigger a needless full reinstall.
+frontend-deps:
+	@cd frontend && \
+	  stamp=node_modules/.deps-stamp; \
+	  want=$$(sha256sum package-lock.json | cut -d' ' -f1); \
+	  if [ ! -d node_modules ] || [ ! -f "$$stamp" ] || [ "$$(cat "$$stamp")" != "$$want" ]; then \
+	    echo "Frontend dependencies missing or stale; running npm ci..."; \
+	    npm ci && printf '%s' "$$want" > "$$stamp"; \
+	  fi
+
+dev-frontend: frontend-deps
 	cd frontend && npm run dev
 
+# The backend needs no equivalent rule: `uv run` syncs .venv from uv.lock itself,
+# and `clean` does not delete .venv.
 dev-backend:
 	cd backend && uv run uvicorn app.main:app --reload --port 8000
 
-dev:
+# Both servers share a fate: if either exits, take the other down too. A
+# frontend left running against a dead backend just serves chat errors with no
+# hint that the backend is the part that died.
+dev: frontend-deps
 	@echo "Starting full stack... (Press Ctrl+C to stop)"
-	@$(MAKE) -j2 dev-frontend dev-backend
+	@set -m; \
+	( cd backend && exec uv run uvicorn app.main:app --reload --port 8000 ) & back=$$!; \
+	( cd frontend && exec npm run dev ) & front=$$!; \
+	trap 'kill $$back $$front 2>/dev/null' EXIT INT TERM; \
+	wait -n $$back $$front; \
+	echo ""; \
+	echo "A dev server exited — stopping the other half of the stack."; \
+	kill $$back $$front 2>/dev/null || true; \
+	wait $$back $$front 2>/dev/null || true
 
 build-index:
 	@echo "Building FAISS + BM25 indexes..."
 	cd backend && uv run python scripts/build_index.py
 
+# Only ever targets processes *listening* on the port. A bare `lsof -ti:3000`
+# also matches clients connected to it — it will happily kill your browser.
 stop:
 	@echo "Stopping running servers on ports 3000 and 8000..."
-	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
-	-@lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+	@for port in 3000 8000; do \
+		pids=$$( { ss -lptnH "sport = :$$port" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2; \
+		           lsof -ti tcp:$$port -sTCP:LISTEN 2>/dev/null; } | sort -u | tr '\n' ' ' ); \
+		if [ -z "$$pids" ]; then \
+			echo "  port $$port: nothing listening"; \
+		else \
+			echo "  port $$port: stopping $$pids"; \
+			kill $$pids 2>/dev/null || true; \
+			sleep 1; \
+			kill -9 $$pids 2>/dev/null || true; \
+		fi; \
+	done
 
 # ---------------------------------------------------------------------------
 # CI checks — thin wrappers over scripts/, which are the single source of
