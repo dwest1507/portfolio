@@ -6,8 +6,6 @@
 ### Features
 
 * added images for project cards ([74a1c21](https://github.com/dwest1507/portfolio/commit/74a1c2145bd771b415865ebdd2a9c1fbf6458370))
-* automate versioning and releases with Release Please ([4e3f3f7](https://github.com/dwest1507/portfolio/commit/4e3f3f715113f8532a55825d70e999a58c390fee))
-* automate versioning and releases with Release Please ([55aa893](https://github.com/dwest1507/portfolio/commit/55aa8935937f24afa0ebf3fc697f770043204534))
 * automate versioning and releases with Release Please ([#13](https://github.com/dwest1507/portfolio/issues/13)) ([4e3f3f7](https://github.com/dwest1507/portfolio/commit/4e3f3f715113f8532a55825d70e999a58c390fee))
 * chatbot widget ([73d9cea](https://github.com/dwest1507/portfolio/commit/73d9cea6d01d1bfb06b5f88b12974fc1bd476904))
 * **ci:** production CI/CD pipeline ([76c6719](https://github.com/dwest1507/portfolio/commit/76c67194a3c5d67ed19e0e4e68d2b617ae4fcaa8))
