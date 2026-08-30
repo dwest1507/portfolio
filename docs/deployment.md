@@ -90,6 +90,7 @@ Do the backend first: the frontend needs the backend's URL.
    | Variable | Value |
    |----------|-------|
    | `GROQ_API_KEY` | From [console.groq.com](https://console.groq.com) |
+   | `GROQ_MODEL` | Optional; defaults to `openai/gpt-oss-120b`. Set this if Groq decommissions that model — check the live list at [console.groq.com/docs/models](https://console.groq.com/docs/models). |
    | `ALLOWED_ORIGINS` | Vercel production URL — fill in after Step 3, e.g. `https://your-site.vercel.app` |
    | `PORT` | `8000` |
 

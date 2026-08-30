@@ -1,6 +1,7 @@
 """POST /api/chat — RAG retrieval + LLM generation + SSE streaming."""
 
 import json
+import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
@@ -10,6 +11,8 @@ from slowapi.util import get_remote_address
 
 from ..llm import Message, build_messages, generate_stream
 from ..rag.pipeline import get_pipeline
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -34,7 +37,9 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
             async for token in generate_stream(messages):
                 yield f"0:{json.dumps(token)}\n"
             yield f"d:{json.dumps({'finishReason': 'stop'})}\n"
-        except Exception:  # noqa: BLE001 — never leak provider errors into the stream
+        except Exception:
+            # Log the real cause server-side; never leak provider errors to the client.
+            logger.exception("LLM generation failed")
             yield '3:"Generation failed"\n'
 
     return StreamingResponse(
