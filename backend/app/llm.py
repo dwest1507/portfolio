@@ -6,7 +6,7 @@ from typing import Literal
 from groq import AsyncGroq
 from pydantic import BaseModel
 
-from .config import GROQ_API_KEY
+from .config import GROQ_API_KEY, GROQ_MODEL
 
 
 class Message(BaseModel):
@@ -45,7 +45,7 @@ async def generate_stream(
         client = AsyncGroq(api_key=GROQ_API_KEY)
 
     stream = await client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=GROQ_MODEL,
         messages=messages,
         stream=True,
         max_tokens=1024,

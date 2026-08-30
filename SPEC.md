@@ -310,7 +310,7 @@ components/
    Conversation history:
    {last 10 messages}
    ```
-6. **Generate:** Call Groq API (`llama-3.3-70b-versatile` or latest available model) with streaming enabled
+6. **Generate:** Call Groq API (model set by `GROQ_MODEL`, default `openai/gpt-oss-120b`) with streaming enabled
 7. **Stream:** Return response as a streamed text response (SSE)
 
 #### Next.js Proxy Route

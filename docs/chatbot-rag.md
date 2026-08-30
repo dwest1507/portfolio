@@ -51,7 +51,7 @@ Embed query (all-mpnet-base-v2)
                     (system + context + history)
                                  │
                                  ▼
-                    Groq API (llama-3.3-70b-versatile)
+                    Groq API (GROQ_MODEL env var)
                     Streaming SSE response
 ```
 
@@ -89,7 +89,7 @@ Conversation history:
 |---------|-------|
 | Embedding | `sentence-transformers/all-mpnet-base-v2` |
 | Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
-| LLM | `llama-3.3-70b-versatile` (via Groq) |
+| LLM | `openai/gpt-oss-120b` via Groq, overridable with `GROQ_MODEL` |
 
 ## Environment Variables
 

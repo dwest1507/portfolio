@@ -28,6 +28,10 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
+addopts = "-m 'not live'"
+markers = [
+    "live: hits the real Groq API; deselected by default",
+]
 
 [tool.ruff]
 line-length = 100

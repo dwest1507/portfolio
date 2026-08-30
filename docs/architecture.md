@@ -24,7 +24,7 @@ Browser → Next.js (Vercel)                     Python FastAPI (Railway)
 | Project Content | MDX (`@next/mdx`) |
 | Backend Framework | Python FastAPI |
 | RAG Pipeline | FAISS + BM25 (hybrid), sentence-transformers, cross-encoder re-ranking |
-| LLM API | Groq (`llama-3.3-70b-versatile`) |
+| LLM API | Groq (`GROQ_MODEL`, default `openai/gpt-oss-120b`) |
 | Streaming | Vercel AI SDK (`useChat` hook) |
 | Frontend Deployment | Vercel (free tier) |
 | Backend Deployment | Railway (free tier, 500 hrs/month) |
