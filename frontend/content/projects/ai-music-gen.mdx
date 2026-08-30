@@ -1,6 +1,6 @@
 ## Overview
 
-Generate Music with AI is a full-stack web application that turns a text prompt into an original music track using large language models and serverless GPU inference. You describe the vibe — _"lo-fi hip hop with rain ambiance"_ or _"aggressive metalcore with a jazz breakdown"_ — and the app composes something that didn't exist a moment before.
+Generate Music with AI is a full-stack web application that turns a text prompt into an original music track using ACE-Step, a text-to-music generation model, running on serverless GPUs. You describe the vibe — _"lo-fi hip hop with rain ambiance"_ or _"aggressive metalcore with a jazz breakdown"_ — and the app composes something that didn't exist a moment before.
 
 The project started as an experiment to close the loop between natural language and audio generation. Rather than wrapping a simple API call in a form, I wanted to build the full production-quality system: input validation, rate limiting, async job polling, streaming audio playback, and a UI that responds gracefully to the latency inherent in GPU inference.
 
@@ -9,7 +9,7 @@ The project started as an experiment to close the loop between natural language 
 The user fills out a prompt form on the Next.js frontend and submits. From there, every layer has a specific job:
 
 1. **FastAPI backend (Railway)** receives the request, validates input, checks rate limits using `slowapi` with session-cookie keying, then proxies the payload to the ACE-Step API running on Modal.
-2. **Modal** spins up a GPU worker, runs the music generation model, and returns a `task_id` immediately — the job is asynchronous.
+2. **Modal** spins up a GPU worker, runs the ACE-Step model, and returns a `task_id` immediately — the job is asynchronous.
 3. **Frontend polls** `GET /api/jobs/{task_id}` at an interval until the job completes, showing a live progress indicator.
 4. **Audio delivery**: once complete, the frontend fetches the audio stream from `GET /api/audio/{task_id}` and renders it in a WaveSurfer.js waveform player.
 

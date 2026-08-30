@@ -1,8 +1,8 @@
 # David West — Portfolio
 
-Personal portfolio website for David West, an AI Engineer with 5+ years of data science and AI experience. Features a cyberpunk design system and an AI-powered chatbot recruiters can use to ask questions about qualifications.
+Personal portfolio website for David West, an AI Engineer with 5+ years of data science and AI experience. Features a dark, Linear-inspired design system and an AI-powered chatbot recruiters can use to ask questions about qualifications.
 
-**Stack:** Next.js 15 · React 19 · TypeScript · Tailwind CSS v4 · Python FastAPI · Groq
+**Stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · Python FastAPI · Groq
 
 **Deployed at:** Vercel (frontend) · Railway (backend)
 
@@ -47,7 +47,7 @@ ALLOWED_ORIGINS=http://localhost:3000
 
 ```
 portfolio/
-├── frontend/          Next.js 15 app (pages, components, styles)
+├── frontend/          Next.js 16 app (pages, components, styles)
 ├── backend/           Python FastAPI (RAG pipeline, chat endpoint)
 ├── scripts/           CI check scripts (shared by make and GitHub Actions)
 ├── docs/              Detailed documentation
@@ -63,7 +63,7 @@ See [docs/architecture.md](docs/architecture.md) for the full system design.
 
 - **4 project showcases** with filterable cards and MDX detail pages
 - **AI chatbot** — floating widget with streaming responses, powered by a hybrid RAG pipeline (FAISS + BM25 + cross-encoder re-ranking) and Groq LLM
-- **Cyberpunk design system** — glitch effects, neon glow, scanlines, chromatic aberration
+- **Dark design system** — near-black surfaces, a single sky-blue accent (`#0ea5e9`), Inter for text with monospace micro-labels
 
 ---
 

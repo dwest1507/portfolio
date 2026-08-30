@@ -37,10 +37,10 @@ describe('ProjectsSection', () => {
     const user = userEvent.setup()
     render(<ProjectsSection />)
 
-    await user.click(screen.getByRole('button', { name: 'Streamlit' }))
+    await user.click(screen.getByRole('button', { name: 'Groq' }))
 
     expect(screen.getByRole('heading', { name: 'Chat with Nietzsche' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Baby Name Popularity' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Baby Names Explorer' })).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: 'Generate Music with AI' })
     ).not.toBeInTheDocument()
