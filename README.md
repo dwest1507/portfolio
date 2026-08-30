@@ -85,6 +85,22 @@ See [docs/ci-cd.md](docs/ci-cd.md) for the full target ↔ workflow mapping.
 
 ---
 
+## Versioning
+
+This project uses [Release Please](https://github.com/googleapis/release-please) for
+automated versioning and changelog generation.
+
+1. **Develop:** merge changes into `main` using
+   [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, …).
+2. **Release PR:** Release Please opens a PR that bumps the version and updates
+   `CHANGELOG.md`.
+3. **Merge:** merging that PR creates the git tag and GitHub Release.
+
+Frontend (`frontend/package.json`) and backend (`backend/pyproject.toml`) share one
+synchronized version, tracked in `.release-please-manifest.json`.
+
+---
+
 ## Documentation
 
 | Doc | Description |
@@ -93,6 +109,6 @@ See [docs/ci-cd.md](docs/ci-cd.md) for the full target ↔ workflow mapping.
 | [docs/chatbot-rag.md](docs/chatbot-rag.md) | RAG pipeline details (chunking, embedding, search, re-ranking) |
 | [docs/design-system.md](docs/design-system.md) | Cyberpunk design tokens, typography, animations |
 | [docs/deployment.md](docs/deployment.md) | Deploying to Vercel + Railway (native git integrations), environment variables |
-| [docs/ci-cd.md](docs/ci-cd.md) | GitHub Actions pipeline — CI, security scans, Lighthouse |
+| [docs/ci-cd.md](docs/ci-cd.md) | GitHub Actions pipeline — CI, security scans, Lighthouse, releases |
 | [docs/testing.md](docs/testing.md) | Test coverage approach, running tests |
 | [SPEC.md](SPEC.md) | Full project specification |

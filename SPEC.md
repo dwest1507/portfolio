@@ -538,7 +538,7 @@ export default function RootLayout({ children }) {
 
 ### Build & Deploy
 
-Deploys use the platforms' native git integrations — both Vercel and Railway watch `main` and redeploy on push. GitHub Actions runs CI, security scans, and Lighthouse but never deploys. See `docs/deployment.md` for setup and `docs/ci-cd.md` for the pipeline.
+Deploys use the platforms' native git integrations — both Vercel and Railway watch `main` and redeploy on push. GitHub Actions runs CI, security scans, Lighthouse, and Release Please but never deploys. See `docs/deployment.md` for setup and `docs/ci-cd.md` for the pipeline.
 
 **Frontend (Vercel):**
 - Root directory: `frontend`
@@ -683,6 +683,7 @@ pytest tests/ -v --cov=app     # With coverage
 ### Phase 7: Deploy
 
 - [x] Set up CI pipeline (GitHub Actions: CI, security scans, Lighthouse — see `docs/ci-cd.md`)
+- [x] Set up automated versioning + changelog (Release Please, `release-please-config.json` — conventional commits drive a release PR that tags `frontend/package.json` and `backend/pyproject.toml` in lockstep)
 - [x] Create Railway deploy config (`backend/Dockerfile`, models baked into image; service settings live in the Railway dashboard — Config as Code is deprecated)
 - [x] Add security headers to Next.js responses (`next.config.ts`)
 - [ ] Create Railway project from the GitHub repo (root directory `backend`) and set `GROQ_API_KEY`, `ALLOWED_ORIGINS`

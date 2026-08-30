@@ -41,6 +41,7 @@ analyses inside `security.yml`. Everything else is script-for-script identical.
 | `backend-ci.yml` | PRs and pushes to `main` touching `backend/**`; manual dispatch | `scripts/backend-lint.sh` (ruff check + format), `backend-test.sh` (pytest, ML models mocked) |
 | `security.yml` | PRs, pushes to `main`, weekly cron | CodeQL (TS + Python), gitleaks secret scan, `scripts/security-audit.sh` (npm audit prod/high+, pip-audit), dependency review on PRs |
 | `lighthouse.yml` | PRs touching `frontend/**` | `scripts/lighthouse.sh` — Lighthouse CI against the production build; asserts ≥ 0.9 on accessibility / best-practices / SEO (performance warns) per `frontend/lighthouserc.json` |
+| `release.yml` | Pushes to `main` | [Release Please](https://github.com/googleapis/release-please) — maintains the release PR, then tags and publishes the GitHub Release when it merges |
 
 Node is pinned by `frontend/.nvmrc` and read via `node-version-file:` in every
 workflow — CI must resolve `package-lock.json` with the same npm major that generated
@@ -66,6 +67,28 @@ live in the dashboard; see [deployment.md](deployment.md#step-2--deploy-the-back
 - FAISS/BM25 indexes are copied from `backend/indexes/` (build them with `make build-index`
   and commit before deploying)
 - Runs as a non-root user; Railway health-checks `/api/health` with a 300s startup budget
+
+## Releases
+
+`release.yml` runs Release Please on every push to `main`. It reads
+`release-please-config.json` and `.release-please-manifest.json` at the repo root and
+keeps an open **release PR** in sync with the conventional commits landed since the last
+release. Merging that PR is what cuts a release:
+
+- bumps the version in `frontend/package.json` and `backend/pyproject.toml`
+  (the `# x-release-please-version` comment marks the line release-please rewrites)
+- writes the entry into `CHANGELOG.md`
+- updates `.release-please-manifest.json`
+- creates the `v<version>` tag and the GitHub Release
+
+Frontend and backend are versioned together as one unit — `release-type: simple` with
+both version files listed under `extra-files`. Commits that aren't conventional
+(`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:`, …) are ignored, so they never appear in
+the changelog and never trigger a bump. To force a specific version, add a
+`Release-As: X.Y.Z` footer to a commit on `main`.
+
+Nothing about releases gates or triggers deploys — Vercel and Railway still deploy from
+`main` on every push, tag or not.
 
 ## Dependency updates
 
