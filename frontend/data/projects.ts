@@ -38,7 +38,7 @@ export const projects: Project[] = [
       'Streaming RAG chatbot that answers in Nietzsche’s voice, grounded in hybrid search over his complete works with cited passages.',
     thumbnail: '/projects/nietzsche-chat4.png',
     tags: ['Next.js', 'TypeScript', 'FastAPI', 'Python', 'Groq', 'RAG', 'FAISS', 'BM25'],
-    liveUrl: 'https://nietzsche-chat.streamlit.app',
+    liveUrl: 'https://nietzsche-chat-one.vercel.app',
     repoUrl: 'https://github.com/dwest1507/nietzsche-chat',
     featured: true,
     year: 2025,
