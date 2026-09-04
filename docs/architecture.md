@@ -7,10 +7,12 @@ Browser → Next.js (Vercel)                     Python FastAPI (Railway)
             ├── Static pages (SSG)               ├── POST /api/chat
             │   ├── Home (hero, projects,        │     ├── Embed query (sentence-transformers)
             │   │   about, contact)              │     ├── Hybrid search (FAISS + BM25)
-            │   └── Project detail pages (MDX)   │     ├── Cross-encoder re-ranking
-            ├── /api/chat (proxy) ─────────────→ │     ├── Prompt construction
-            │     (forwards to FastAPI)          │     └── Groq LLM (streaming)
-            └── Static assets                    ├── FAISS index (pre-built, loaded at startup)
+            │   └── Project detail pages (MDX)   │     ├── Reciprocal-rank fusion
+            ├── /api/chat (proxy) ─────────────→ │     ├── Cross-encoder re-ranking
+            │     (forwards to FastAPI)          │     ├── Prompt construction
+            └── Static assets                    │     └── Groq LLM (streaming)
+                                                 ├── FAISS index (pre-built, loaded at startup)
+                                                 ├── BM25 index (stemmed, stopword-filtered)
                                                  └── Rate limiting (in-memory + Groq backstop)
 ```
 
@@ -23,7 +25,8 @@ Browser → Next.js (Vercel)                     Python FastAPI (Railway)
 | Styling | Tailwind CSS v4 |
 | Project Content | MDX (`@next/mdx`) |
 | Backend Framework | Python FastAPI |
-| RAG Pipeline | FAISS + BM25 (hybrid), sentence-transformers, cross-encoder re-ranking |
+| RAG Pipeline | FAISS + BM25 fused by weighted reciprocal-rank fusion, sentence-transformers, cross-encoder re-ranking |
+| Retrieval Eval | 55-question golden set; hit@5 / recall@5 / MRR / nDCG@5, gated in CI |
 | LLM API | Groq (`GROQ_MODEL`, default `openai/gpt-oss-120b`) |
 | Streaming | Vercel AI SDK (`useChat` hook) |
 | Frontend Deployment | Vercel (free tier) |

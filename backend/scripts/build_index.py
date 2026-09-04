@@ -25,6 +25,9 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.rag.tokenize import tokenize
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 INDEXES_DIR = BACKEND_ROOT / "indexes"
@@ -34,6 +37,45 @@ MDX_DIR = REPO_ROOT / "frontend" / "content" / "projects"
 
 CHUNK_SIZE = 1000  # characters (~250-300 tokens)
 CHUNK_OVERLAP = 100
+
+
+# ---------------------------------------------------------------------------
+# PII redaction
+# ---------------------------------------------------------------------------
+
+# The resume is a public document, but the chatbot is a retrieval system that
+# will happily read any indexed line back to an anonymous visitor who asks for
+# it. Contact details that are fine on a PDF sent to a specific recruiter are
+# not fine coming out of a public endpoint on request, so they are stripped
+# before anything reaches the index. This is a backstop: the source documents
+# should not contain them either.
+
+_PII_PATTERNS: list[tuple[re.Pattern, str]] = [
+    # US phone numbers: (586) 549-3786, 586-549-3786, +1 586.549.3786
+    (
+        re.compile(r"(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b"),
+        "[redacted]",
+    ),
+    # Street address followed by a city/state/ZIP, e.g.
+    # "6482 Misty Ct, Waterford, MI 48327"
+    (
+        re.compile(
+            r"\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+)*?\s+"
+            r"(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Ct|Court|Blvd|Boulevard|"
+            r"Way|Cir|Circle|Pl|Place|Ter|Terrace|Pkwy|Parkway)\.?"
+            r"(?:\s*,\s*[A-Za-z .'-]+)?\s*,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\b",
+            re.IGNORECASE,
+        ),
+        "[redacted]",
+    ),
+]
+
+
+def _redact_pii(text: str) -> str:
+    """Strip home address and phone numbers before indexing."""
+    for pattern, replacement in _PII_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +174,7 @@ def load_documents() -> list[dict]:
     if not RESUME_PATH.exists():
         print(f"WARNING: Resume not found at {RESUME_PATH}", file=sys.stderr)
     else:
-        text = RESUME_PATH.read_text(encoding="utf-8")
+        text = _redact_pii(RESUME_PATH.read_text(encoding="utf-8"))
         docs.append({"text": text, "source": "resume"})
         print(f"  Loaded resume ({len(text)} chars)")
 
@@ -141,7 +183,7 @@ def load_documents() -> list[dict]:
         print(f"WARNING: Q&A file not found at {QA_PATH}", file=sys.stderr)
     else:
         raw = QA_PATH.read_text(encoding="utf-8")
-        text = _strip_mdx(raw)
+        text = _redact_pii(_strip_mdx(raw))
         docs.append({"text": text, "source": "qa"})
         print(f"  Loaded chatbot-questions.md ({len(text)} chars)")
 
@@ -151,7 +193,7 @@ def load_documents() -> list[dict]:
         print(f"WARNING: No MDX files found in {MDX_DIR}", file=sys.stderr)
     for mdx_path in mdx_files:
         raw = mdx_path.read_text(encoding="utf-8")
-        text = _strip_mdx(raw)
+        text = _redact_pii(_strip_mdx(raw))
         slug = mdx_path.stem
         docs.append({"text": text, "source": f"project:{slug}"})
         print(f"  Loaded {slug} ({len(text)} chars)")
@@ -203,7 +245,7 @@ def main() -> None:
     print(f"Saved faiss.index ({index.ntotal} vectors, dim={dim})")
 
     # Build BM25 index
-    tokenized_corpus = [c["text"].lower().split() for c in all_chunks]
+    tokenized_corpus = [tokenize(c["text"]) for c in all_chunks]
     bm25 = BM25Okapi(tokenized_corpus)
     with open(INDEXES_DIR / "bm25.pkl", "wb") as f:
         pickle.dump(bm25, f)

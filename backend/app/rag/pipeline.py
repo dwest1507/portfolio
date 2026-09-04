@@ -10,9 +10,64 @@ from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from ..config import INDEXES_DIR
+from .tokenize import tokenize
+
+EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
+CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+# Weights applied to each retriever's reciprocal-rank contribution. Semantic
+# search leads because most recruiter questions are paraphrases rather than
+# exact-term lookups; BM25 is the backstop for proper nouns ("TACOM", "FAISS")
+# that embeddings blur together. Tuned against eval/golden_set.json — see
+# `make eval`.
+DENSE_WEIGHT = 0.7
+SPARSE_WEIGHT = 0.3
+
+# RRF damping constant. 60 is the value from Cormack et al. (2009) and is the
+# de-facto default; it flattens the gap between ranks 1 and 2 so a single
+# retriever cannot dominate the fused ordering on its own.
+RRF_K = 60
+
+
+def reciprocal_rank_fusion(
+    rankings: list[list[int]],
+    weights: list[float],
+    k: int = RRF_K,
+) -> list[tuple[int, float]]:
+    """Fuse ranked ID lists by weighted reciprocal rank.
+
+    Each list contributes ``weight / (k + rank)`` for its entries (rank is
+    1-based). Returns ``(id, score)`` pairs sorted best-first.
+
+    RRF is used instead of normalizing and summing raw scores because FAISS
+    cosine similarities and BM25 term-frequency scores live on different,
+    unbounded scales. Min-max normalizing each list independently — the previous
+    approach here — forces the top hit of *every* list to 1.0 and the bottom to
+    0.0 regardless of absolute quality, so a list of uniformly irrelevant
+    results contributed exactly as much as a list of excellent ones, and the
+    last item of each list was always discarded at score 0. Rank position is
+    scale-free and has neither failure mode.
+    """
+    if len(rankings) != len(weights):
+        raise ValueError("rankings and weights must be the same length")
+
+    scores: dict[int, float] = {}
+    for ranking, weight in zip(rankings, weights):
+        for rank, doc_id in enumerate(ranking, start=1):
+            scores[doc_id] = scores.get(doc_id, 0.0) + weight / (k + rank)
+
+    return sorted(scores.items(), key=lambda item: item[1], reverse=True)
 
 
 class RAGPipeline:
+    """Hybrid retrieval over the pre-built portfolio indexes.
+
+    The embedding and cross-encoder models are loaded lazily on first use. That
+    keeps keyword-only paths (the BM25 arm of the eval harness, most unit tests)
+    runnable without downloading ~500MB of weights, and lets the API server
+    control when it pays that cost via :meth:`warm`.
+    """
+
     def __init__(
         self,
         indexes_dir: Path = INDEXES_DIR,
@@ -26,60 +81,82 @@ class RAGPipeline:
         # Load FAISS index (inner product = cosine sim on normalized vectors)
         self.faiss_index = faiss.read_index(str(indexes_dir / "faiss.index"))
 
+        # A FAISS index built from a different revision of chunks.json would
+        # silently return the text of the wrong chunk IDs, so refuse to start.
+        if self.faiss_index.ntotal != len(self.chunks):
+            raise ValueError(
+                f"Index mismatch: faiss.index has {self.faiss_index.ntotal} vectors but "
+                f"chunks.json has {len(self.chunks)} chunks. Run `make build-index`."
+            )
+
         # Load BM25 index
         with open(indexes_dir / "bm25.pkl", "rb") as f:
             self.bm25: BM25Okapi = pickle.load(f)
 
-        self.embedder = embedder or SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
-        self.cross_encoder = cross_encoder or CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+        self._embedder = embedder
+        self._cross_encoder = cross_encoder
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[str]:
-        """Full pipeline: hybrid search → cross-encoder re-ranking → top_k chunks."""
-        candidates = self._hybrid_search(query, top_k=10)
-        reranked = self._rerank(query, candidates, top_k=top_k)
-        return [c["text"] for c in reranked]
+    # -- Lazily loaded models ------------------------------------------------
 
-    def _hybrid_search(self, query: str, top_k: int = 10) -> list[dict]:
-        """70% semantic (FAISS) + 30% keyword (BM25)."""
-        # --- Semantic search ---
+    @property
+    def embedder(self) -> SentenceTransformer:
+        if self._embedder is None:
+            self._embedder = SentenceTransformer(EMBEDDING_MODEL)
+        return self._embedder
+
+    @property
+    def cross_encoder(self) -> CrossEncoder:
+        if self._cross_encoder is None:
+            self._cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL)
+        return self._cross_encoder
+
+    def warm(self) -> None:
+        """Force both models to load. Called at API startup so the first
+        request doesn't pay the download/initialization cost."""
+        _ = self.embedder
+        _ = self.cross_encoder
+
+    # -- Retrieval -----------------------------------------------------------
+
+    def retrieve(self, query: str, top_k: int = 5, candidates_k: int = 10) -> list[str]:
+        """Full pipeline: hybrid search → cross-encoder re-ranking → top_k chunk texts."""
+        candidate_ids = self.hybrid_search(query, top_k=candidates_k)
+        reranked_ids = self.rerank(query, candidate_ids, top_k=top_k)
+        return [self.chunks[i]["text"] for i in reranked_ids]
+
+    def dense_search(self, query: str, top_k: int = 10) -> list[int]:
+        """Semantic search over the FAISS index. Returns chunk IDs, best first."""
         query_vec = self.embedder.encode([query], normalize_embeddings=True).astype(np.float32)
-        faiss_scores, faiss_indices = self.faiss_index.search(query_vec, top_k)
-        faiss_scores = faiss_scores[0]
-        faiss_indices = faiss_indices[0]
+        _, indices = self.faiss_index.search(query_vec, top_k)
+        return [int(i) for i in indices[0] if i >= 0]
 
-        # --- BM25 search ---
-        tokenized = query.lower().split()
-        bm25_scores_all = self.bm25.get_scores(tokenized)
-        bm25_top_indices = np.argsort(bm25_scores_all)[::-1][:top_k]
-        bm25_top_scores = bm25_scores_all[bm25_top_indices]
+    def sparse_search(self, query: str, top_k: int = 10) -> list[int]:
+        """BM25 keyword search. Returns chunk IDs, best first."""
+        scores = self.bm25.get_scores(tokenize(query))
+        ranked = np.argsort(scores)[::-1][:top_k]
+        # Drop chunks BM25 scored at zero: they share no query term at all, and
+        # including them would hand reciprocal-rank credit to documents that
+        # merely padded out the list.
+        return [int(i) for i in ranked if scores[i] > 0]
 
-        # --- Normalize to [0, 1] ---
-        def _norm(scores: np.ndarray) -> np.ndarray:
-            lo, hi = scores.min(), scores.max()
-            return np.zeros_like(scores) if hi == lo else (scores - lo) / (hi - lo)
+    def hybrid_search(self, query: str, top_k: int = 10) -> list[int]:
+        """Weighted reciprocal-rank fusion of dense and sparse retrieval.
 
-        faiss_norm = _norm(faiss_scores)
-        bm25_norm = _norm(bm25_top_scores)
+        Returns chunk IDs, best first.
+        """
+        dense = self.dense_search(query, top_k=top_k)
+        sparse = self.sparse_search(query, top_k=top_k)
+        fused = reciprocal_rank_fusion([dense, sparse], [DENSE_WEIGHT, SPARSE_WEIGHT])
+        return [doc_id for doc_id, _ in fused[:top_k]]
 
-        # --- Combine with 70/30 weighting ---
-        combined: dict[int, float] = {}
-        for idx, score in zip(faiss_indices, faiss_norm):
-            if idx >= 0:
-                combined[int(idx)] = combined.get(int(idx), 0.0) + 0.7 * float(score)
-        for idx, score in zip(bm25_top_indices, bm25_norm):
-            combined[int(idx)] = combined.get(int(idx), 0.0) + 0.3 * float(score)
-
-        sorted_items = sorted(combined.items(), key=lambda x: x[1], reverse=True)[:top_k]
-        return [self.chunks[idx] for idx, _ in sorted_items]
-
-    def _rerank(self, query: str, candidates: list[dict], top_k: int = 5) -> list[dict]:
-        """Cross-encoder re-ranking."""
-        if len(candidates) <= 1:
-            return candidates[:top_k]
-        pairs = [[query, c["text"]] for c in candidates]
+    def rerank(self, query: str, candidate_ids: list[int], top_k: int = 5) -> list[int]:
+        """Cross-encoder re-ranking. Returns chunk IDs, best first."""
+        if len(candidate_ids) <= 1:
+            return candidate_ids[:top_k]
+        pairs = [[query, self.chunks[i]["text"]] for i in candidate_ids]
         scores = self.cross_encoder.predict(pairs)
-        ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
-        return [c for c, _ in ranked[:top_k]]
+        ranked = sorted(zip(candidate_ids, scores), key=lambda x: x[1], reverse=True)
+        return [doc_id for doc_id, _ in ranked[:top_k]]
 
 
 _pipeline: RAGPipeline | None = None

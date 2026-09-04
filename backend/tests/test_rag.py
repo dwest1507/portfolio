@@ -88,7 +88,9 @@ def fake_indexes(tmp_path):
     # BM25 index
     from rank_bm25 import BM25Okapi
 
-    corpus = [c["text"].lower().split() for c in chunks]
+    from app.rag.tokenize import tokenize
+
+    corpus = [tokenize(c["text"]) for c in chunks]
     bm25 = BM25Okapi(corpus)
     with open(tmp_path / "bm25.pkl", "wb") as f:
         pickle.dump(bm25, f)
@@ -110,15 +112,16 @@ def test_hybrid_search_returns_chunks(fake_indexes):
     pipeline = RAGPipeline(
         indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
     )
-    results = pipeline._hybrid_search("AI Engineer experience", top_k=3)
+    results = pipeline.hybrid_search("AI Engineer experience", top_k=3)
 
     assert len(results) > 0
-    assert all("text" in r for r in results)
+    assert all(isinstance(doc_id, int) for doc_id in results)
+    assert all(0 <= doc_id < 3 for doc_id in results)
 
 
 def test_reranking_orders_by_cross_encoder_score(fake_indexes):
     """The chunk with the highest cross-encoder score should appear first."""
-    indexes_dir, chunks = fake_indexes
+    indexes_dir, _chunks = fake_indexes
 
     mock_embedder = MagicMock()
     mock_embedder.encode.return_value = np.random.rand(1, 768).astype(np.float32)
@@ -132,11 +135,10 @@ def test_reranking_orders_by_cross_encoder_score(fake_indexes):
     pipeline = RAGPipeline(
         indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
     )
-    candidates = list(chunks)  # use all 3
-    reranked = pipeline._rerank("query", candidates, top_k=3)
+    reranked = pipeline.rerank("query", [0, 1, 2], top_k=3)
 
-    # The candidate that got score 0.9 (index 2 in candidates) should be first
-    assert reranked[0] == chunks[2]
+    # The candidate that got score 0.9 (chunk ID 2) should be first
+    assert reranked[0] == 2
 
 
 def test_retrieve_returns_top_k(fake_indexes):

@@ -53,6 +53,26 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | RAG pipeline | Prompt construction includes context and history |
 | Medium | Rate limiting | Exceeding 30 req/min → 429 |
 | Medium | Chunking | Correct chunk sizes with overlap |
+| High | PII guard | No phone number or street address appears in the committed index |
+| High | Tokenizer | Stemming unifies "engineer"/"engineering"; stopwords dropped; "R" survives |
+| High | RRF fusion | Agreement between retrievers wins; weights shift order; no item zeroed |
+| Medium | Eval metrics | recall@k, hit@k, MRR, nDCG@k computed correctly |
 | Medium | `GET /api/health` | Returns 200 `{ "status": "ok" }` |
 
-Test files are in `backend/tests/`. Fixtures (including mock indexes) are defined in `backend/tests/conftest.py`.
+Test files are in `backend/tests/`. Fixtures (including mock indexes) are defined
+in `backend/tests/conftest.py`. The FastAPI `TestClient` import is deferred into
+the `client` fixture so the tests that never touch the HTTP layer (tokenizer,
+fusion, PII, chunking) can run without importing FastAPI.
+
+## Retrieval Evaluation
+
+Unit tests check that retrieval code behaves as written; they cannot tell you
+whether retrieval is any *good*. That is measured separately by a 55-question
+golden set scored on hit@5, recall@5, MRR, and nDCG@5, and gated in CI:
+
+```bash
+make eval        # all arms (downloads ~500MB of models on first run)
+make eval-fast   # BM25 arm only — no model download
+```
+
+See [evaluation.md](evaluation.md) for method, current numbers, and thresholds.

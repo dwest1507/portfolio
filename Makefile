@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 .PHONY: help install dev dev-frontend dev-backend build-index test lint clean stop \
 	frontend-quality frontend-test frontend-build backend-lint backend-test frontend-deps \
-	security-audit lighthouse ci-cd
+	security-audit lighthouse ci-cd eval eval-fast
 
 help:
 	@echo "Available commands:"
@@ -24,6 +24,8 @@ help:
 	@echo "  make frontend-build          - Next.js production build"
 	@echo "  make backend-lint            - Ruff check + format check"
 	@echo "  make backend-test            - Pytest"
+	@echo "  make eval                    - Retrieval quality eval (all arms; downloads models)"
+	@echo "  make eval-fast               - Retrieval eval, BM25 arm only (no model download)"
 	@echo "  make security-audit          - npm audit + pip-audit"
 	@echo "  make lighthouse              - Lighthouse CI budget check (needs Chrome)"
 	@echo ""
@@ -113,6 +115,12 @@ backend-lint:
 backend-test:
 	./scripts/backend-test.sh
 
+eval:
+	./scripts/backend-eval.sh
+
+eval-fast:
+	./scripts/backend-eval.sh bm25
+
 security-audit:
 	./scripts/security-audit.sh all
 
@@ -121,7 +129,7 @@ lighthouse:
 
 # Everything the PR/push gates run, in one command. There is nothing to deploy
 # here — Vercel and Railway deploy from main via their git integrations.
-ci-cd: frontend-quality frontend-test frontend-build backend-lint backend-test security-audit lighthouse
+ci-cd: frontend-quality frontend-test frontend-build backend-lint backend-test eval security-audit lighthouse
 	@echo ""
 	@echo "ci-cd: all checks passed ✔"
 

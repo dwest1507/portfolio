@@ -21,10 +21,17 @@ make build-index
 
 `scripts/build_index.py` performs:
 
-1. **Load sources** — `docs/resume.txt` + project descriptions from `data/projects.ts`
+1. **Load sources** — `docs/resume.txt`, `docs/chatbot-questions.md`, and the
+   project write-ups in `frontend/content/projects/*.mdx`, then **redact**
+   contact PII (street address, phone numbers) before anything is indexed. The
+   chatbot reads indexed text back to anyone who asks for it, so what goes in
+   the index is published.
 2. **Chunk** — ~200–300 token chunks with overlap; paragraph-based splitting to preserve complete thoughts
 3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk
-4. **Index** — Builds a FAISS index (vector search) and a BM25 index (keyword search)
+4. **Index** — Builds a FAISS index (vector search) and a BM25 index (keyword search).
+   BM25 terms are lowercased, stopword-filtered, and Snowball-stemmed by
+   `app/rag/tokenize.py` — the same tokenizer the query path uses, so index and
+   query terms always agree.
 5. **Save** — Writes `backend/indexes/faiss.index`, `bm25.pkl`, and `chunks.json`
 
 The indexes are committed to the repo and loaded into memory at FastAPI startup.
@@ -38,8 +45,8 @@ User query
 Embed query (all-mpnet-base-v2)
     │
     ├──► FAISS semantic search  ─┐
-    │    (top-k candidates)      ├──► Merge (70% semantic / 30% keyword)
-    └──► BM25 keyword search   ──┘
+    │    (top-k candidates)      ├──► Weighted RRF fusion
+    └──► BM25 keyword search   ──┘     (0.7 semantic / 0.3 keyword)
                                  │
                                  ▼
                     Cross-encoder re-ranking
@@ -98,3 +105,20 @@ Conversation history:
 | `GROQ_API_KEY` | Railway (backend) | Groq API key |
 | `CHAT_API_URL` | Vercel (frontend) | URL of the FastAPI backend |
 | `ALLOWED_ORIGINS` | Railway (backend) | CORS allowed origins (Vercel URL) |
+
+## Fusion
+
+Dense and sparse results are combined with weighted reciprocal-rank fusion:
+each list contributes `weight / (60 + rank)` for the documents it returns.
+
+RRF replaced an earlier scheme that min-max normalized each retriever's scores
+and summed them. That was unsound: normalizing a list against itself forces its
+top hit to 1.0 and its last hit to 0.0 regardless of absolute quality, so a
+list of uniformly irrelevant results contributed exactly as much as a list of
+excellent ones, and the lowest-ranked candidate of each list was always
+discarded at zero. Rank position is scale-free and has neither problem.
+
+## Evaluation
+
+Retrieval quality is measured against a 55-question golden set and gated in CI.
+See [evaluation.md](evaluation.md).

@@ -7,12 +7,16 @@ on:
   pull_request:
     paths:
       - 'backend/**'
+      - 'docs/resume.txt'
+      - 'docs/chatbot-questions.md'
       - 'scripts/backend-*.sh'
       - '.github/workflows/backend-ci.yml'
   push:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'docs/resume.txt'
+      - 'docs/chatbot-questions.md'
       - 'scripts/backend-*.sh'
       - '.github/workflows/backend-ci.yml'
   workflow_dispatch:
@@ -64,3 +68,32 @@ jobs:
 
       - name: Tests
         run: ./scripts/backend-test.sh
+
+  eval:
+    name: Retrieval eval
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: backend
+
+      # The embedding + cross-encoder weights are ~500MB. Cache them so only the
+      # first run on a given lockfile pays the download.
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
+          restore-keys: hf-${{ runner.os }}-
+
+      - name: Retrieval quality gate
+        run: ./scripts/backend-eval.sh
