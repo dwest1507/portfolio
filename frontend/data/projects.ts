@@ -59,7 +59,7 @@ export const projects: Project[] = [
       'Time Series',
       'Data Visualization',
     ],
-    liveUrl: 'https://baby-names-app.streamlit.app/',
+    liveUrl: 'https://baby-names-app-zeta.vercel.app/',
     repoUrl: 'https://github.com/dwest1507/baby-names-app',
     featured: false,
     year: 2025,
