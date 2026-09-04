@@ -1,0 +1,66 @@
+## Overview
+
+This is the site you are reading. It is also the project I would point at first in a technical interview, because it is the one where I can show you numbers instead of adjectives.
+
+The visible half is a Next.js front end. The interesting half is the chatbot in the corner: a Retrieval-Augmented Generation system that answers questions about my experience from my own resume and a written Q&A corpus, streaming responses through a FastAPI backend. Plenty of portfolios have a chatbot bolted on. What I wanted was the thing most of them skip — a way to know whether the retrieval underneath it actually works, and a gate that fails the build when it stops working.
+
+## The problem with "it seems to work"
+
+The pipeline started with the parameters you would expect: 70% semantic search, 30% keyword search, ten candidates narrowed to five by a cross-encoder. Every one of those numbers was a guess. I had no answer to _"does the cross-encoder earn its latency?"_ or _"would keyword search alone be just as good?"_, and nothing would have told me if a change to chunking quietly broke retrieval.
+
+So I built the eval suite first and let it answer.
+
+**The golden set** is 55 questions of the kind a recruiter, hiring manager, or technical interviewer actually asks — employment history, specific technologies, project details, education, logistics. Each question is labelled with the phrases a correct answer has to be grounded in. Labelling by phrase rather than by chunk ID matters: the corpus gets re-chunked every time I edit a source document, and chunk IDs would be invalidated on every rebuild while phrases survive.
+
+**The metrics** are hit@5, recall@5, MRR, and nDCG@5. The one that gates CI is hit@5 — did _any_ relevant passage reach the model? — because that is what decides whether the LLM can answer at all. recall@5 is reported but deliberately not gated: several questions have more than five relevant chunks, so their recall is capped below 1.0 by construction and no honest threshold could ever be met.
+
+## What the eval told me
+
+<EvalScoreboard />
+
+Keyword search beats the full pipeline. On every metric.
+
+That is not the result I was hoping for when I wired up hybrid retrieval and a cross-encoder. It is, however, exactly why the eval exists, and I would rather publish it than quietly ship a slower, more complicated pipeline that performs worse than the simple thing.
+
+Reading the table properly:
+
+- **BM25 alone retrieves a relevant passage for all 55 questions.** hit@5 of 1.000.
+- **Dense retrieval is the weak link here**, missing 10 questions outright.
+- **Hybrid fusion lands between its two inputs**, which is what fusion does when you average a strong retriever with a weak one.
+- **The cross-encoder is doing its job.** Re-ranking lifts MRR from 0.750 to 0.853 — it genuinely reorders good passages upward. It just cannot rescue what the candidate stage never handed it.
+
+## Why keyword search wins here
+
+The honest explanation is structural, and it is a caveat on the result rather than a defence of it.
+
+The corpus is largely a written Q&A document — it _contains the questions themselves_, phrased almost the way a recruiter would ask them. Lexical matching thrives on that. Dense retrieval earns its keep when a user's phrasing shares no vocabulary with the source text, and a corpus built out of anticipated questions systematically under-represents that case.
+
+There is a second bias I should name: relevance is labelled by exact phrase presence, and BM25 ranks by exact term overlap. The labelling scheme and the retriever are measuring something close to the same thing. It does not invalidate the comparison — every arm was scored against identical labels — but it means the honest claim is narrow. Not _"BM25 beats dense retrieval."_ Only _"on a small, keyword-dense corpus that embeds its own expected questions, lexical search wins, and I have the numbers to show it."_
+
+BM25 being a stubbornly strong baseline is a well-known result in information retrieval. Rediscovering it on my own corpus, with my own measurements, was more instructive than reading it.
+
+**What I am changing as a result:** the fusion weights currently favour dense retrieval 70/30, which the data does not support — that ratio is now a measured mistake rather than an assumption. The next experiments are shifting the weighting toward sparse, and testing BM25 feeding the cross-encoder directly, dropping the dense stage entirely. That would be both cheaper and, on this evidence, better. I am keeping the dense arm measured either way, because the moment the corpus grows past anticipated questions I expect that conclusion to flip.
+
+## Two bugs the eval caught
+
+Neither of these would have been visible without measurement. Both were in code that looked perfectly reasonable.
+
+**The tokenizer was silently destroying keyword recall.** The index builder and the query path both tokenized with `text.lower().split()`. That never matches "engineering" against "engineer", never matches "David's" against "David", leaves punctuation welded to terms, and scores stopwords as if they carried meaning. Replacing it with one shared stopword-filtered, Snowball-stemmed tokenizer — shared being the operative word, since a mismatch between index-time and query-time tokenization is unfixable at query time — moved BM25's MRR from 0.745 to 0.892, roughly 20% relative, at no cost in latency.
+
+**The fusion weights had disabled the sparse retriever entirely.** Reciprocal-rank fusion combines ranked lists as `weight / (k + rank)`, and the textbook value for `k` is 60. That default assumes lists thousands of documents long. Over the ten-item lists here, `k=60` varies the rank term by only 1.15× across the entire list, while the 0.7/0.3 weights vary by 2.33×. The weights dominated outright: every dense hit outscored every sparse hit, so BM25 could never introduce a candidate the dense arm had missed — which is the only reason to run a second retriever at all. Dropping `k` to 1 restored it.
+
+A well-known constant, used at the wrong scale, quietly turning off half the system. That one is going in my mental catalogue permanently.
+
+## Engineering around it
+
+The eval is a CI gate, not a notebook. `scripts/backend-eval.sh` runs on every backend change and fails the build if any gated configuration drops below its floor, so retrieval quality cannot regress silently between commits. The same script backs `make eval` locally, and a BM25-only mode runs in seconds without downloading half a gigabyte of model weights.
+
+The rest of the pipeline is held to the same standard. Ruff, ESLint, Prettier, and `tsc` gate every push. CodeQL, gitleaks, `pip-audit`, `npm audit`, and dependency review run on every pull request and weekly against unchanged code. Lighthouse CI watches performance and accessibility budgets. Every check lives in `scripts/` and is shared verbatim between the Makefile and GitHub Actions, so `make ci-cd` reproduces the PR gates exactly — no drift between what passes locally and what passes in CI.
+
+One gate is there because of a specific mistake. My resume is a source document for the index, and it carried my home address and phone number, which meant the chatbot would read them back to anyone who asked. The fix was three-layered: strip it at the source, redact it during the index build as a backstop, and add a regression test that fails the build if a phone number or street address ever appears in the committed index again. The redaction and the detection are deliberately asymmetric — the redactor is precise, because rewriting the corpus silently means a false positive destroys real content unnoticed, while the test guard casts a wide net, because its only power is to fail a build and a false positive there costs one glance from me.
+
+## Skills Demonstrated
+
+The RAG pipeline is the part that looks impressive. The eval suite is the part that matters, and it is the difference between an engineer who assembles components and one who can tell you whether the assembly works.
+
+This project shows I can define what "good" means for a system whose output is text, label ground truth by hand, choose metrics that survive contact with the actual failure modes, wire the result into CI as a gate rather than a report, and — when the measurement contradicts the architecture I had already built — say so publicly and change the design instead of the story.

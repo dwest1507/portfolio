@@ -26,7 +26,8 @@ function InfoRow({ label, value, accent }: { label: string; value: string; accen
 
 export default function ProjectDetail({ project, content }: ProjectDetailProps) {
   const isExternalLive = project.liveUrl.startsWith('http')
-  const liveLabel = project.liveUrl.endsWith('.html') ? 'View Analysis ↗' : 'Live App ↗'
+  const liveLabel =
+    project.liveLabel ?? (project.liveUrl.endsWith('.html') ? 'View Analysis ↗' : 'Live App ↗')
 
   return (
     <main className="relative z-10 min-h-screen">

@@ -58,9 +58,10 @@ make eval-fast   # BM25 arm only — no model download, runs in seconds
 calibrated at k=5, so `--check` only runs at the default cutoff and fails
 loudly rather than comparing a `hit@10` against a `hit@5` floor.
 
-The `dense` arm has no threshold entry, because it has never been measured (see
-below). `--check` names any ungated arm explicitly, and a run in which *nothing*
-was gated — `--check --arms dense` — is a failure rather than a pass.
+The `dense` arm has no threshold entry: it is measured and reported as a
+baseline, not defended as a quality bar (see the results below). `--check` names
+any ungated arm explicitly, and a run in which *nothing* was gated —
+`--check --arms dense` — is a failure rather than a pass.
 
 Useful flags:
 
@@ -73,45 +74,78 @@ uv run python eval/run_eval.py --check                # exit 1 below thresholds
 
 ## Results
 
+Measured on the current corpus (49 chunks, 55 questions) by the CI
+`Retrieval eval` job at `ee674f2`.
+
+### Arm comparison
+
+| Arm | recall@5 | hit@5 | MRR | nDCG@5 |
+|-----|---------:|------:|----:|-------:|
+| `bm25` | **0.730** | **1.000** | **0.892** | **0.758** |
+| `dense` | 0.571 | 0.818 | 0.688 | 0.588 |
+| `hybrid` | 0.653 | 0.927 | 0.750 | 0.651 |
+| `rerank` | 0.652 | 0.909 | 0.853 | 0.698 |
+
+**Keyword search alone beats the full pipeline on every metric.** BM25 retrieves
+a relevant passage for all 55 questions; the hybrid + cross-encoder pipeline
+that was built on the assumption that it would do better does not.
+
+Reading the rest of the table:
+
+- **Dense retrieval is the weak arm here**, missing 10 questions outright.
+- **Hybrid lands between its two inputs**, which is what fusion does when it
+  averages a strong retriever with a weak one.
+- **The cross-encoder is working.** Re-ranking lifts MRR from 0.750 to 0.853 —
+  it genuinely reorders good passages upward. It cannot rescue what the
+  candidate stage never gave it.
+
+### Why lexical search wins on this corpus
+
+Two structural reasons, both of which narrow the claim rather than support it:
+
+1. **The corpus contains the questions.** `docs/chatbot-questions.md` is written
+   as recruiter questions with answers, and the golden set asks paraphrases of
+   those same questions. Lexical overlap between query and document is therefore
+   unusually high. Dense retrieval earns its keep when the user's phrasing shares
+   no vocabulary with the source — a case a Q&A corpus under-represents by
+   construction.
+2. **The labels correlate with the retriever.** Relevance is defined by exact
+   phrase presence, and BM25 ranks by exact term overlap, so the labelling scheme
+   and one of the arms measure something close to the same thing. Every arm was
+   scored against identical labels, so the comparison is internally fair — but
+   the honest claim is narrow: *on a small, keyword-dense corpus that embeds its
+   own expected questions, lexical search wins here.* Not that BM25 beats dense
+   retrieval in general.
+
+### What changes as a result
+
+The 70/30 weighting favouring dense retrieval is now a measured mistake rather
+than an untested assumption. Open experiments:
+
+- Shift `DENSE_WEIGHT` / `SPARSE_WEIGHT` toward sparse and re-measure.
+- Test BM25 feeding the cross-encoder directly, dropping the dense stage — on
+  this evidence that would be cheaper *and* better.
+- Keep the dense arm measured regardless. The moment the corpus grows beyond
+  anticipated questions, this conclusion is expected to flip.
+
 ### BM25 tokenizer change
 
 Both the index builder and the query path previously tokenized with
 `text.lower().split()`. That never matched "engineering" against "engineer",
 never matched "David's" against "David", left punctuation attached to terms, and
 scored stopwords as if they carried meaning. Replacing it with a shared
-stopword-filtered Snowball-stemmed tokenizer, measured on the BM25 arm:
+stopword-filtered Snowball-stemmed tokenizer, measured on the BM25 arm against
+the same corpus:
 
 | Tokenizer | recall@5 | hit@5 | MRR | nDCG@5 |
 |-----------|---------:|------:|----:|-------:|
-| `.lower().split()` | 0.595 | 0.836 | 0.644 | 0.549 |
-| stopwords + Snowball stemming | **0.711** | **0.909** | **0.839** | **0.723** |
-| change | +0.116 | +0.073 | **+0.196** | +0.174 |
+| `.lower().split()` | 0.633 | 0.945 | 0.745 | 0.618 |
+| stopwords + Snowball stemming | **0.730** | **1.000** | **0.892** | **0.758** |
+| change | +0.097 | +0.055 | **+0.147** | +0.140 |
 
-A 30% relative improvement in MRR from the tokenizer alone — the largest
-single-change gain measured so far, and it costs nothing at query time.
-
-### Arm comparison
-
-The BM25 baseline is recorded below. The dense, hybrid, and rerank rows are
-produced by the CI `Retrieval eval` job, which has the model weights available;
-fill them in here from that run's output.
-
-| Arm | recall@5 | hit@5 | MRR | nDCG@5 |
-|-----|---------:|------:|----:|-------:|
-| `bm25` | 0.711 | 0.909 | 0.839 | 0.723 |
-| `dense` | — | — | — | — |
-| `hybrid` | — | — | — | — |
-| `rerank` | — | — | — | — |
-
-The five questions BM25 alone misses are all semantic paraphrases, which is
-exactly the gap dense retrieval is supposed to close:
-
-- "What is David's current job title?" (corpus says *Data Scientist, Lead*)
-- "What did David study in college?" (corpus says *Major: Biochemistry*)
-- "Does David have a computer science degree?"
-- "What cloud providers has David used?" (corpus says *cloud platforms*)
-- "Has David built models that predict equipment failure?" (corpus says
-  *predicts when parts will fail*)
+Roughly 20% relative improvement in MRR from the tokenizer alone, at no query-time
+cost. Index-time and query-time tokenization must match exactly, which is why
+both sides import the single implementation in `app/rag/tokenize.py`.
 
 ## CI gate
 
@@ -119,19 +153,19 @@ exactly the gap dense retrieval is supposed to close:
 backend change. The job fails if any gated arm falls below the floors in
 `eval/run_eval.py`, so a change that degrades retrieval cannot merge silently.
 
-Floors are currently set to the measured BM25 baseline rounded down (hit@5 ≥
-0.85, MRR ≥ 0.75). BM25 alone is the weakest arm, so any configuration scoring
-below it is a real regression. Raise the floors once the full four-arm run is
-recorded above.
+Floors are hit@5 ≥ 0.85 and MRR ≥ 0.75, set below the measured values with
+headroom for noise. `dense` is intentionally ungated — it is measured and
+reported as a baseline, not defended as a quality bar.
 
 ## Scope and honesty about it
 
-The corpus is 42 chunks. Retrieving 10 candidates means touching roughly a
-quarter of it, so this is not a hard retrieval problem, and the absolute numbers
-should be read with that in mind. The pipeline is built at production
-complexity — hybrid retrieval, cross-encoder re-ranking, a measured regression
-gate — deliberately, to demonstrate the pattern on a corpus small enough to
-label exhaustively by hand.
+The corpus is 49 chunks. Retrieving 10 candidates touches roughly a fifth of it,
+so this is not a hard retrieval problem and the absolute numbers should be read
+with that in mind. The pipeline is built at production complexity — hybrid
+retrieval, cross-encoder re-ranking, a measured regression gate — deliberately,
+to demonstrate the pattern on a corpus small enough to label exhaustively by
+hand. The eval earning its keep by contradicting the architecture is the point,
+not an embarrassment to hide.
 
 ## Not yet measured
 

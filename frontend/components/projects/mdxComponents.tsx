@@ -1,4 +1,5 @@
-import type { ReactNode, HTMLAttributes, AnchorHTMLAttributes } from 'react'
+import type { ReactNode, HTMLAttributes, AnchorHTMLAttributes, TdHTMLAttributes } from 'react'
+import EvalScoreboard from './EvalScoreboard'
 
 type Block = HTMLAttributes<HTMLElement> & { children?: ReactNode }
 type Anchor = AnchorHTMLAttributes<HTMLAnchorElement> & { children?: ReactNode }
@@ -171,6 +172,41 @@ function Hr() {
   )
 }
 
+type Cell = TdHTMLAttributes<HTMLTableCellElement> & { children?: ReactNode }
+
+function Table({ children, ...props }: Block) {
+  return (
+    // Wide tables scroll inside this container so the page body never does.
+    <div className="my-6 overflow-x-auto rounded-xl border border-white/[0.06]">
+      <table
+        className="w-full border-collapse text-left text-sm"
+        {...(props as HTMLAttributes<HTMLTableElement>)}
+      >
+        {children}
+      </table>
+    </div>
+  )
+}
+
+function Th({ children, ...props }: Cell) {
+  return (
+    <th
+      className="border-b border-white/[0.08] px-4 py-2.5 font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+      {...props}
+    >
+      {children}
+    </th>
+  )
+}
+
+function Td({ children, ...props }: Cell) {
+  return (
+    <td className="border-b border-white/[0.04] px-4 py-2.5 text-[#8a8f98]" {...props}>
+      {children}
+    </td>
+  )
+}
+
 export const mdxComponents = {
   h2: H2,
   h3: H3,
@@ -185,4 +221,9 @@ export const mdxComponents = {
   pre: Pre,
   a: A,
   hr: Hr,
+  table: Table,
+  th: Th,
+  td: Td,
+  // Available to MDX write-ups as <EvalScoreboard />
+  EvalScoreboard,
 }
