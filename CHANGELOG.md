@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/dwest1507/portfolio/compare/portfolio-v0.1.0...portfolio-v0.2.0) (2026-08-31)
+
+
+### Features
+
+* updated link to new nietzsche chatbot ([2719e4b](https://github.com/dwest1507/portfolio/commit/2719e4b19559c13edfd45faf61dd1ebff6b5ef56))
+
 ## 0.1.0 (2026-08-30)
 
 
