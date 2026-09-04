@@ -50,10 +50,43 @@ CHUNK_OVERLAP = 100
 # before anything reaches the index. This is a backstop: the source documents
 # should not contain them either.
 
+# Redaction is deliberately PRECISE, not permissive. It rewrites the corpus
+# silently, so a false positive destroys real content (a metric, an ID, a
+# quantity) with nobody the wiser, and degrades the retrieval quality that
+# eval/ exists to measure. The broad net lives in tests/test_pii.py instead:
+# that one only has to fail a build, so a false positive there costs one human
+# glance rather than a hole in the index.
+#
+# Concretely: a bare 10-digit run like "5865493786" is NOT redacted here,
+# because it is indistinguishable from an ordinary number. test_pii.py does
+# match it, so it fails the build and the source document gets fixed — which is
+# the stated order of operations anyway ("the sources should be clean to begin
+# with").
+
+# Separators that actually mark a phone number rather than a numeric coincidence.
+_PHONE_PUNCT = r"[.-]"
+
 _PII_PATTERNS: list[tuple[re.Pattern, str]] = [
-    # US phone numbers: (586) 549-3786, 586-549-3786, +1 586.549.3786
+    # Phone numbers written with unambiguous phone punctuation:
+    #   (586) 549-3786 | 586-549-3786 | +1 586.549.3786 | (586)549-3786
+    # A parenthesized area code, or dot/dash separators, marks intent. Bare or
+    # space-only separated digit runs are left to the test guard (see above).
     (
-        re.compile(r"(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b"),
+        re.compile(
+            r"(?<!\d)(?:\+?1[\s.-]?)?"
+            r"(?:\(\d{3}\)\s*|\d{3}" + _PHONE_PUNCT + r")"
+            r"\d{3}" + _PHONE_PUNCT + r"\d{4}(?!\d)"
+        ),
+        "[redacted]",
+    ),
+    # Phone numbers with ambiguous separators (spaces, or none at all), but
+    # carrying an explicit label that resolves the ambiguity:
+    #   "Phone: 586 549 3786" | "cell 5865493786" | "Tel. +1 586 549 3786"
+    (
+        re.compile(
+            r"(?i:\b(?:phone|tel|telephone|mobile|cell|fax|contact)\b\.?\s*:?\s*)"
+            r"(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)"
+        ),
         "[redacted]",
     ),
     # Street address followed by a city/state/ZIP, e.g.

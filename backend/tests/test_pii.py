@@ -20,9 +20,14 @@ REPO_ROOT = BACKEND_ROOT.parent
 sys.path.insert(0, str(BACKEND_ROOT / "scripts"))
 from build_index import _redact_pii
 
-# Deliberately broader than the redaction patterns: this is a detector, not a
-# sanitizer, and it should catch formats the sanitizer might have missed.
-PHONE_RE = re.compile(r"(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b")
+# Deliberately broader than the redaction patterns in build_index.py, and the
+# asymmetry is the point. The redactor rewrites the corpus silently, so it is
+# precise: a false positive there deletes real content and nobody finds out.
+# This is a detector — its only power is to fail a build — so a false positive
+# costs one human glance. It therefore casts the wide net, including bare
+# 10-digit runs and punctuation-free international forms that the redactor
+# deliberately leaves alone.
+PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)")
 STREET_RE = re.compile(
     r"\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+)*?\s+"
     r"(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Ct|Court|Blvd|Boulevard|"
@@ -30,9 +35,12 @@ STREET_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Every document load_documents() indexes must be scanned. The MDX write-ups
+# were missing here even though build_index.py feeds them to the same index.
 SOURCE_DOCS = [
     REPO_ROOT / "docs" / "resume.txt",
     REPO_ROOT / "docs" / "chatbot-questions.md",
+    *sorted((REPO_ROOT / "frontend" / "content" / "projects").glob("*.mdx")),
 ]
 
 
@@ -83,3 +91,57 @@ def test_redactor_strips_phone_and_address():
 def test_redactor_leaves_ordinary_resume_text_alone(text: str):
     """Guards against a redaction pattern that eats dates, grades, or versions."""
     assert _redact_pii(text) == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "5865493786",
+        "(586)5493786",
+        "+15865493786",
+        "586 549 3786",
+        "(586) 549-3786",
+        "586-549-3786",
+        "+1 586.549.3786",
+    ],
+)
+def test_guard_catches_every_phone_format_including_bare_digits(text: str):
+    """The detector is the wide net.
+
+    It must match formats the redactor deliberately skips, because for those the
+    build failing *is* the fix: the source document gets corrected rather than
+    the corpus silently rewritten.
+    """
+    assert PHONE_RE.search(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Processed 4500000000 records",
+        "Latency dropped 200 300 4000 ms",
+        "Serial 1234567890123",
+        "Handled 12,500,000 rows",
+    ],
+)
+def test_redactor_does_not_eat_ordinary_numbers(text: str):
+    """The redactor mutates the corpus silently, so it must not guess.
+
+    A bare or space-separated digit run is indistinguishable from a metric, an
+    identifier, or a quantity. Redacting those degrades retrieval with no signal
+    that anything was lost.
+    """
+    assert _redact_pii(text) == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Phone: 586 549 3786",
+        "cell 5865493786",
+        "Tel. +1 586 549 3786",
+    ],
+)
+def test_redactor_strips_ambiguous_formats_when_labelled(text: str):
+    """A nearby label resolves the ambiguity, so the redactor can act safely."""
+    assert "[redacted]" in _redact_pii(text)

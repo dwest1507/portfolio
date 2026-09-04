@@ -180,3 +180,52 @@ def test_prompt_includes_context_and_history(fake_indexes):
     assert messages[1] == {"role": "user", "content": "What skills does David have?"}
     assert messages[2] == {"role": "assistant", "content": "Python, FastAPI, FAISS."}
     assert messages[-1] == {"role": "user", "content": new_message}
+
+
+# ---------------------------------------------------------------------------
+# Reciprocal-rank fusion
+# ---------------------------------------------------------------------------
+
+
+def test_rrf_sparse_only_hit_reaches_candidates():
+    """A chunk only BM25 found must survive into the candidate set.
+
+    This is the whole justification for keeping a sparse arm: it is the backstop
+    for proper nouns and rare terms the embedding model smooths away. With
+    RRF_K=60 the weight ratio (0.7/0.3) dwarfed the rank term across a 10-item
+    list, so every dense hit outscored every sparse hit and the sparse-only
+    chunk was truncated away before the re-ranker ever saw it.
+    """
+    from app.rag.pipeline import reciprocal_rank_fusion
+
+    dense = list(range(100, 110))  # 10 dense hits, none of them chunk 7
+    sparse = [7, 101]  # BM25's top hit is a chunk dense missed entirely
+
+    fused = [doc_id for doc_id, _ in reciprocal_rank_fusion([dense, sparse], [0.7, 0.3])]
+
+    assert 7 in fused[:10], "BM25's top hit must make the 10-candidate set"
+
+
+def test_rrf_dense_still_leads_the_ordering():
+    """Fixing the above must not flip the arms: dense is still the primary."""
+    from app.rag.pipeline import reciprocal_rank_fusion
+
+    dense = list(range(100, 110))
+    sparse = [7, 101]
+
+    fused = [doc_id for doc_id, _ in reciprocal_rank_fusion([dense, sparse], [0.7, 0.3])]
+
+    assert fused[0] == 100, "the top dense hit should still rank first"
+    assert fused.index(7) > 0, "a sparse-only hit should not displace the top dense hit"
+
+
+def test_rrf_agreement_between_arms_boosts_a_chunk():
+    """A chunk both retrievers found should outrank one only dense found."""
+    from app.rag.pipeline import reciprocal_rank_fusion
+
+    dense = [10, 11, 12]
+    sparse = [12, 99]
+
+    fused = [doc_id for doc_id, _ in reciprocal_rank_fusion([dense, sparse], [0.7, 0.3])]
+
+    assert fused.index(12) < fused.index(11), "agreement should pull chunk 12 up past 11"

@@ -13,9 +13,14 @@ cd "$(dirname "$0")/../backend"
 export GROQ_API_KEY="${GROQ_API_KEY:-test_key}"
 export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000}"
 
-ARMS=("$@")
-if [ ${#ARMS[@]} -eq 0 ]; then
+# Note: build the array from "$#", not from "${#ARMS[@]}" on an array assigned
+# from an empty "$@". Under `set -u`, bash 3.2 (still the default /bin/bash on
+# macOS) treats an empty array as unset and aborts on the expansion, so a
+# no-argument `make eval` died before running anything.
+if [ "$#" -eq 0 ]; then
   ARMS=(bm25 dense hybrid rerank)
+else
+  ARMS=("$@")
 fi
 
 echo "==> Retrieval eval (arms: ${ARMS[*]})"

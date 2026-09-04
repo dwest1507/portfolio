@@ -52,13 +52,25 @@ GOLDEN_SET_PATH = Path(__file__).resolve().parent / "golden_set.json"
 # docs/evaluation.md.
 _FLOORS = {"hit@5": 0.85, "mrr": 0.75}
 
+# Keyed by metric name at the default cutoff. `--check` is only meaningful at
+# that cutoff, which check_thresholds() enforces rather than silently comparing
+# a hit@20 against a floor calibrated for hit@5.
+DEFAULT_TOP_K = 5
+
 THRESHOLDS: dict[str, dict[str, float]] = {
     "bm25": dict(_FLOORS),
     "hybrid": dict(_FLOORS),
     "rerank": dict(_FLOORS),
+    # NOTE: "dense" is deliberately absent — the arm has never been measured
+    # (see docs/evaluation.md), so there is no honest floor to set. An ungated
+    # arm is reported as such by `--check` instead of quietly passing.
 }
 
 ARMS = ("bm25", "dense", "hybrid", "rerank")
+
+
+def metric_names_for(top_k: int) -> list[str]:
+    return [f"recall@{top_k}", f"hit@{top_k}", "mrr", f"ndcg@{top_k}"]
 
 
 # ---------------------------------------------------------------------------
@@ -97,8 +109,14 @@ def hit_at_k(retrieved: list[int], relevant: set[int], k: int) -> float:
     return 1.0 if set(retrieved[:k]) & relevant else 0.0
 
 
-def reciprocal_rank(retrieved: list[int], relevant: set[int]) -> float:
-    for rank, doc_id in enumerate(retrieved, start=1):
+def reciprocal_rank(retrieved: list[int], relevant: set[int], k: int) -> float:
+    """Reciprocal rank of the first relevant chunk within the top k.
+
+    Truncated at k like every other metric here. An untruncated MRR measured on
+    a --top-k 20 run is not comparable to the thresholds, which were calibrated
+    at k=5.
+    """
+    for rank, doc_id in enumerate(retrieved[:k], start=1):
         if doc_id in relevant:
             return 1.0 / rank
     return 0.0
@@ -152,16 +170,16 @@ def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
                 "id": case["id"],
                 "question": case["question"],
                 "n_relevant": len(relevant),
-                "recall@5": recall_at_k(retrieved, relevant, 5),
-                "hit@5": hit_at_k(retrieved, relevant, 5),
-                "mrr": reciprocal_rank(retrieved, relevant),
-                "ndcg@5": ndcg_at_k(retrieved, relevant, 5),
+                f"recall@{top_k}": recall_at_k(retrieved, relevant, top_k),
+                f"hit@{top_k}": hit_at_k(retrieved, relevant, top_k),
+                "mrr": reciprocal_rank(retrieved, relevant, top_k),
+                f"ndcg@{top_k}": ndcg_at_k(retrieved, relevant, top_k),
             }
         )
 
-    metric_names = ["recall@5", "hit@5", "mrr", "ndcg@5"]
+    metric_names = metric_names_for(top_k)
     summary = {m: sum(c[m] for c in per_case) / len(per_case) for m in metric_names}
-    return {"arm": arm, "summary": summary, "cases": per_case}
+    return {"arm": arm, "top_k": top_k, "summary": summary, "cases": per_case}
 
 
 def build_pipeline():
@@ -174,8 +192,8 @@ def build_pipeline():
     return RAGPipeline()
 
 
-def format_table(results: list[dict]) -> str:
-    headers = ["arm", "recall@5", "hit@5", "mrr", "ndcg@5"]
+def format_table(results: list[dict], top_k: int) -> str:
+    headers = ["arm"] + metric_names_for(top_k)
     widths = [max(len(h), 8) for h in headers]
     lines = [
         "  ".join(h.ljust(w) for h, w in zip(headers, widths)),
@@ -187,6 +205,58 @@ def format_table(results: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def check_thresholds(results: list[dict], top_k: int) -> int:
+    """Gate the run against THRESHOLDS. Returns a process exit code.
+
+    Two ways this used to pass when it should not have:
+
+    1. An arm with no THRESHOLDS entry (``dense``) contributed no checks, so a
+       dense-only ``--check`` run compared nothing and still printed "OK". A run
+       in which *nothing* was gated is now a failure, and any ungated arm is
+       named explicitly rather than passing in silence.
+    2. Floors are calibrated at k=5. Comparing them against metrics measured at
+       another cutoff is meaningless, so a non-default ``--top-k`` cannot be
+       gated.
+    """
+    if top_k != DEFAULT_TOP_K:
+        print(
+            f"\nFAIL — --check is calibrated for --top-k {DEFAULT_TOP_K}, got {top_k}. "
+            "Re-run at the default cutoff, or update THRESHOLDS deliberately."
+        )
+        return 1
+
+    failures: list[str] = []
+    gated: list[str] = []
+    ungated: list[str] = []
+
+    for r in results:
+        thresholds = THRESHOLDS.get(r["arm"])
+        if not thresholds:
+            ungated.append(r["arm"])
+            continue
+        gated.append(r["arm"])
+        for metric, floor in thresholds.items():
+            actual = r["summary"][metric]
+            if actual < floor:
+                failures.append(f"{r['arm']}.{metric} = {actual:.3f} < {floor:.3f}")
+
+    if ungated:
+        print(f"\nNOT GATED — no thresholds configured for: {', '.join(ungated)}")
+
+    if failures:
+        print("\nFAIL — retrieval quality below threshold:")
+        for f in failures:
+            print(f"  {f}")
+        return 1
+
+    if not gated:
+        print("\nFAIL — --check ran but gated nothing. No evaluated arm has thresholds.")
+        return 1
+
+    print(f"\nOK — all gated arms ({', '.join(gated)}) meet their thresholds.")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -196,7 +266,13 @@ def main() -> int:
         choices=ARMS,
         help="Retrieval arms to evaluate (default: all).",
     )
-    parser.add_argument("--top-k", type=int, default=5, help="Cutoff for retrieval (default: 5).")
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=DEFAULT_TOP_K,
+        help=f"Cutoff for retrieval and every metric (default: {DEFAULT_TOP_K}). "
+        "--check requires the default.",
+    )
     parser.add_argument(
         "--check",
         action="store_true",
@@ -217,13 +293,17 @@ def main() -> int:
     print(f"Corpus: {len(pipeline.chunks)} chunks | Golden set: {len(cases)} questions\n")
 
     results = [evaluate_arm(pipeline, arm, cases, args.top_k) for arm in args.arms]
-    print(format_table(results))
+    print(format_table(results, args.top_k))
 
     if args.failures:
         for r in results:
-            misses = [c for c in r["cases"] if c["hit@5"] == 0.0]
+            hit_key = f"hit@{args.top_k}"
+            misses = [c for c in r["cases"] if c[hit_key] == 0.0]
             if misses:
-                print(f"\n{r['arm']} — {len(misses)} question(s) with no relevant chunk in top 5:")
+                print(
+                    f"\n{r['arm']} — {len(misses)} question(s) "
+                    f"with no relevant chunk in top {args.top_k}:"
+                )
                 for m in misses:
                     print(f"  - [{m['id']}] {m['question']}")
 
@@ -232,18 +312,7 @@ def main() -> int:
         print(f"\nWrote {args.json}")
 
     if args.check:
-        failures = []
-        for r in results:
-            for metric, floor in THRESHOLDS.get(r["arm"], {}).items():
-                actual = r["summary"][metric]
-                if actual < floor:
-                    failures.append(f"{r['arm']}.{metric} = {actual:.3f} < {floor:.3f}")
-        if failures:
-            print("\nFAIL — retrieval quality below threshold:")
-            for f in failures:
-                print(f"  {f}")
-            return 1
-        print("\nOK — all evaluated arms meet their thresholds.")
+        return check_thresholds(results, args.top_k)
 
     return 0
 

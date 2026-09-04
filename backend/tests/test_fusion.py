@@ -88,9 +88,20 @@ def test_hit_at_k_is_binary():
 
 
 def test_reciprocal_rank_uses_first_relevant_position():
-    assert reciprocal_rank([9, 8, 7], {7}) == pytest.approx(1 / 3)
-    assert reciprocal_rank([9, 8, 7], {9}) == 1.0
-    assert reciprocal_rank([9, 8, 7], {1}) == 0.0
+    assert reciprocal_rank([9, 8, 7], {7}, 5) == pytest.approx(1 / 3)
+    assert reciprocal_rank([9, 8, 7], {9}, 5) == 1.0
+    assert reciprocal_rank([9, 8, 7], {1}, 5) == 0.0
+
+
+def test_reciprocal_rank_is_truncated_at_k():
+    """MRR must respect the same cutoff as every other metric.
+
+    Untruncated, a --top-k 20 run scored hits at ranks 6-20 that a hit@5 or
+    ndcg@5 on the same run counts as misses, so the arms were being gated on a
+    metric measured over a different list length than the floors assume.
+    """
+    assert reciprocal_rank([9, 8, 7], {7}, 2) == 0.0
+    assert reciprocal_rank([9, 8, 7], {7}, 3) == pytest.approx(1 / 3)
 
 
 def test_ndcg_is_one_for_perfect_ranking():

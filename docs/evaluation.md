@@ -40,9 +40,10 @@ IDs would not survive.
 - **recall@5** — what fraction of all relevant chunks made the top 5. Reported
   for information only. It is a poor gate here: several questions have more than
   five relevant chunks, so their recall@5 is capped below 1.0 by construction.
-- **MRR** — mean reciprocal rank of the first relevant chunk. Captures how far
-  up the list the good passage landed, which matters because the model attends
-  unevenly across a long context.
+- **MRR** — mean reciprocal rank of the first relevant chunk, truncated at the
+  same cutoff as the other metrics. Captures how far up the list the good
+  passage landed, which matters because the model attends unevenly across a
+  long context.
 - **nDCG@5** — rank-discounted gain, as a cross-check on MRR.
 
 ## Running it
@@ -51,6 +52,15 @@ IDs would not survive.
 make eval        # all four arms (downloads ~500MB of models on first run)
 make eval-fast   # BM25 arm only — no model download, runs in seconds
 ```
+
+`--top-k` moves the cutoff, and every metric follows it — `--top-k 10` reports
+`hit@10`, `recall@10`, `ndcg@10` and an MRR truncated at 10. The thresholds are
+calibrated at k=5, so `--check` only runs at the default cutoff and fails
+loudly rather than comparing a `hit@10` against a `hit@5` floor.
+
+The `dense` arm has no threshold entry, because it has never been measured (see
+below). `--check` names any ungated arm explicitly, and a run in which *nothing*
+was gated — `--check --arms dense` — is a failure rather than a pass.
 
 Useful flags:
 

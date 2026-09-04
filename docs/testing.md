@@ -53,9 +53,10 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | RAG pipeline | Prompt construction includes context and history |
 | Medium | Rate limiting | Exceeding 30 req/min → 429 |
 | Medium | Chunking | Correct chunk sizes with overlap |
-| High | PII guard | No phone number or street address appears in the committed index |
+| High | PII guard | No phone number or street address in the committed index or any indexed source, including the project MDX |
+| High | PII asymmetry | Broad detector catches bare digit runs; precise redactor leaves metrics and IDs untouched |
 | High | Tokenizer | Stemming unifies "engineer"/"engineering"; stopwords dropped; "R" survives |
-| High | RRF fusion | Agreement between retrievers wins; weights shift order; no item zeroed |
+| High | RRF fusion | Agreement between retrievers wins; weights shift order; no item zeroed; a BM25-only hit reaches the candidate set |
 | Medium | Eval metrics | recall@k, hit@k, MRR, nDCG@k computed correctly |
 | Medium | `GET /api/health` | Returns 200 `{ "status": "ok" }` |
 

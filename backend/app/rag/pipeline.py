@@ -23,10 +23,21 @@ CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 DENSE_WEIGHT = 0.7
 SPARSE_WEIGHT = 0.3
 
-# RRF damping constant. 60 is the value from Cormack et al. (2009) and is the
-# de-facto default; it flattens the gap between ranks 1 and 2 so a single
-# retriever cannot dominate the fused ordering on its own.
-RRF_K = 60
+# RRF damping constant.
+#
+# NOT the Cormack et al. (2009) default of 60. That value assumes ranked lists
+# thousands of documents long, where k=60 usefully flattens the gap between the
+# top few ranks. Here the lists are 10 items, and at k=60 the rank term varies
+# by only (60+10)/(60+1) = 1.15x across the whole list while the weight term
+# varies by 0.7/0.3 = 2.33x. The weights therefore dominate completely: every
+# dense hit outscores every sparse hit, BM25 can never introduce a candidate the
+# dense arm missed, and its documented role as a proper-noun backstop is dead.
+#
+# k must satisfy (k+10)/(k+1) > 0.7/0.3 for a sparse-only hit at rank 1 to beat
+# a dense hit at rank 10, i.e. k < 5.75. k=1 places a sparse-only top hit around
+# 4th in the fused list, which is inside the candidate set with room to spare.
+# test_rrf_sparse_only_hit_reaches_candidates locks this property down.
+RRF_K = 1
 
 
 def reciprocal_rank_fusion(

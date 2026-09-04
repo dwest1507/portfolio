@@ -26,6 +26,20 @@ make build-index
    contact PII (street address, phone numbers) before anything is indexed. The
    chatbot reads indexed text back to anyone who asks for it, so what goes in
    the index is published.
+
+   Redaction and detection are deliberately asymmetric. The redactor in
+   `build_index.py` is **precise** — it strips only unambiguous phone shapes
+   (parenthesized area code, or dot/dash separators) and labelled ones
+   (`Phone: 586 549 3786`). It rewrites the corpus silently, so a false positive
+   there deletes real content — a metric, an ID, a quantity — with no signal
+   that anything was lost. The guard in `tests/test_pii.py` is **broad**: it
+   matches bare 10-digit runs and punctuation-free international forms too. Its
+   only power is to fail a build, so a false positive costs one human glance.
+
+   The consequence is intentional: a bare `5865493786` in a source document is
+   not silently redacted, it fails the test, and the source gets fixed. That is
+   the stated order of operations — the sources should be clean to begin with,
+   and redaction is only the backstop.
 2. **Chunk** — ~200–300 token chunks with overlap; paragraph-based splitting to preserve complete thoughts
 3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk
 4. **Index** — Builds a FAISS index (vector search) and a BM25 index (keyword search).
@@ -109,7 +123,17 @@ Conversation history:
 ## Fusion
 
 Dense and sparse results are combined with weighted reciprocal-rank fusion:
-each list contributes `weight / (60 + rank)` for the documents it returns.
+each list contributes `weight / (k + rank)` for the documents it returns, with
+dense weighted 0.7 and sparse 0.3.
+
+The damping constant `k` is **1**, not the 60 from Cormack et al. (2009). That
+default assumes ranked lists thousands of documents long; here the lists are 10
+items, where `k=60` varies the rank term by only 1.15x across the whole list
+while the 0.7/0.3 weights vary by 2.33x. The weights then dominate outright:
+every dense hit outscores every sparse hit, and BM25 can never introduce a
+candidate the dense arm missed — which is the only reason the sparse arm is
+there. `k=1` places a sparse-only top hit around 4th in the fused list, inside
+the candidate set, while leaving the top dense hit in front.
 
 RRF replaced an earlier scheme that min-max normalized each retriever's scores
 and summed them. That was unsound: normalizing a list against itself forces its
