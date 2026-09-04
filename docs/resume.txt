@@ -58,12 +58,10 @@ Developed a BOM analysis tool using R that validated contractor-submitted data.
 Created Independent Government Cost Estimates (IGCEs) for price analysts to reference during their evaluations of proposed contractor prices.
 
 EDUCATION														
-
 Western Michigan University (WMU)
 Kalamazoo, MI
 Graduation: December 2017
 GPA: 3.57
-
 Bachelor of Science
 Major: Biochemistry
 Minor: Psychology
@@ -73,14 +71,12 @@ Minor: Psychology
 CompTIA
 Comptia.org
 Completion: June 2025
-
 Certificate of Completion
 Security+
 
 
 
 Data Camp
-
 Datacamp.com
 Completion: July 2020
 Certificate of Completion
@@ -88,7 +84,6 @@ Data Scientist with R
 
 
 Machine Learning with Andrew Ng
-
 Coursera.org
 Completion: June 2021
 Certificate of Completion

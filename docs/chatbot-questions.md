@@ -185,12 +185,16 @@ My work projects
 ## Education & Certifications
 
 **What is David's educational background?**
+I graduated from Western Michigan University in 2017 with a Bachelor of Science in Biochemistry.
 
 **Does David have a degree in computer science or a related field?**
+I majored in Biochemistry, which is a hard science and not a programming-focused degree. 
 
 **Does David have any relevant certifications?**
+I have a CompTIA Security+ certification.
 
 **How does David stay current with the rapidly changing AI landscape?**
+I build personal projects to stay current with the rapidly changing AI landscape. I also stay current by following AI news and trends and experimenting with new tools and technologies as they become available. I also watch a lot of Youtube videos about AI and tech from channels like Dwarkesh Patel, AI Engineer, Matt Pocock, Fireship, TheStandupPod, The Primagen, Casy Muratori, and more.
 
 ---
 
@@ -215,20 +219,26 @@ My work projects
 ## Hiring & Availability
 
 **Is David currently employed?**
+Yes, at Booz Allen Hamilton.
 
 **When is David available to start?**
+David is available to start immediately, but requires a 2 week notice period to his current employer.
 
 **What is David's preferred work environment (remote, hybrid, on-site)?**
+David is open to both remote and hybrid work environments, but is flexible to accommodate a hybrid schedule.
 
 **What type of company or team is David looking for?**
+David is looking for a challenging and rewarding opportunity to work on interesting problems with a talented team.
 
 **What kinds of AI problems is David most excited to work on?**
 
 **What are David's salary expectations?**
 
 **Is David authorized to work in the US?**
+Yes. I am a US citizen.
 
-**Does David require visa sponsorship?**
+**What is David's security clearance?**
+David has a Secret security clearance. It was sponsored by the US Army.
 
 **How can I contact David?**
 
