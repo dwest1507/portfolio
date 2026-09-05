@@ -18,7 +18,12 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = BACKEND_ROOT.parent
 
 sys.path.insert(0, str(BACKEND_ROOT / "scripts"))
-from build_index import _redact_pii  # noqa: E402  (needs the sys.path line above)
+from build_index import (  # (needs the sys.path line above)
+    MDX_DIR,
+    QA_PATH,
+    RESUME_PATH,
+    _redact_pii,
+)
 
 # Deliberately broader than the redaction patterns in build_index.py, and the
 # asymmetry is the point. The redactor rewrites the corpus silently, so it is
@@ -35,13 +40,11 @@ STREET_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Every document load_documents() indexes must be scanned. The MDX write-ups
-# were missing here even though build_index.py feeds them to the same index.
-SOURCE_DOCS = [
-    REPO_ROOT / "docs" / "resume.txt",
-    REPO_ROOT / "docs" / "chatbot-questions.md",
-    *sorted((REPO_ROOT / "frontend" / "content" / "projects").glob("*.mdx")),
-]
+# Every document load_documents() indexes must be scanned, so the paths come from
+# build_index.py rather than being re-listed here. A hand-maintained copy of that list
+# is exactly the drift this guard exists to prevent: a source added to the indexer but
+# not to the copy would be indexed and never scanned.
+SOURCE_DOCS = [RESUME_PATH, QA_PATH, *sorted(MDX_DIR.glob("*.mdx"))]
 
 
 def _chunk_texts() -> list[str]:
