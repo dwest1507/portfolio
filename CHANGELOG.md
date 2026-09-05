@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/dwest1507/portfolio/compare/portfolio-v0.4.0...portfolio-v0.4.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **pii:** use fictional contact details in fixtures and docs ([6cd57c6](https://github.com/dwest1507/portfolio/commit/6cd57c6995fa516fded429f27293be6d5464b160))
+
 ## [0.4.0](https://github.com/dwest1507/portfolio/compare/portfolio-v0.3.0...portfolio-v0.4.0) (2026-09-05)
 
 
