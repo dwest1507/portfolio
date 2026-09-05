@@ -57,7 +57,7 @@
       "id": "rerank",
       "label": "Both combined, then re-ranked",
       "description": "Takes the merged list and has a second, slower model re-read each candidate against the question to put the best one first.",
-      "technical": "Cross-encoder re-ranking of the fused candidates. Matches RAGPipeline.retrieve: hybrid_search(candidates_k) \u2192 rerank(top_k).",
+      "technical": "Cross-encoder re-ranking of the fused candidates. Matches RAGPipeline.retrieve: hybrid_search(candidates_k) → rerank(top_k).",
       "shipped": true,
       "metrics": {
         "recall@5": 0.652,

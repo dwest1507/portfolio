@@ -36,7 +36,7 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = BACKEND_ROOT.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from eval.publish import (  # noqa: E402  (needs the sys.path line above)
+from eval.publish import (  # (needs the sys.path line above)
     ARMS,
     build_results_document,
     update_markdown_block,
@@ -357,9 +357,16 @@ def main() -> int:
             top_k=args.top_k,
             gating_metric=GATING_METRIC,
         )
-        write_results_document(document, RESULTS_PATH)
+        # An unchanged measurement leaves both files alone, so the publishing job has
+        # something real to test for. `document` is rebound to whatever is now on disk:
+        # rendering the markdown from the run we just discarded would put a fresh
+        # timestamp under a table the JSON still dates to the earlier run.
+        document, written = write_results_document(document, RESULTS_PATH)
         changed = update_markdown_block(EVALUATION_DOC_PATH, document)
-        print(f"\nPublished {RESULTS_PATH.relative_to(REPO_ROOT)}")
+        print(
+            f"\n{'Published' if written else 'Measurement unchanged; kept'} "
+            f"{RESULTS_PATH.relative_to(REPO_ROOT)}"
+        )
         print(
             f"{'Updated' if changed else 'No change to'} "
             f"{EVALUATION_DOC_PATH.relative_to(REPO_ROOT)}"

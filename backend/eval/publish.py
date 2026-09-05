@@ -15,7 +15,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 SCHEMA_VERSION = 1
@@ -173,7 +173,7 @@ def build_results_document(
 
     return {
         "schemaVersion": SCHEMA_VERSION,
-        "generatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "generatedAt": datetime.now(UTC).replace(microsecond=0).isoformat(),
         "commit": _git_commit(),
         "runUrl": _run_url(),
         "corpusChunks": corpus_chunks,
@@ -185,9 +185,52 @@ def build_results_document(
     }
 
 
-def write_results_document(document: dict, path: Path) -> None:
+#: The fields that carry the measurement. Everything outside this set is provenance —
+#: when it changed, and which run produced it — which moves on every run by construction.
+MEASURED_KEYS = (
+    "schemaVersion",
+    "corpusChunks",
+    "goldenQuestions",
+    "topK",
+    "gatingMetric",
+    "metricNames",
+    "arms",
+)
+
+
+def _measurement(document: dict) -> dict:
+    return {k: document.get(k) for k in MEASURED_KEYS}
+
+
+def write_results_document(document: dict, path: Path) -> tuple[dict, bool]:
+    """Publish `document` unless it measures exactly what the file already holds.
+
+    Returns the document now on disk and whether it was written.
+
+    The rewrite is conditional because `generatedAt` and `commit` change on every run
+    whether or not a single metric moved. Writing unconditionally made the publishing
+    job's "results unchanged; nothing to commit" branch unreachable: the file always
+    differed, so every push to main landed a commit asserting a re-measurement that had
+    found nothing. Comparing on MEASURED_KEYS alone means an unchanged run leaves the
+    file — provenance included — exactly as it was, and the commit history records the
+    runs where a number actually moved.
+
+    A file that cannot be parsed is treated as absent and overwritten; a corrupt
+    published document is not worth preserving.
+    """
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            existing = None
+        if existing is not None and _measurement(existing) == _measurement(document):
+            return existing, False
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    # ensure_ascii=False: the arm descriptions contain "→", and \u2192 in a published
+    # JSON file is noise for anyone reading it.
+    path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return document, True
 
 
 # ---------------------------------------------------------------------------

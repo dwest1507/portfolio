@@ -37,7 +37,12 @@ def _raw(arm: str, hit: float, mrr: float) -> dict:
 
 
 def _document(results=None, **kwargs) -> dict:
-    defaults = dict(corpus_chunks=49, golden_questions=55, top_k=5, gating_metric="hit@5")
+    defaults = {
+        "corpus_chunks": 49,
+        "golden_questions": 55,
+        "top_k": 5,
+        "gating_metric": "hit@5",
+    }
     defaults.update(kwargs)
     return build_results_document(
         results or [_raw("bm25", 1.0, 0.892), _raw("rerank", 0.909, 0.853)], **defaults
@@ -118,10 +123,59 @@ class TestResultsDocument:
 
     def test_writes_json_the_frontend_can_import(self, tmp_path):
         path = tmp_path / "nested" / "evalResults.json"
-        write_results_document(_document(), path)
+        document, written = write_results_document(_document(), path)
         loaded = json.loads(path.read_text())
+        assert written is True
+        assert loaded == document
         assert loaded["schemaVersion"] == 1
         assert {a["id"] for a in loaded["arms"]} == {"bm25", "rerank"}
+
+    def test_writes_arrows_rather_than_escapes(self, tmp_path):
+        """The published file is read by humans; \\u2192 in it is noise."""
+        path = tmp_path / "evalResults.json"
+        write_results_document(
+            _document(results=[_raw("rerank", 0.9, 0.85)]),
+            path,
+        )
+        assert "\u2192" in path.read_text(encoding="utf-8")
+
+    def test_an_unchanged_measurement_leaves_the_file_alone(self, tmp_path):
+        """Provenance moves on every run; a rewrite that only moves it is a false change.
+
+        Rewriting unconditionally made the publishing job's "nothing to commit" branch
+        unreachable, so every push to main committed a re-measurement that found nothing.
+        """
+        path = tmp_path / "evalResults.json"
+        write_results_document(_document(), path)
+        before = path.read_text(encoding="utf-8")
+
+        rerun = _document()
+        rerun["generatedAt"] = "2027-01-01T00:00:00+00:00"
+        rerun["commit"] = "deadbee"
+        document, written = write_results_document(rerun, path)
+
+        assert written is False
+        assert path.read_text(encoding="utf-8") == before
+        assert document == json.loads(before)
+
+    def test_a_moved_metric_is_published(self, tmp_path):
+        path = tmp_path / "evalResults.json"
+        write_results_document(_document(), path)
+
+        moved = _document(results=[_raw("bm25", 1.0, 0.892), _raw("rerank", 0.99, 0.99)])
+        document, written = write_results_document(moved, path)
+
+        assert written is True
+        assert json.loads(path.read_text(encoding="utf-8")) == document
+
+    def test_an_unparseable_file_is_overwritten(self, tmp_path):
+        path = tmp_path / "evalResults.json"
+        path.write_text("{ truncated", encoding="utf-8")
+
+        _, written = write_results_document(_document(), path)
+
+        assert written is True
+        assert json.loads(path.read_text(encoding="utf-8"))["schemaVersion"] == 1
 
 
 # ---------------------------------------------------------------------------
