@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues live as local markdown files under `.scratch/<feature-slug>/`. No GitHub Issues; no PR triage surface. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues (`gh issue`); external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -10,4 +10,4 @@ Default canonical label strings (`needs-triage`, `needs-info`, `ready-for-agent`
 
 ### Domain docs
 
-Multi-context layout — `CONTEXT-MAP.md` at root pointing to `frontend/CONTEXT.md` and `backend/CONTEXT.md`; system-wide ADRs in `docs/adr/`, context-scoped ADRs in `frontend/docs/adr/` and `backend/docs/adr/`. See `docs/agents/domain.md`.
+Single-context — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
