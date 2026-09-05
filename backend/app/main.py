@@ -17,8 +17,10 @@ from .routes.health import router as health_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Pre-load indexes and models at startup so the first request isn't slow
-    get_pipeline().warm()
+    # Build the pipeline at startup so the first request doesn't pay for reading the
+    # indexes. There are no model weights to warm any more: production retrieval is
+    # BM25 over a pickled index, which is why this is now cheap enough to be boring.
+    get_pipeline()
     yield
 
 

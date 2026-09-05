@@ -48,7 +48,10 @@ make build-index
    query terms always agree.
 5. **Save** — Writes `backend/indexes/faiss.index`, `bm25.pkl`, and `chunks.json`
 
-The indexes are committed to the repo and loaded into memory at FastAPI startup.
+The indexes are committed to the repo. `chunks.json` and `bm25.pkl` are loaded into memory
+at FastAPI startup; `faiss.index` is not, because the served pipeline does not use it —
+steps 3 and 4's vector half exist for the evaluation harness. See
+[evaluation.md](evaluation.md).
 
 ## Runtime Pipeline (`POST /api/chat`)
 
@@ -56,25 +59,29 @@ The indexes are committed to the repo and loaded into memory at FastAPI startup.
 User query
     │
     ▼
-Embed query (all-mpnet-base-v2)
+BM25 keyword search
+(shared stemmed, stopword-filtered tokenizer)
+Top 5 chunks selected — fewer if the query
+shares no term with any chunk
     │
-    ├──► FAISS semantic search  ─┐
-    │    (top-k candidates)      ├──► Weighted RRF fusion
-    └──► BM25 keyword search   ──┘     (0.7 semantic / 0.3 keyword)
-                                 │
-                                 ▼
-                    Cross-encoder re-ranking
-                    (ms-marco-MiniLM-L-6-v2)
-                    Top 5 chunks selected
-                                 │
-                                 ▼
-                    Prompt construction
-                    (system + context + history)
-                                 │
-                                 ▼
-                    Groq API (GROQ_MODEL env var)
-                    Streaming SSE response
+    ▼
+Prompt construction
+(system + context + history)
+    │
+    ▼
+Groq API (GROQ_MODEL env var)
+Streaming SSE response
 ```
+
+No embedding model, no vector search, no re-ranker. The pipeline used to run all three;
+the evaluation harness measured each against plain BM25 on this corpus and none of them
+won, so they were removed from the serving path. `RAGPipeline` still implements them and
+the harness still measures them on every run — see [evaluation.md](evaluation.md) and
+[ADR-0004](adr/0004-retrieval-shipped-arm-chosen-by-measurement.md).
+
+An empty context is a deliberate outcome rather than a bug: the system prompt tells the
+model to say so honestly when the context does not contain the answer, which is a better
+failure than five irrelevant chunks to sound confident from.
 
 ### Prompt Template
 
@@ -85,7 +92,7 @@ ONLY the provided context. If the context doesn't contain the answer,
 say so honestly. Be concise and professional. Do not make up information.
 
 Context:
-{top 5 re-ranked chunks}
+{top 5 retrieved chunks}
 
 Conversation history:
 {last 10 messages}
@@ -106,11 +113,14 @@ Conversation history:
 
 ## Models Used
 
-| Purpose | Model |
-|---------|-------|
-| Embedding | `sentence-transformers/all-mpnet-base-v2` |
-| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
-| LLM | `openai/gpt-oss-120b` via Groq, overridable with `GROQ_MODEL` |
+| Purpose | Model | Where it runs |
+|---------|-------|---------------|
+| LLM | `openai/gpt-oss-120b` via Groq, overridable with `GROQ_MODEL` | Production |
+| Embedding | `sentence-transformers/all-mpnet-base-v2` | Index build + eval only |
+| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Eval only |
+
+Neither model is installed in the production image: `faiss-cpu` and `sentence-transformers`
+live in the `dev` dependency group, which the Dockerfile's `uv sync --no-dev` skips.
 
 ## Environment Variables
 

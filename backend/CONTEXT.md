@@ -15,13 +15,22 @@ _Avoid_: Variant, strategy, mode, config
 
 **Shipped Arm**:
 The single Arm that mirrors what the production pipeline actually runs. Exactly one Arm
-carries this designation at a time.
+carries this designation at a time, and it is the only Arm a Floor gates. An Arm losing
+the designation is not retired from the harness: the code that implements it and the
+measurement of it both remain, so the decision can be revisited on evidence.
 _Avoid_: Default arm, live arm, current config
 
 **Golden Set**:
 The hand-labelled questions retrieval is scored against, together with the phrases an
 answer must be grounded in.
 _Avoid_: Test set, eval set, question bank
+
+**Split**:
+One of the two portions the Golden Set is divided into. Decisions are made against the
+development portion; the held-out portion is measured but never consulted while making
+one, and is what a published Measured Run reports. A Split is a property of a case,
+frozen in the Golden Set rather than computed per run.
+_Avoid_: Fold, sample, train/test, validation set
 
 **Relevant Phrase**:
 A string whose presence in a chunk makes that chunk relevant to a given question.
@@ -37,7 +46,9 @@ _Avoid_: Result, snapshot, benchmark
 
 **Floor**:
 A minimum metric value below which a Measured Run fails the build. A Floor sits beneath
-measured performance to catch regressions, and is never a target to optimise toward.
+measured performance to catch regressions, and is never a target to optimise toward. Only
+the Shipped Arm has one — a Floor defends what a visitor is served, and nothing is served
+by an Arm production does not run.
 _Avoid_: Threshold, target, baseline, SLA
 
 **Corpus**:

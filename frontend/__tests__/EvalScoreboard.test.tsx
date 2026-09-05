@@ -1,17 +1,25 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import EvalScoreboard from '@/components/projects/EvalScoreboard'
-import { evalRun, leadingArm, shippedArm, verdictLine, type EvalRun } from '@/data/evalResults'
+import {
+  evalRun,
+  leadingArm,
+  sampleLabel,
+  shippedArm,
+  verdictLine,
+  type EvalRun,
+} from '@/data/evalResults'
 
 /** A run with two arms, shaped exactly like the generated file. */
 function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-09-04T00:00:00+00:00',
     commit: 'abc1234',
     runUrl: 'https://example.test/run/1',
     corpusChunks: 10,
     goldenQuestions: 20,
+    split: 'holdout',
     topK: 5,
     gatingMetric: 'hit@5',
     metricNames: ['hit@5', 'mrr'],
@@ -79,11 +87,17 @@ describe('EvalScoreboard', () => {
     expect(screen.getByText(verdictLine())).toBeInTheDocument()
   })
 
-  it('reports the corpus and golden set size', () => {
+  it('reports the corpus and the measured sample', () => {
     render(<EvalScoreboard />)
     expect(
-      screen.getByText(`${evalRun.goldenQuestions} questions · ${evalRun.corpusChunks} chunks`)
+      screen.getByText(`${sampleLabel()} · ${evalRun.corpusChunks} chunks`)
     ).toBeInTheDocument()
+  })
+
+  it('says the published questions are held out, so nothing was tuned against them', () => {
+    render(<EvalScoreboard />)
+    if (evalRun.split !== 'holdout') return
+    expect(screen.getByText(/held-out portion of the labelled set/)).toBeInTheDocument()
   })
 
   it('links to the CI run the numbers came from', () => {
@@ -146,7 +160,23 @@ describe('verdictLine', () => {
   })
 })
 
+describe('sampleLabel', () => {
+  it('says a held-out run is held out', () => {
+    expect(sampleLabel(makeRun())).toBe('20 held-out questions')
+  })
+
+  it('claims nothing extra for a run over the whole set', () => {
+    // Which portion gets published is the harness's decision; the page must follow it
+    // rather than assert "held-out" forever.
+    expect(sampleLabel(makeRun({ split: 'all' }))).toBe('20 questions')
+  })
+})
+
 describe('the generated results file', () => {
+  it('publishes the portion no configuration was chosen against', () => {
+    expect(evalRun.split).toBe('holdout')
+  })
+
   it('flags exactly one arm as shipped', () => {
     expect(evalRun.arms.filter((a) => a.shipped)).toHaveLength(1)
   })

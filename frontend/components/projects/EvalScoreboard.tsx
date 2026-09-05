@@ -1,4 +1,11 @@
-import { evalRun, leadingArm, metricLabel, verdictLine, type EvalArm } from '@/data/evalResults'
+import {
+  evalRun,
+  leadingArm,
+  metricLabel,
+  sampleLabel,
+  verdictLine,
+  type EvalArm,
+} from '@/data/evalResults'
 
 function format(value: number | undefined): string {
   return value === undefined ? '—' : value.toFixed(3)
@@ -25,7 +32,7 @@ export default function EvalScoreboard() {
             RETRIEVAL EVAL
           </span>
           <span className="ml-auto font-mono text-[9px] tracking-widest text-[#8a8f98]">
-            {evalRun.goldenQuestions} questions · {evalRun.corpusChunks} chunks
+            {sampleLabel()} · {evalRun.corpusChunks} chunks
           </span>
         </div>
 
@@ -33,8 +40,7 @@ export default function EvalScoreboard() {
         <div className="overflow-x-auto bg-[#0a0a0c]">
           <table className="w-full min-w-[34rem] border-collapse text-left">
             <caption className="sr-only">
-              Retrieval quality by pipeline configuration, measured on {evalRun.goldenQuestions}{' '}
-              labelled questions.
+              Retrieval quality by pipeline configuration, measured on {sampleLabel()}.
             </caption>
             <thead>
               <tr className="border-b border-white/[0.06]">
@@ -105,7 +111,17 @@ export default function EvalScoreboard() {
 
       <figcaption className="mt-3 text-xs leading-relaxed text-[#8a8f98]">
         Best score per column in blue. This table and the sentence above it are generated from the
-        evaluation harness — measured at{' '}
+        evaluation harness.{' '}
+        {/* Only claimed when the run actually measured the held-out portion — which portion
+            gets published is the harness's call, not this component's. */}
+        {evalRun.split === 'holdout' && (
+          <>
+            The questions are the held-out portion of the labelled set: no configuration here was
+            chosen against them, so these are measurements rather than the score of whatever won on
+            the questions it was picked with.{' '}
+          </>
+        )}
+        Measured at{' '}
         {evalRun.runUrl ? (
           <a
             href={evalRun.runUrl}

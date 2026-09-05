@@ -18,7 +18,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+# Bumped to 2 when the document gained `split`: a v1 file records a run over the whole
+# golden set, which is not the same measurement as a v2 held-out run and must not be
+# compared with one.
+SCHEMA_VERSION = 2
 
 BEGIN_MARKER = "<!-- eval:begin -->"
 END_MARKER = "<!-- eval:end -->"
@@ -51,7 +54,11 @@ ARM_SPECS: tuple[Arm, ...] = (
             "Matches the words in the question against the words in the document, with no "
             "machine learning involved."
         ),
-        technical="BM25 over stemmed, stopword-filtered terms. Needs no embedding model.",
+        technical=(
+            "BM25 over stemmed, stopword-filtered terms. Needs no embedding model, which "
+            "is why the production image ships none. Matches RAGPipeline.retrieve."
+        ),
+        shipped=True,
     ),
     Arm(
         id="dense",
@@ -76,10 +83,21 @@ ARM_SPECS: tuple[Arm, ...] = (
             "against the question to put the best one first."
         ),
         technical=(
-            "Cross-encoder re-ranking of the fused candidates. Matches "
-            "RAGPipeline.retrieve: hybrid_search(candidates_k) → rerank(top_k)."
+            "Cross-encoder re-ranking of the fused candidates. Shipped until the harness "
+            "measured it against the keyword arm: hybrid_search(candidates_k) → rerank(top_k)."
         ),
-        shipped=True,
+    ),
+    Arm(
+        id="bm25+rerank",
+        label="Keyword, then re-ranked",
+        description=(
+            "Takes the keyword results alone and has the slower second model re-read them "
+            "against the question, with no meaning-based search involved at all."
+        ),
+        technical=(
+            "Cross-encoder re-ranking of BM25 candidates. The arm that answers whether the "
+            "dense stage contributes anything the re-ranker cannot recover on its own."
+        ),
     ),
 )
 
@@ -144,6 +162,7 @@ def build_results_document(
     golden_questions: int,
     top_k: int,
     gating_metric: str,
+    split: str = "all",
 ) -> dict:
     """Assemble the published measured run from raw per-arm harness output.
 
@@ -178,6 +197,7 @@ def build_results_document(
         "runUrl": _run_url(),
         "corpusChunks": corpus_chunks,
         "goldenQuestions": golden_questions,
+        "split": split,
         "topK": top_k,
         "gatingMetric": gating_metric,
         "metricNames": metric_names,
@@ -191,6 +211,7 @@ MEASURED_KEYS = (
     "schemaVersion",
     "corpusChunks",
     "goldenQuestions",
+    "split",
     "topK",
     "gatingMetric",
     "metricNames",
@@ -300,9 +321,16 @@ def render_markdown(document: dict) -> str:
         shipped = " _(shipped)_" if arm["shipped"] else ""
         rows.append(f"| `{arm['id']}`{shipped} | " + " | ".join(cells) + " |")
 
+    split = document.get("split", "all")
+    described = (
+        f"{document['goldenQuestions']} golden questions"
+        if split == "all"
+        else f"the {document['goldenQuestions']} held-out golden questions"
+        if split == "holdout"
+        else f"{document['goldenQuestions']} {split} golden questions"
+    )
     provenance = (
-        f"Measured on {document['corpusChunks']} chunks and "
-        f"{document['goldenQuestions']} golden questions at `{document['commit']}`"
+        f"Measured on {document['corpusChunks']} chunks and {described} at `{document['commit']}`"
     )
     if document["runUrl"]:
         provenance += f" — [CI run]({document['runUrl']})"

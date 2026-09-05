@@ -77,14 +77,15 @@ Do the backend first: the frontend needs the backend's URL.
      instead (the field's base directory has changed across Railway versions).
    - Leave build and start commands empty — the Dockerfile's `CMD` starts uvicorn
      on `$PORT`.
-   - **Set the healthcheck timeout explicitly.** The image bakes the embedding and
-     cross-encoder models, so first boot is slow; the default timeout is far shorter
-     and is the most likely cause of a deploy stalling on "waiting for healthcheck".
+   - **Set the healthcheck timeout explicitly.** It is generous rather than necessary
+     now — the image carries no model weights, so first boot only reads a pickled BM25
+     index — but a short default timeout is still the most likely cause of a deploy
+     stalling on "waiting for healthcheck".
    - Watch paths keep frontend-only pushes from rebuilding the container.
 
-   Railpack is not a viable fallback here: it would install dependencies at runtime
-   and pull the models from Hugging Face on first request instead of at build time,
-   which makes cold starts long enough to fail the healthcheck.
+   Railpack is not a viable fallback here: it ignores the Dockerfile and installs
+   dependencies at runtime, which both slows cold starts and installs the wrong set —
+   the Dockerfile's `--no-dev` is what keeps the eval-only ML libraries out of the image.
 4. **Variables** tab → add:
 
    | Variable | Value |
@@ -100,10 +101,11 @@ Do the backend first: the frontend needs the backend's URL.
    (`https://<something>.up.railway.app`). When prompted for a **target port**, enter
    **`8000`** — the port the container listens on (`EXPOSE 8000` in the Dockerfile).
    Copy the generated URL.
-6. Wait for the first build. It takes several minutes — the image bakes the embedding
-   and cross-encoder models in so cold starts never hit Hugging Face. The log should
-   show Docker build steps; if it shows Railpack detection instead, revisit the builder
-   setting in step 3.
+6. Wait for the first build. The log should show Docker build steps; if it shows Railpack
+   detection instead, revisit the builder setting in step 3. (This step used to take many
+   minutes and produce a 17.2GB image, most of it `torch`'s CUDA wheels plus baked model
+   weights. It no longer does — retrieval is BM25, the image installs no ML libraries at
+   all, and it builds to 544MB.)
 7. Verify:
 
    ```bash

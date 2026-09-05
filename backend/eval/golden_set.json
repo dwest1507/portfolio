@@ -1,8 +1,14 @@
 {
   "description": "Retrieval ground truth for the portfolio chatbot. Each case is a question a recruiter, hiring manager, or technical interviewer might realistically ask. A retrieved chunk counts as relevant if its text contains ANY phrase in `relevant_phrases` (case-insensitive, whitespace-normalized). Matching on phrases rather than chunk IDs keeps the labels valid across re-chunking and re-indexing.",
+  "splits": {
+    "description": "Every case belongs to exactly one split. `dev` is where parameters, weights and stage choices are decided; `holdout` is never looked at while deciding one, so the published numbers are not the numbers something was tuned against. Assignment is deterministic rather than hand-picked — cases sorted by sha256(\"portfolio-golden-split-v1:\" + id), the first 40% held out — so it can be recomputed and audited, and so nobody can move an inconvenient question across the line. It is recorded here rather than computed at run time because a frozen split is the whole point: recomputing it would silently reshuffle every case the day an id is edited or a question is added.",
+    "salt": "portfolio-golden-split-v1",
+    "holdoutFraction": 0.4
+  },
   "cases": [
     {
       "id": "employer-current",
+      "split": "dev",
       "question": "Where does David currently work?",
       "relevant_phrases": [
         "Booz Allen Hamilton"
@@ -10,6 +16,7 @@
     },
     {
       "id": "current-title",
+      "split": "dev",
       "question": "What is David's current job title?",
       "relevant_phrases": [
         "Data Scientist"
@@ -17,6 +24,7 @@
     },
     {
       "id": "tacom-history",
+      "split": "holdout",
       "question": "Did David ever work for the government directly?",
       "relevant_phrases": [
         "Operations Research Analyst",
@@ -26,6 +34,7 @@
     },
     {
       "id": "promotions",
+      "split": "dev",
       "question": "Has David been promoted?",
       "relevant_phrases": [
         "Promoted twice",
@@ -35,6 +44,7 @@
     },
     {
       "id": "years-experience",
+      "split": "holdout",
       "question": "How many years of AI and machine learning experience does David have?",
       "relevant_phrases": [
         "working with AI/ML since 2020",
@@ -43,6 +53,7 @@
     },
     {
       "id": "career-start",
+      "split": "dev",
       "question": "When did David start his professional career?",
       "relevant_phrases": [
         "started my professional career in May, 2018",
@@ -51,6 +62,7 @@
     },
     {
       "id": "education",
+      "split": "dev",
       "question": "What did David study in college?",
       "relevant_phrases": [
         "Biochemistry",
@@ -59,6 +71,7 @@
     },
     {
       "id": "degree-cs",
+      "split": "dev",
       "question": "Does David have a computer science degree?",
       "relevant_phrases": [
         "Biochemistry",
@@ -67,6 +80,7 @@
     },
     {
       "id": "certifications",
+      "split": "dev",
       "question": "What certifications does David hold?",
       "relevant_phrases": [
         "Security+",
@@ -75,6 +89,7 @@
     },
     {
       "id": "clearance",
+      "split": "dev",
       "question": "Does David have a security clearance?",
       "relevant_phrases": [
         "Security clearance: Secret",
@@ -83,6 +98,7 @@
     },
     {
       "id": "languages",
+      "split": "dev",
       "question": "What programming languages does David know?",
       "relevant_phrases": [
         "Python, R, Typescript, and SQL",
@@ -91,6 +107,7 @@
     },
     {
       "id": "python-proficiency",
+      "split": "dev",
       "question": "How good is David at Python?",
       "relevant_phrases": [
         "very proficient in Python",
@@ -99,6 +116,7 @@
     },
     {
       "id": "cloud-platforms",
+      "split": "dev",
       "question": "What cloud providers has David used?",
       "relevant_phrases": [
         "AWS",
@@ -110,6 +128,7 @@
     },
     {
       "id": "aws-services",
+      "split": "dev",
       "question": "Which AWS services has David worked with?",
       "relevant_phrases": [
         "Bedrock",
@@ -119,6 +138,7 @@
     },
     {
       "id": "govcloud",
+      "split": "dev",
       "question": "Does David have experience with classified or restricted cloud environments?",
       "relevant_phrases": [
         "GovCloud",
@@ -127,6 +147,7 @@
     },
     {
       "id": "databases",
+      "split": "dev",
       "question": "What databases has David used?",
       "relevant_phrases": [
         "SQLite and DynamoDB",
@@ -135,6 +156,7 @@
     },
     {
       "id": "api-experience",
+      "split": "holdout",
       "question": "Has David built APIs?",
       "relevant_phrases": [
         "FastAPI",
@@ -144,6 +166,7 @@
     },
     {
       "id": "frontend",
+      "split": "holdout",
       "question": "Can David do frontend work?",
       "relevant_phrases": [
         "frontend experience using React",
@@ -152,6 +175,7 @@
     },
     {
       "id": "llm-experience",
+      "split": "holdout",
       "question": "Has David worked with large language models?",
       "relevant_phrases": [
         "worked with LLMs since 2025",
@@ -160,6 +184,7 @@
     },
     {
       "id": "llm-providers",
+      "split": "holdout",
       "question": "Which LLM providers has David used?",
       "relevant_phrases": [
         "OpenAI's GPT models",
@@ -169,6 +194,7 @@
     },
     {
       "id": "rag-experience",
+      "split": "dev",
       "question": "Has David built retrieval augmented generation systems?",
       "relevant_phrases": [
         "built a few RAG systems",
@@ -177,6 +203,7 @@
     },
     {
       "id": "vector-search",
+      "split": "dev",
       "question": "What is David's experience with vector databases and semantic search?",
       "relevant_phrases": [
         "FAISS for local vector search",
@@ -185,6 +212,7 @@
     },
     {
       "id": "embedding-models",
+      "split": "dev",
       "question": "What embedding models has David used?",
       "relevant_phrases": [
         "Titan embedding",
@@ -193,6 +221,7 @@
     },
     {
       "id": "fine-tuning",
+      "split": "holdout",
       "question": "Has David fine-tuned a model?",
       "relevant_phrases": [
         "Not yet",
@@ -201,6 +230,7 @@
     },
     {
       "id": "prompt-engineering",
+      "split": "dev",
       "question": "What does David know about prompt engineering?",
       "relevant_phrases": [
         "prompt engineering",
@@ -209,6 +239,7 @@
     },
     {
       "id": "groq",
+      "split": "holdout",
       "question": "Has David used Groq?",
       "relevant_phrases": [
         "Groq's API",
@@ -217,6 +248,7 @@
     },
     {
       "id": "langchain",
+      "split": "holdout",
       "question": "Does David know LangChain?",
       "relevant_phrases": [
         "LangChain"
@@ -224,6 +256,7 @@
     },
     {
       "id": "devtools",
+      "split": "holdout",
       "question": "What tools does David use day to day?",
       "relevant_phrases": [
         "Windsurf",
@@ -233,6 +266,7 @@
     },
     {
       "id": "iac-devops",
+      "split": "holdout",
       "question": "Does David have DevOps or infrastructure as code experience?",
       "relevant_phrases": [
         "Terraform",
@@ -242,6 +276,7 @@
     },
     {
       "id": "leadership",
+      "split": "holdout",
       "question": "Has David managed or led anyone?",
       "relevant_phrases": [
         "Manage two full-time employees",
@@ -251,6 +286,7 @@
     },
     {
       "id": "mentoring",
+      "split": "holdout",
       "question": "Does David mentor junior engineers?",
       "relevant_phrases": [
         "mentoring junior staff",
@@ -260,6 +296,7 @@
     },
     {
       "id": "cross-functional",
+      "split": "dev",
       "question": "Has David worked on cross functional teams?",
       "relevant_phrases": [
         "cross-functional",
@@ -268,6 +305,7 @@
     },
     {
       "id": "business-development",
+      "split": "dev",
       "question": "Has David helped win new business?",
       "relevant_phrases": [
         "Propose projects to potential customers",
@@ -276,6 +314,7 @@
     },
     {
       "id": "stakeholder-comms",
+      "split": "dev",
       "question": "How does David present to non-technical audiences?",
       "relevant_phrases": [
         "non-technical customers",
@@ -284,6 +323,7 @@
     },
     {
       "id": "additive-manufacturing",
+      "split": "dev",
       "question": "Tell me about the additive manufacturing project.",
       "relevant_phrases": [
         "additively manufactured",
@@ -292,6 +332,7 @@
     },
     {
       "id": "hazmat-bom",
+      "split": "holdout",
       "question": "Has David worked on bill of materials analysis?",
       "relevant_phrases": [
         "Bill of Material",
@@ -301,6 +342,7 @@
     },
     {
       "id": "anomaly-detection",
+      "split": "holdout",
       "question": "Has David done anomaly detection?",
       "relevant_phrases": [
         "Anomaly detection",
@@ -309,6 +351,7 @@
     },
     {
       "id": "web-scraping",
+      "split": "dev",
       "question": "Has David built a web scraper?",
       "relevant_phrases": [
         "web scraper using R and Selenium",
@@ -317,6 +360,7 @@
     },
     {
       "id": "predictive-maintenance",
+      "split": "dev",
       "question": "Has David built models that predict equipment failure?",
       "relevant_phrases": [
         "no",
@@ -325,6 +369,7 @@
     },
     {
       "id": "nietzsche-project",
+      "split": "dev",
       "question": "Tell me about the Nietzsche chatbot.",
       "relevant_phrases": [
         "Chat with Nietzsche",
@@ -333,6 +378,7 @@
     },
     {
       "id": "nietzsche-reranking",
+      "split": "dev",
       "question": "How does the Nietzsche chatbot rank its search results?",
       "relevant_phrases": [
         "cross-encoder",
@@ -342,6 +388,7 @@
     },
     {
       "id": "music-project",
+      "split": "holdout",
       "question": "Tell me about the AI music generation project.",
       "relevant_phrases": [
         "Generate Music with AI",
@@ -350,6 +397,7 @@
     },
     {
       "id": "music-gpu",
+      "split": "holdout",
       "question": "How does the music app run its model on a GPU?",
       "relevant_phrases": [
         "Modal",
@@ -358,6 +406,7 @@
     },
     {
       "id": "rate-limiting",
+      "split": "holdout",
       "question": "How does David handle rate limiting?",
       "relevant_phrases": [
         "rate limit",
@@ -366,6 +415,7 @@
     },
     {
       "id": "baby-names-project",
+      "split": "dev",
       "question": "Tell me about the baby names project.",
       "relevant_phrases": [
         "baby name",
@@ -374,6 +424,7 @@
     },
     {
       "id": "time-series",
+      "split": "holdout",
       "question": "Has David worked with time series forecasting?",
       "relevant_phrases": [
         "time-series",
@@ -382,6 +433,7 @@
     },
     {
       "id": "diamonds-project",
+      "split": "dev",
       "question": "Tell me about the diamonds price prediction project.",
       "relevant_phrases": [
         "Diamonds",
@@ -390,6 +442,7 @@
     },
     {
       "id": "r-language",
+      "split": "holdout",
       "question": "Does David know R?",
       "relevant_phrases": [
         "Leverage R",
@@ -399,6 +452,7 @@
     },
     {
       "id": "remote-work",
+      "split": "holdout",
       "question": "Is David open to remote work?",
       "relevant_phrases": [
         "prefer remote work",
@@ -407,6 +461,7 @@
     },
     {
       "id": "relocation",
+      "split": "holdout",
       "question": "Would David relocate?",
       "relevant_phrases": [
         "open to relocation",
@@ -415,6 +470,7 @@
     },
     {
       "id": "location",
+      "split": "dev",
       "question": "Where is David based?",
       "relevant_phrases": [
         "Waterford",
@@ -423,6 +479,7 @@
     },
     {
       "id": "role-sought",
+      "split": "dev",
       "question": "What kind of job is David looking for?",
       "relevant_phrases": [
         "AI Engineer is the preferred role",
@@ -431,6 +488,7 @@
     },
     {
       "id": "defense-industry",
+      "split": "dev",
       "question": "What industries has David worked in?",
       "relevant_phrases": [
         "defense industry",
@@ -439,6 +497,7 @@
     },
     {
       "id": "differentiator",
+      "split": "dev",
       "question": "What makes David stand out from other candidates?",
       "relevant_phrases": [
         "well rounded",
@@ -448,6 +507,7 @@
     },
     {
       "id": "contact",
+      "split": "dev",
       "question": "How can I contact David?",
       "relevant_phrases": [
         "david.p.west2@gmail.com",

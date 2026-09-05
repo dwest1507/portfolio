@@ -1,6 +1,7 @@
 """Tests for the RAG pipeline components."""
 
 import json
+import os
 import pickle
 import sys
 from pathlib import Path
@@ -144,21 +145,63 @@ def test_reranking_orders_by_cross_encoder_score(fake_indexes):
 def test_retrieve_returns_top_k(fake_indexes):
     indexes_dir, _chunks = fake_indexes
 
-    mock_embedder = MagicMock()
-    mock_embedder.encode.return_value = np.random.rand(1, 768).astype(np.float32)
+    from app.rag.pipeline import RAGPipeline
 
-    mock_cross_encoder = MagicMock()
-    mock_cross_encoder.predict.side_effect = lambda pairs: np.random.rand(len(pairs))
+    pipeline = RAGPipeline(indexes_dir=indexes_dir)
+    results = pipeline.retrieve("RAG pipeline FAISS", top_k=2)
+
+    assert 0 < len(results) <= 2
+    assert all(isinstance(r, str) for r in results)
+
+
+def test_retrieve_needs_neither_a_model_nor_the_dense_index(fake_indexes):
+    """What the production container actually has: chunks, a BM25 index, no weights.
+
+    The eval measured semantic search, fusion and re-ranking against plain keyword
+    search and none of them won, so serving must not touch any of them. This asserts
+    it the only way that cannot rot — by deleting faiss.index and leaving both model
+    slots empty. If a dense stage ever creeps back onto the serving path, this raises
+    instead of quietly re-downloading 500MB on a Railway cold start.
+    """
+    indexes_dir, _chunks = fake_indexes
+    (indexes_dir / "faiss.index").unlink()
 
     from app.rag.pipeline import RAGPipeline
 
-    pipeline = RAGPipeline(
-        indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
-    )
-    results = pipeline.retrieve("What is David's background?", top_k=2)
+    pipeline = RAGPipeline(indexes_dir=indexes_dir)
+    assert pipeline.retrieve("RAG pipeline FAISS", top_k=2)
 
-    assert len(results) <= 2
-    assert all(isinstance(r, str) for r in results)
+
+def test_retrieve_returns_nothing_when_the_query_shares_no_term(fake_indexes):
+    """An off-topic question yields no context rather than the least-bad chunks.
+
+    Padding the prompt is how a model answers a question the corpus cannot support;
+    an empty context leaves the system prompt's "say so honestly" unopposed.
+    """
+    indexes_dir, _chunks = fake_indexes
+
+    from app.rag.pipeline import RAGPipeline
+
+    pipeline = RAGPipeline(indexes_dir=indexes_dir)
+    assert pipeline.retrieve("zebra photosynthesis quarterly") == []
+
+
+def test_a_stale_dense_index_still_raises_for_the_harness(fake_indexes):
+    """The mismatch guard moved off the startup path when dense left production. It has
+    to survive the move: a FAISS index out of step with chunks.json returns the text of
+    the wrong chunk IDs, which would corrupt a measured run rather than an answer."""
+    import faiss as faiss_lib
+
+    indexes_dir, chunks = fake_indexes
+    index = faiss_lib.IndexFlatIP(768)
+    index.add(np.random.rand(len(chunks) + 1, 768).astype(np.float32))
+    faiss_lib.write_index(index, str(indexes_dir / "faiss.index"))
+
+    from app.rag.pipeline import RAGPipeline
+
+    pipeline = RAGPipeline(indexes_dir=indexes_dir)
+    with pytest.raises(ValueError, match="Index mismatch"):
+        _ = pipeline.faiss_index
 
 
 def test_prompt_includes_context_and_history(fake_indexes):
@@ -229,3 +272,44 @@ def test_rrf_agreement_between_arms_boosts_a_chunk():
     fused = [doc_id for doc_id, _ in reciprocal_rank_fusion([dense, sparse], [0.7, 0.3])]
 
     assert fused.index(12) < fused.index(11), "agreement should pull chunk 12 up past 11"
+
+
+def test_the_pipeline_module_imports_without_the_eval_only_libraries():
+    """The production image installs neither faiss-cpu nor sentence-transformers.
+
+    Both are in the `dev` dependency group, and the Dockerfile syncs with --no-dev, so a
+    module-level `import faiss` in pipeline.py would crash the container on boot while
+    every test here still passed — the dev group has both installed. Run in a subprocess
+    with the two libraries made unimportable, which is the only way to reproduce the
+    production environment from inside a dev one.
+    """
+    import subprocess
+    import sys
+
+    program = """
+import sys
+
+class Guard:
+    def find_spec(self, name, path=None, target=None):
+        if name.split(".")[0] in {"faiss", "sentence_transformers", "torch", "transformers"}:
+            raise AssertionError(f"{name} must not be imported to serve a request")
+        return None
+
+sys.meta_path.insert(0, Guard())
+import app.main  # noqa: F401
+print("ok")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,  # the assertion below reports the traceback, which `check` would hide
+        cwd=str(Path(__file__).resolve().parent.parent),
+        env={
+            **os.environ,
+            "GROQ_API_KEY": "test_key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ok" in result.stdout

@@ -34,7 +34,14 @@ export interface EvalRun {
   /** The CI job that produced the numbers, when a run produced them. */
   runUrl: string | null
   corpusChunks: number
+  /** How many questions this run measured — the size of `split`, not of the whole set. */
   goldenQuestions: number
+  /**
+   * Which portion of the golden set was measured: `holdout` for a published run.
+   * Configurations are chosen on the `dev` portion and reported on this one, so a number
+   * on the page is never the number something was tuned against.
+   */
+  split: string
   topK: number
   /** The metric the verdict is decided on. */
   gatingMetric: string
@@ -85,4 +92,18 @@ export function verdictLine(run: EvalRun = evalRun): string {
 /** Display name for a metric column. `mrr` is an initialism; the rest read as written. */
 export function metricLabel(metric: string): string {
   return metric === 'mrr' ? 'MRR' : metric
+}
+
+/**
+ * How to describe the measured sample in one phrase.
+ *
+ * Derived from the run rather than written into the page, because which portion gets
+ * published is the harness's decision (`PUBLISHED_SPLIT` in eval/run_eval.py). A page
+ * that hardcoded "held-out" would keep saying it after that decision changed.
+ */
+export function sampleLabel(run: EvalRun = evalRun): string {
+  const noun = run.goldenQuestions === 1 ? 'question' : 'questions'
+  return run.split === 'holdout'
+    ? `${run.goldenQuestions} held-out ${noun}`
+    : `${run.goldenQuestions} ${noun}`
 }

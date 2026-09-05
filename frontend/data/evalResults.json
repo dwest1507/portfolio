@@ -1,10 +1,11 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": "2026-09-05T01:42:31+00:00",
-  "commit": "ee674f2",
-  "runUrl": "https://github.com/dwest1507/portfolio/actions/runs/33891968483",
-  "corpusChunks": 49,
-  "goldenQuestions": 55,
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-05T16:32:39+00:00",
+  "commit": "c2d283e",
+  "runUrl": null,
+  "corpusChunks": 73,
+  "goldenQuestions": 22,
+  "split": "holdout",
   "topK": 5,
   "gatingMetric": "hit@5",
   "metricNames": [
@@ -18,13 +19,13 @@
       "id": "bm25",
       "label": "Keyword only",
       "description": "Matches the words in the question against the words in the document, with no machine learning involved.",
-      "technical": "BM25 over stemmed, stopword-filtered terms. Needs no embedding model.",
-      "shipped": false,
+      "technical": "BM25 over stemmed, stopword-filtered terms. Needs no embedding model, which is why the production image ships none. Matches RAGPipeline.retrieve.",
+      "shipped": true,
       "metrics": {
-        "recall@5": 0.73,
+        "recall@5": 0.7746,
         "hit@5": 1.0,
-        "mrr": 0.892,
-        "ndcg@5": 0.758
+        "mrr": 0.9015,
+        "ndcg@5": 0.8012
       }
     },
     {
@@ -34,10 +35,10 @@
       "technical": "FAISS inner-product search over normalized all-mpnet-base-v2 embeddings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.571,
-        "hit@5": 0.818,
-        "mrr": 0.688,
-        "ndcg@5": 0.588
+        "recall@5": 0.5725,
+        "hit@5": 0.8182,
+        "mrr": 0.6773,
+        "ndcg@5": 0.5779
       }
     },
     {
@@ -47,23 +48,36 @@
       "technical": "Weighted reciprocal-rank fusion of the sparse and dense rankings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.653,
-        "hit@5": 0.927,
-        "mrr": 0.75,
-        "ndcg@5": 0.651
+        "recall@5": 0.6258,
+        "hit@5": 0.9091,
+        "mrr": 0.7311,
+        "ndcg@5": 0.6254
       }
     },
     {
       "id": "rerank",
       "label": "Both combined, then re-ranked",
       "description": "Takes the merged list and has a second, slower model re-read each candidate against the question to put the best one first.",
-      "technical": "Cross-encoder re-ranking of the fused candidates. Matches RAGPipeline.retrieve: hybrid_search(candidates_k) → rerank(top_k).",
-      "shipped": true,
+      "technical": "Cross-encoder re-ranking of the fused candidates. Shipped until the harness measured it against the keyword arm: hybrid_search(candidates_k) → rerank(top_k).",
+      "shipped": false,
       "metrics": {
-        "recall@5": 0.652,
-        "hit@5": 0.909,
-        "mrr": 0.853,
-        "ndcg@5": 0.698
+        "recall@5": 0.6217,
+        "hit@5": 0.8636,
+        "mrr": 0.7841,
+        "ndcg@5": 0.6498
+      }
+    },
+    {
+      "id": "bm25+rerank",
+      "label": "Keyword, then re-ranked",
+      "description": "Takes the keyword results alone and has the slower second model re-read them against the question, with no meaning-based search involved at all.",
+      "technical": "Cross-encoder re-ranking of BM25 candidates. The arm that answers whether the dense stage contributes anything the re-ranker cannot recover on its own.",
+      "shipped": false,
+      "metrics": {
+        "recall@5": 0.6965,
+        "hit@5": 1.0,
+        "mrr": 0.8447,
+        "ndcg@5": 0.7126
       }
     }
   ]
