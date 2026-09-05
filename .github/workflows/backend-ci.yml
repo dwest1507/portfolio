@@ -94,7 +94,7 @@ jobs:
       # The embedding + cross-encoder weights are ~500MB. Cache them so only the
       # first run on a given lockfile pays the download.
       - name: Cache Hugging Face models
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface
           key: hf-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
