@@ -5,12 +5,38 @@ export interface Project {
   thumbnail: string
   tags: string[]
   liveUrl: string
+  /** Overrides the default "Live App" link label (e.g. for a non-app destination). */
+  liveLabel?: string
   repoUrl: string
   featured: boolean
   year: number
 }
 
 export const projects: Project[] = [
+  {
+    slug: 'portfolio',
+    title: 'This Portfolio',
+    shortDescription:
+      'The site you are on: a RAG chatbot answering recruiter questions, with an eval suite that scores retrieval on every commit, gates CI, and publishes its own results.',
+    thumbnail: '',
+    tags: [
+      'Next.js',
+      'TypeScript',
+      'FastAPI',
+      'Python',
+      'Groq',
+      'RAG',
+      'FAISS',
+      'BM25',
+      'Evals',
+      'CI/CD',
+    ],
+    liveUrl: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md',
+    liveLabel: 'Eval Method ↗',
+    repoUrl: 'https://github.com/dwest1507/portfolio',
+    featured: true,
+    year: 2026,
+  },
   {
     slug: 'ai-music-gen',
     title: 'Generate Music with AI',

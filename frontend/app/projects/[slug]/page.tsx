@@ -3,6 +3,7 @@ import { readFile } from 'fs/promises'
 import path from 'path'
 import type { Metadata } from 'next'
 import { compileMDX } from 'next-mdx-remote/rsc'
+import remarkGfm from 'remark-gfm'
 import { projects } from '@/data/projects'
 import ProjectDetail from '@/components/projects/ProjectDetail'
 import { mdxComponents } from '@/components/projects/mdxComponents'
@@ -49,7 +50,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
     source,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     components: mdxComponents as any,
-    options: { parseFrontmatter: true },
+    // remark-gfm enables GFM tables; without it a markdown table renders as
+    // a run-on paragraph of pipe characters.
+    options: { parseFrontmatter: true, mdxOptions: { remarkPlugins: [remarkGfm] } },
   })
 
   return <ProjectDetail project={project} content={content} />

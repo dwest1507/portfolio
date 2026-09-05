@@ -1,0 +1,63 @@
+## Overview
+
+This is the site you are reading. It is also the project I would point at first in a technical interview, because it is the one where I can show you numbers instead of adjectives.
+
+The visible half is a Next.js front end. The interesting half is the chatbot in the corner: a Retrieval-Augmented Generation system that answers questions about my experience from my own resume and a written Q&A corpus, streaming responses through a FastAPI backend. Plenty of portfolios have a chatbot bolted on. What I wanted was the thing most of them skip — a way to know whether the retrieval underneath it actually works, and a gate that fails the build when it stops working.
+
+## The problem with "it seems to work"
+
+A RAG pipeline gives you a lot of knobs and very little feedback. Mine started with the parameters you would expect: a weighted blend of semantic and keyword search, ten candidates narrowed to five by a second model. Every one of those numbers was a guess. I had no answer to _"does the re-ranking stage earn its latency?"_ or _"would keyword search alone be just as good?"_, and nothing would have told me if a change to how documents get split quietly broke retrieval.
+
+That is the situation evaluation exists for, and it is not specific to this project. Any system whose output is text has the same problem: it is always producing something plausible, so "it seems to work" is the default state whether it works or not. The only way out is to decide in advance what good means, label enough ground truth to measure it, and put the measurement somewhere it can fail.
+
+## How I decided what "good" means
+
+**The golden set** is a set of questions of the kind a recruiter, hiring manager, or technical interviewer actually asks — employment history, specific technologies, project details, education, logistics. Each one is labelled with the phrases a correct answer has to be grounded in.
+
+Labelling by _phrase_ rather than by document ID is the decision I would defend hardest. The corpus gets re-split every time I edit a source document, so any label tied to a chunk's identity is invalidated on every rebuild — the labels would rot faster than I could maintain them. Phrases survive re-chunking, which is what makes the golden set an asset rather than a chore.
+
+**The metrics** are chosen for what they decide, not for what is easy to report:
+
+- **hit@5** — did _any_ relevant passage reach the model? This is the one that gates the build, because it is what determines whether the system can answer at all.
+- **recall@5** — what share of the relevant passages made it. Reported, deliberately not gated: several questions have more than five relevant passages, so their recall is capped below 1.0 by construction and no honest threshold could ever be met. A metric you cannot set a fair threshold on is a metric you should not gate on.
+- **MRR** and **nDCG@5** — how far up the list the good passage landed, which matters because a model attends unevenly across a long context.
+
+The thresholds sit _below_ measured performance with headroom for noise. They are floors, not targets. Tuning parameters until a floor is cleared would be fitting to my own test set, which produces numbers that look better and mean less.
+
+## The current results
+
+Everything in this table is generated. The harness runs in CI, writes its results to a file, and commits them; this page renders that file. The sentence underneath the table — which configuration is in production, and which one is actually winning — is derived from the numbers rather than written by me.
+
+<EvalScoreboard />
+
+That last part is deliberate, and it is the only way I could find to publish results honestly over time. If I wrote the conclusion by hand, it would be a claim about one afternoon that slowly stopped being true, and I would be the last person to notice. Generating it means the page cannot flatter the architecture I happened to build: when the simplest configuration beats the elaborate one, the page says so, on its own, until I fix it.
+
+It also means this write-up does not need rewriting when the system changes. The numbers move, the verdict follows them, and the prose around it stays true because it never claimed to know the answer.
+
+## What the evaluation changed
+
+Metrics are only worth collecting if they alter what you build. This is the running record of what the harness found and what I did about it — appended to, never rewritten.
+
+<FindingsLog />
+
+The pattern in both entries is the one I find most useful to have learned: the code looked correct, every component behaved exactly as specified, and every test passed. Nothing was going to surface either problem except a number moving. That is the argument for evaluation in a sentence — unit tests tell you the parts do what you said, and only measurement tells you the system does what you meant.
+
+## Engineering around it
+
+The eval is a CI gate, not a notebook. It runs on every backend change and fails the build if any gated configuration drops below its floor, so retrieval quality cannot regress silently between commits. A keyword-only mode runs in seconds without downloading half a gigabyte of model weights, so the fast feedback loop stays fast.
+
+The rest of the pipeline is held to the same standard. Ruff, ESLint, Prettier, and `tsc` gate every push. CodeQL, gitleaks, `pip-audit`, `npm audit`, and dependency review run on every pull request and weekly against unchanged code. Lighthouse CI watches performance and accessibility budgets. Every check lives in `scripts/` and is shared verbatim between the Makefile and GitHub Actions, so `make ci-cd` reproduces the PR gates exactly — no drift between what passes locally and what passes in CI.
+
+One gate is there because of a specific mistake. My resume is a source document for the index, and it carried my home address and phone number, which meant the chatbot would read them back to anyone who asked. The fix was three-layered: strip it at the source, redact it during the index build as a backstop, and add a regression test that fails the build if a phone number or street address ever appears in the committed index again. The redaction and the detection are deliberately asymmetric — the redactor is precise, because rewriting the corpus silently means a false positive destroys real content unnoticed, while the test guard casts a wide net, because its only power is to fail a build and a false positive there costs one glance from me.
+
+## What I am not claiming
+
+The corpus is small, and much of it is written as anticipated questions with answers — which is exactly the condition that favours keyword matching over semantic search. Relevance is also labelled by exact phrase presence, which is close to what keyword ranking measures. Every configuration is scored against identical labels, so the comparison is internally fair, but any conclusion it supports is about _this_ corpus rather than about retrieval in general.
+
+I would rather state that plainly than let a table imply more than it earned. The full write-up of the method, the biases, and what is still unmeasured — generation faithfulness, refusal behaviour on out-of-scope questions, adversarial robustness — is in the repository.
+
+## Skills Demonstrated
+
+The RAG pipeline is the part that looks impressive. The evaluation suite is the part that matters, and it is the difference between an engineer who assembles components and one who can tell you whether the assembly works.
+
+This project shows I can define what "good" means for a system whose output is text, label ground truth in a form that survives the corpus changing underneath it, choose metrics for what they decide rather than what is easy to report, wire the result into CI as a gate rather than a report — and build the publishing path so that the conclusions stay honest as the system evolves, including when the measurement contradicts the architecture I had already built.

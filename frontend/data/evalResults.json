@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-05T01:42:31+00:00",
+  "commit": "ee674f2",
+  "runUrl": "https://github.com/dwest1507/portfolio/actions/runs/33891968483",
+  "corpusChunks": 49,
+  "goldenQuestions": 55,
+  "topK": 5,
+  "gatingMetric": "hit@5",
+  "metricNames": [
+    "recall@5",
+    "hit@5",
+    "mrr",
+    "ndcg@5"
+  ],
+  "arms": [
+    {
+      "id": "bm25",
+      "label": "Keyword only",
+      "description": "Matches the words in the question against the words in the document, with no machine learning involved.",
+      "technical": "BM25 over stemmed, stopword-filtered terms. Needs no embedding model.",
+      "shipped": false,
+      "metrics": {
+        "recall@5": 0.73,
+        "hit@5": 1.0,
+        "mrr": 0.892,
+        "ndcg@5": 0.758
+      }
+    },
+    {
+      "id": "dense",
+      "label": "Meaning only",
+      "description": "Matches on meaning rather than wording, so it can find a passage that answers the question without repeating any of its words.",
+      "technical": "FAISS inner-product search over normalized all-mpnet-base-v2 embeddings.",
+      "shipped": false,
+      "metrics": {
+        "recall@5": 0.571,
+        "hit@5": 0.818,
+        "mrr": 0.688,
+        "ndcg@5": 0.588
+      }
+    },
+    {
+      "id": "hybrid",
+      "label": "Both combined",
+      "description": "Runs both of the above and merges their rankings into one list.",
+      "technical": "Weighted reciprocal-rank fusion of the sparse and dense rankings.",
+      "shipped": false,
+      "metrics": {
+        "recall@5": 0.653,
+        "hit@5": 0.927,
+        "mrr": 0.75,
+        "ndcg@5": 0.651
+      }
+    },
+    {
+      "id": "rerank",
+      "label": "Both combined, then re-ranked",
+      "description": "Takes the merged list and has a second, slower model re-read each candidate against the question to put the best one first.",
+      "technical": "Cross-encoder re-ranking of the fused candidates. Matches RAGPipeline.retrieve: hybrid_search(candidates_k) → rerank(top_k).",
+      "shipped": true,
+      "metrics": {
+        "recall@5": 0.652,
+        "hit@5": 0.909,
+        "mrr": 0.853,
+        "ndcg@5": 0.698
+      }
+    }
+  ]
+}

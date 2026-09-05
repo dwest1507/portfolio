@@ -17,8 +17,8 @@ from .routes.health import router as health_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Pre-load models at startup so the first request isn't slow
-    get_pipeline()
+    # Pre-load indexes and models at startup so the first request isn't slow
+    get_pipeline().warm()
     yield
 
 

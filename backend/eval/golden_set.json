@@ -1,0 +1,458 @@
+{
+  "description": "Retrieval ground truth for the portfolio chatbot. Each case is a question a recruiter, hiring manager, or technical interviewer might realistically ask. A retrieved chunk counts as relevant if its text contains ANY phrase in `relevant_phrases` (case-insensitive, whitespace-normalized). Matching on phrases rather than chunk IDs keeps the labels valid across re-chunking and re-indexing.",
+  "cases": [
+    {
+      "id": "employer-current",
+      "question": "Where does David currently work?",
+      "relevant_phrases": [
+        "Booz Allen Hamilton"
+      ]
+    },
+    {
+      "id": "current-title",
+      "question": "What is David's current job title?",
+      "relevant_phrases": [
+        "Data Scientist"
+      ]
+    },
+    {
+      "id": "tacom-history",
+      "question": "Did David ever work for the government directly?",
+      "relevant_phrases": [
+        "Operations Research Analyst",
+        "TACOM",
+        "Army civilian"
+      ]
+    },
+    {
+      "id": "promotions",
+      "question": "Has David been promoted?",
+      "relevant_phrases": [
+        "Promoted twice",
+        "promoted twice",
+        "GS-1515-07"
+      ]
+    },
+    {
+      "id": "years-experience",
+      "question": "How many years of AI and machine learning experience does David have?",
+      "relevant_phrases": [
+        "working with AI/ML since 2020",
+        "since 2020"
+      ]
+    },
+    {
+      "id": "career-start",
+      "question": "When did David start his professional career?",
+      "relevant_phrases": [
+        "started my professional career in May, 2018",
+        "May 2018"
+      ]
+    },
+    {
+      "id": "education",
+      "question": "What did David study in college?",
+      "relevant_phrases": [
+        "Biochemistry",
+        "Western Michigan University"
+      ]
+    },
+    {
+      "id": "degree-cs",
+      "question": "Does David have a computer science degree?",
+      "relevant_phrases": [
+        "Biochemistry",
+        "Bachelor of Science"
+      ]
+    },
+    {
+      "id": "certifications",
+      "question": "What certifications does David hold?",
+      "relevant_phrases": [
+        "Security+",
+        "CompTIA"
+      ]
+    },
+    {
+      "id": "clearance",
+      "question": "Does David have a security clearance?",
+      "relevant_phrases": [
+        "Security clearance: Secret",
+        "Security clearance"
+      ]
+    },
+    {
+      "id": "languages",
+      "question": "What programming languages does David know?",
+      "relevant_phrases": [
+        "Python, R, Typescript, and SQL",
+        "programming languages"
+      ]
+    },
+    {
+      "id": "python-proficiency",
+      "question": "How good is David at Python?",
+      "relevant_phrases": [
+        "very proficient in Python",
+        "go-to language"
+      ]
+    },
+    {
+      "id": "cloud-platforms",
+      "question": "What cloud providers has David used?",
+      "relevant_phrases": [
+        "AWS",
+        "Foundry",
+        "Modal",
+        "Railway",
+        "Vercel"
+      ]
+    },
+    {
+      "id": "aws-services",
+      "question": "Which AWS services has David worked with?",
+      "relevant_phrases": [
+        "Bedrock",
+        "GovCloud",
+        "Textract"
+      ]
+    },
+    {
+      "id": "govcloud",
+      "question": "Does David have experience with classified or restricted cloud environments?",
+      "relevant_phrases": [
+        "GovCloud",
+        "Impact Level 5"
+      ]
+    },
+    {
+      "id": "databases",
+      "question": "What databases has David used?",
+      "relevant_phrases": [
+        "SQLite and DynamoDB",
+        "Neptune"
+      ]
+    },
+    {
+      "id": "api-experience",
+      "question": "Has David built APIs?",
+      "relevant_phrases": [
+        "FastAPI",
+        "API Gateway",
+        "RESTful APIs"
+      ]
+    },
+    {
+      "id": "frontend",
+      "question": "Can David do frontend work?",
+      "relevant_phrases": [
+        "frontend experience using React",
+        "not a frontend expert"
+      ]
+    },
+    {
+      "id": "llm-experience",
+      "question": "Has David worked with large language models?",
+      "relevant_phrases": [
+        "worked with LLMs since 2025",
+        "applications using LLMs"
+      ]
+    },
+    {
+      "id": "llm-providers",
+      "question": "Which LLM providers has David used?",
+      "relevant_phrases": [
+        "OpenAI's GPT models",
+        "Anthropic's Claude",
+        "Gemini"
+      ]
+    },
+    {
+      "id": "rag-experience",
+      "question": "Has David built retrieval augmented generation systems?",
+      "relevant_phrases": [
+        "built a few RAG systems",
+        "RAG is a great way"
+      ]
+    },
+    {
+      "id": "vector-search",
+      "question": "What is David's experience with vector databases and semantic search?",
+      "relevant_phrases": [
+        "FAISS for local vector search",
+        "OpenSearch"
+      ]
+    },
+    {
+      "id": "embedding-models",
+      "question": "What embedding models has David used?",
+      "relevant_phrases": [
+        "Titan embedding",
+        "all-mpnet-base-v2"
+      ]
+    },
+    {
+      "id": "fine-tuning",
+      "question": "Has David fine-tuned a model?",
+      "relevant_phrases": [
+        "Not yet",
+        "fine-tuning"
+      ]
+    },
+    {
+      "id": "prompt-engineering",
+      "question": "What does David know about prompt engineering?",
+      "relevant_phrases": [
+        "prompt engineering",
+        "context and grounding is key"
+      ]
+    },
+    {
+      "id": "groq",
+      "question": "Has David used Groq?",
+      "relevant_phrases": [
+        "Groq's API",
+        "serving LLMs on a budget"
+      ]
+    },
+    {
+      "id": "langchain",
+      "question": "Does David know LangChain?",
+      "relevant_phrases": [
+        "LangChain"
+      ]
+    },
+    {
+      "id": "devtools",
+      "question": "What tools does David use day to day?",
+      "relevant_phrases": [
+        "Windsurf",
+        "Terraform with Terragrunt",
+        "Jira"
+      ]
+    },
+    {
+      "id": "iac-devops",
+      "question": "Does David have DevOps or infrastructure as code experience?",
+      "relevant_phrases": [
+        "Terraform",
+        "Kubernetes",
+        "GitHub Actions"
+      ]
+    },
+    {
+      "id": "leadership",
+      "question": "Has David managed or led anyone?",
+      "relevant_phrases": [
+        "Manage two full-time employees",
+        "Career Manager",
+        "lead the technical development"
+      ]
+    },
+    {
+      "id": "mentoring",
+      "question": "Does David mentor junior engineers?",
+      "relevant_phrases": [
+        "mentoring junior staff",
+        "Mentor a data analyst intern",
+        "mentor"
+      ]
+    },
+    {
+      "id": "cross-functional",
+      "question": "Has David worked on cross functional teams?",
+      "relevant_phrases": [
+        "cross-functional",
+        "quality assurance"
+      ]
+    },
+    {
+      "id": "business-development",
+      "question": "Has David helped win new business?",
+      "relevant_phrases": [
+        "Propose projects to potential customers",
+        "win work"
+      ]
+    },
+    {
+      "id": "stakeholder-comms",
+      "question": "How does David present to non-technical audiences?",
+      "relevant_phrases": [
+        "non-technical customers",
+        "dashboards and PowerPoint"
+      ]
+    },
+    {
+      "id": "additive-manufacturing",
+      "question": "Tell me about the additive manufacturing project.",
+      "relevant_phrases": [
+        "additively manufactured",
+        "additive manufacturing"
+      ]
+    },
+    {
+      "id": "hazmat-bom",
+      "question": "Has David worked on bill of materials analysis?",
+      "relevant_phrases": [
+        "Bill of Material",
+        "Bills of Materials",
+        "hazardous materials"
+      ]
+    },
+    {
+      "id": "anomaly-detection",
+      "question": "Has David done anomaly detection?",
+      "relevant_phrases": [
+        "Anomaly detection",
+        "Installation Management Command"
+      ]
+    },
+    {
+      "id": "web-scraping",
+      "question": "Has David built a web scraper?",
+      "relevant_phrases": [
+        "web scraper using R and Selenium",
+        "Selenium"
+      ]
+    },
+    {
+      "id": "predictive-maintenance",
+      "question": "Has David built models that predict equipment failure?",
+      "relevant_phrases": [
+        "no",
+        "not"
+      ]
+    },
+    {
+      "id": "nietzsche-project",
+      "question": "Tell me about the Nietzsche chatbot.",
+      "relevant_phrases": [
+        "Chat with Nietzsche",
+        "Nietzsche"
+      ]
+    },
+    {
+      "id": "nietzsche-reranking",
+      "question": "How does the Nietzsche chatbot rank its search results?",
+      "relevant_phrases": [
+        "cross-encoder",
+        "ms-marco-MiniLM",
+        "re-rank"
+      ]
+    },
+    {
+      "id": "music-project",
+      "question": "Tell me about the AI music generation project.",
+      "relevant_phrases": [
+        "Generate Music with AI",
+        "music track"
+      ]
+    },
+    {
+      "id": "music-gpu",
+      "question": "How does the music app run its model on a GPU?",
+      "relevant_phrases": [
+        "Modal",
+        "GPU"
+      ]
+    },
+    {
+      "id": "rate-limiting",
+      "question": "How does David handle rate limiting?",
+      "relevant_phrases": [
+        "rate limit",
+        "slowapi"
+      ]
+    },
+    {
+      "id": "baby-names-project",
+      "question": "Tell me about the baby names project.",
+      "relevant_phrases": [
+        "baby name",
+        "Social Security Administration"
+      ]
+    },
+    {
+      "id": "time-series",
+      "question": "Has David worked with time series forecasting?",
+      "relevant_phrases": [
+        "time-series",
+        "forecast"
+      ]
+    },
+    {
+      "id": "diamonds-project",
+      "question": "Tell me about the diamonds price prediction project.",
+      "relevant_phrases": [
+        "Diamonds",
+        "diamond price"
+      ]
+    },
+    {
+      "id": "r-language",
+      "question": "Does David know R?",
+      "relevant_phrases": [
+        "Leverage R",
+        "using R",
+        "R:"
+      ]
+    },
+    {
+      "id": "remote-work",
+      "question": "Is David open to remote work?",
+      "relevant_phrases": [
+        "prefer remote work",
+        "open to a hybrid schedule"
+      ]
+    },
+    {
+      "id": "relocation",
+      "question": "Would David relocate?",
+      "relevant_phrases": [
+        "open to relocation",
+        "relocation"
+      ]
+    },
+    {
+      "id": "location",
+      "question": "Where is David based?",
+      "relevant_phrases": [
+        "Waterford",
+        "Metro-Detroit"
+      ]
+    },
+    {
+      "id": "role-sought",
+      "question": "What kind of job is David looking for?",
+      "relevant_phrases": [
+        "AI Engineer is the preferred role",
+        "build solutions using large language models"
+      ]
+    },
+    {
+      "id": "defense-industry",
+      "question": "What industries has David worked in?",
+      "relevant_phrases": [
+        "defense industry",
+        "TACOM"
+      ]
+    },
+    {
+      "id": "differentiator",
+      "question": "What makes David stand out from other candidates?",
+      "relevant_phrases": [
+        "well rounded",
+        "leadership experience",
+        "cognizant of cybersecurity"
+      ]
+    },
+    {
+      "id": "contact",
+      "question": "How can I contact David?",
+      "relevant_phrases": [
+        "david.p.west2@gmail.com",
+        "LinkedIn"
+      ]
+    }
+  ]
+}

@@ -4,7 +4,6 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 # Set required env vars before importing the app
 os.environ.setdefault("GROQ_API_KEY", "test_key")
@@ -51,6 +50,11 @@ def mock_pipeline():
 @pytest.fixture
 def client(mock_pipeline):
     """TestClient with mocked RAG pipeline and Groq."""
+    # Imported inside the fixture so that tests which never touch the HTTP layer
+    # (tokenizer, fusion, PII, chunking) can be collected and run without
+    # importing FastAPI.
+    from fastapi.testclient import TestClient
+
     # Patch the pipeline in its home module and where the chat route imports it
     with (
         patch("app.rag.pipeline.get_pipeline", return_value=mock_pipeline),

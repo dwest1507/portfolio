@@ -88,7 +88,9 @@ def fake_indexes(tmp_path):
     # BM25 index
     from rank_bm25 import BM25Okapi
 
-    corpus = [c["text"].lower().split() for c in chunks]
+    from app.rag.tokenize import tokenize
+
+    corpus = [tokenize(c["text"]) for c in chunks]
     bm25 = BM25Okapi(corpus)
     with open(tmp_path / "bm25.pkl", "wb") as f:
         pickle.dump(bm25, f)
@@ -110,15 +112,16 @@ def test_hybrid_search_returns_chunks(fake_indexes):
     pipeline = RAGPipeline(
         indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
     )
-    results = pipeline._hybrid_search("AI Engineer experience", top_k=3)
+    results = pipeline.hybrid_search("AI Engineer experience", top_k=3)
 
     assert len(results) > 0
-    assert all("text" in r for r in results)
+    assert all(isinstance(doc_id, int) for doc_id in results)
+    assert all(0 <= doc_id < 3 for doc_id in results)
 
 
 def test_reranking_orders_by_cross_encoder_score(fake_indexes):
     """The chunk with the highest cross-encoder score should appear first."""
-    indexes_dir, chunks = fake_indexes
+    indexes_dir, _chunks = fake_indexes
 
     mock_embedder = MagicMock()
     mock_embedder.encode.return_value = np.random.rand(1, 768).astype(np.float32)
@@ -132,11 +135,10 @@ def test_reranking_orders_by_cross_encoder_score(fake_indexes):
     pipeline = RAGPipeline(
         indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
     )
-    candidates = list(chunks)  # use all 3
-    reranked = pipeline._rerank("query", candidates, top_k=3)
+    reranked = pipeline.rerank("query", [0, 1, 2], top_k=3)
 
-    # The candidate that got score 0.9 (index 2 in candidates) should be first
-    assert reranked[0] == chunks[2]
+    # The candidate that got score 0.9 (chunk ID 2) should be first
+    assert reranked[0] == 2
 
 
 def test_retrieve_returns_top_k(fake_indexes):
@@ -178,3 +180,52 @@ def test_prompt_includes_context_and_history(fake_indexes):
     assert messages[1] == {"role": "user", "content": "What skills does David have?"}
     assert messages[2] == {"role": "assistant", "content": "Python, FastAPI, FAISS."}
     assert messages[-1] == {"role": "user", "content": new_message}
+
+
+# ---------------------------------------------------------------------------
+# Reciprocal-rank fusion
+# ---------------------------------------------------------------------------
+
+
+def test_rrf_sparse_only_hit_reaches_candidates():
+    """A chunk only BM25 found must survive into the candidate set.
+
+    This is the whole justification for keeping a sparse arm: it is the backstop
+    for proper nouns and rare terms the embedding model smooths away. With
+    RRF_K=60 the weight ratio (0.7/0.3) dwarfed the rank term across a 10-item
+    list, so every dense hit outscored every sparse hit and the sparse-only
+    chunk was truncated away before the re-ranker ever saw it.
+    """
+    from app.rag.pipeline import reciprocal_rank_fusion
+
+    dense = list(range(100, 110))  # 10 dense hits, none of them chunk 7
+    sparse = [7, 101]  # BM25's top hit is a chunk dense missed entirely
+
+    fused = [doc_id for doc_id, _ in reciprocal_rank_fusion([dense, sparse], [0.7, 0.3])]
+
+    assert 7 in fused[:10], "BM25's top hit must make the 10-candidate set"
+
+
+def test_rrf_dense_still_leads_the_ordering():
+    """Fixing the above must not flip the arms: dense is still the primary."""
+    from app.rag.pipeline import reciprocal_rank_fusion
+
+    dense = list(range(100, 110))
+    sparse = [7, 101]
+
+    fused = [doc_id for doc_id, _ in reciprocal_rank_fusion([dense, sparse], [0.7, 0.3])]
+
+    assert fused[0] == 100, "the top dense hit should still rank first"
+    assert fused.index(7) > 0, "a sparse-only hit should not displace the top dense hit"
+
+
+def test_rrf_agreement_between_arms_boosts_a_chunk():
+    """A chunk both retrievers found should outrank one only dense found."""
+    from app.rag.pipeline import reciprocal_rank_fusion
+
+    dense = [10, 11, 12]
+    sparse = [12, 99]
+
+    fused = [doc_id for doc_id, _ in reciprocal_rank_fusion([dense, sparse], [0.7, 0.3])]
+
+    assert fused.index(12) < fused.index(11), "agreement should pull chunk 12 up past 11"

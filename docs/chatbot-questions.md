@@ -180,17 +180,44 @@ My work projects
 
 **Why did David build a chatbot into his portfolio?**
 
+### Evaluation
+
+**Has David done evaluation work on AI systems?**
+Yes — the chatbot you're talking to is the example I'd point at. I built a retrieval evaluation suite for it: a golden set of labelled questions, four retrieval configurations scored against identical labels, and a CI gate that fails the build if retrieval quality regresses. The results are published on the portfolio project page, including the ones that were unflattering.
+
+**How does David evaluate a RAG system?**
+I start by deciding what "good" means before measuring anything. For retrieval I label a set of realistic questions with the phrases a correct answer has to be grounded in, then score configurations on hit rate, recall, MRR, and nDCG. I gate CI on hit@k specifically, because that's what determines whether the model can answer at all — the other metrics are informative but make poor gates. I set thresholds below measured performance as regression floors, never as targets, because tuning until a threshold is cleared is just fitting to your own test set.
+
+**Why does David label relevance by phrase instead of by document?**
+Because the corpus gets re-split every time a source document changes. Labels tied to a chunk's identity are invalidated on every rebuild, so they rot faster than you can maintain them. Phrases survive re-chunking, which is what makes the labelled set an asset instead of a chore.
+
+**What has David's evaluation work actually found?**
+Two real bugs that no test caught. A tokenizer mismatch between index-time and query-time was silently destroying keyword recall — fixing it moved MRR from 0.745 to 0.892. And a rank-fusion constant taken from a paper was being used at the wrong scale, which meant one of the two retrievers could never contribute a result; fusion was running, passing its tests, and doing nothing. In both cases every component behaved exactly as specified and only a metric moved.
+
+**Does David use evaluation results to change what he builds?**
+That's the entire point of collecting them. The eval showed that plain keyword search was beating my hybrid pipeline with a cross-encoder on every metric, which is not the result I wanted after building it. I published it anyway and opened an issue to decide whether the semantic retrieval stage earns its place at all, rather than quietly retuning a weight to make the number look better. I keep an append-only findings log on the project page recording what each measurement showed and what changed in the code because of it.
+
+**How does David keep published metrics from going stale?**
+The numbers aren't written by hand anywhere. CI runs the evaluation, writes the results to a file, and commits it; the project page and the repository docs both render from that file. Even the sentence comparing the shipped configuration to the best-scoring one is generated from the data, so the write-up can't drift into claiming something the measurements no longer support.
+
+**What has David not measured yet?**
+Retrieval quality is only half of a RAG system's behaviour. Generation faithfulness — does the answer stay inside the retrieved context? — plus refusal behaviour on out-of-scope questions and adversarial robustness are all still unmeasured. I'd rather name those gaps than imply the evaluation covers more than it does.
+
 ---
 
 ## Education & Certifications
 
 **What is David's educational background?**
+I graduated from Western Michigan University in 2017 with a Bachelor of Science in Biochemistry.
 
 **Does David have a degree in computer science or a related field?**
+I majored in Biochemistry, which is a hard science and not a programming-focused degree. 
 
 **Does David have any relevant certifications?**
+I have a CompTIA Security+ certification.
 
 **How does David stay current with the rapidly changing AI landscape?**
+I build personal projects to stay current with the rapidly changing AI landscape. I also stay current by following AI news and trends and experimenting with new tools and technologies as they become available. I also watch a lot of Youtube videos about AI and tech from channels like Dwarkesh Patel, AI Engineer, Matt Pocock, Fireship, TheStandupPod, The Primagen, Casy Muratori, and more.
 
 ---
 
@@ -215,20 +242,26 @@ My work projects
 ## Hiring & Availability
 
 **Is David currently employed?**
+Yes, at Booz Allen Hamilton.
 
 **When is David available to start?**
+David is available to start immediately, but requires a 2 week notice period to his current employer.
 
 **What is David's preferred work environment (remote, hybrid, on-site)?**
+David is open to both remote and hybrid work environments, but is flexible to accommodate a hybrid schedule.
 
 **What type of company or team is David looking for?**
+David is looking for a challenging and rewarding opportunity to work on interesting problems with a talented team.
 
 **What kinds of AI problems is David most excited to work on?**
 
 **What are David's salary expectations?**
 
 **Is David authorized to work in the US?**
+Yes. I am a US citizen.
 
-**Does David require visa sponsorship?**
+**What is David's security clearance?**
+David has a Secret security clearance. It was sponsored by the US Army.
 
 **How can I contact David?**
 

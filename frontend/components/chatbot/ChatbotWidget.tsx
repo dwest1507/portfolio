@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useEffect, useState, type FormEvent, type ChangeEvent } from 'react'
+import Link from 'next/link'
 import { useChat } from '@ai-sdk/react'
 import { TextStreamChatTransport } from 'ai'
 import ChatMessage from './ChatMessage'
@@ -247,6 +248,14 @@ export default function ChatbotWidget() {
             </span>
             <div className="max-w-[85%] rounded-xl bg-white/[0.05] px-3 py-2 text-[13px] leading-relaxed text-[#ededef] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]">
               {WELCOME_MESSAGE}
+              {/* Connects the demo to the engineering behind it: the retrieval
+                  pipeline and its eval suite are written up as a project. */}
+              <Link
+                href="/projects/portfolio"
+                className="mt-2 block font-mono text-[10px] tracking-widest text-[#0ea5e9] transition-colors duration-150 hover:text-[#38bdf8]"
+              >
+                How this works →
+              </Link>
             </div>
           </div>
 

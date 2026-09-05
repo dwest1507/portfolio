@@ -1,0 +1,46 @@
+# Backend
+
+The retrieval-augmented pipeline that answers questions about David's experience, and the
+harness that measures whether its retrieval actually works.
+
+## Language
+
+### Retrieval evaluation
+
+**Arm**:
+One retrieval configuration measured by the harness, such as keyword-only or hybrid
+fusion followed by re-ranking. Arms are defined in the harness, which owns both their
+identity and how they are described to a reader.
+_Avoid_: Variant, strategy, mode, config
+
+**Shipped Arm**:
+The single Arm that mirrors what the production pipeline actually runs. Exactly one Arm
+carries this designation at a time.
+_Avoid_: Default arm, live arm, current config
+
+**Golden Set**:
+The hand-labelled questions retrieval is scored against, together with the phrases an
+answer must be grounded in.
+_Avoid_: Test set, eval set, question bank
+
+**Relevant Phrase**:
+A string whose presence in a chunk makes that chunk relevant to a given question.
+Relevance is labelled by phrase rather than by chunk identity so that labels survive
+re-chunking.
+_Avoid_: Ground truth, gold label, answer key
+
+**Measured Run**:
+One execution of the harness over the Golden Set, carrying its metrics, the corpus it was
+measured against, and the commit it was measured at. A metric is only meaningful alongside
+the run that produced it.
+_Avoid_: Result, snapshot, benchmark
+
+**Floor**:
+A minimum metric value below which a Measured Run fails the build. A Floor sits beneath
+measured performance to catch regressions, and is never a target to optimise toward.
+_Avoid_: Threshold, target, baseline, SLA
+
+**Corpus**:
+The chunked text the pipeline retrieves over, assembled from the resume, the question
+document, and the project write-ups. Metrics from different Corpora are not comparable.
+_Avoid_: Index, knowledge base, dataset

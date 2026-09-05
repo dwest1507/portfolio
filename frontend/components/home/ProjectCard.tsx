@@ -12,6 +12,7 @@ interface ProjectCardProps {
 
 export default function ProjectCard({ project }: ProjectCardProps) {
   const isExternalLive = project.liveUrl.startsWith('http')
+  const liveLabel = project.liveLabel ?? 'Live App ↗'
   const cardRef = useRef<HTMLDivElement>(null)
   const [spotPos, setSpotPos] = useState({ x: 0, y: 0 })
   const [spotVisible, setSpotVisible] = useState(false)
@@ -106,7 +107,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
             rel={isExternalLive ? 'noopener noreferrer' : undefined}
             className="font-mono text-[10px] tracking-widest text-[#0ea5e9] transition-colors duration-150 hover:text-[#38bdf8]"
           >
-            Live App ↗
+            {liveLabel}
           </a>
           <a
             href={project.repoUrl}
