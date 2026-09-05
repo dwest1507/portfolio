@@ -73,10 +73,10 @@ def test_source_documents_have_no_contact_pii(path: Path):
 
 
 def test_redactor_strips_phone_and_address():
-    text = "David West\n6482 Misty Ct, Waterford, MI 48327  ●  (586) 549-3786  ●  a@b.com"
+    text = "David West\n742 Evergreen Ter, Springfield, IL 62704  ●  (586) 555-0147  ●  a@b.com"
     result = _redact_pii(text)
-    assert "Misty Ct" not in result
-    assert "549-3786" not in result
+    assert "Evergreen Ter" not in result
+    assert "555-0147" not in result
     assert "David West" in result
     assert "a@b.com" in result, "email is a published contact method and should survive"
 
@@ -99,13 +99,13 @@ def test_redactor_leaves_ordinary_resume_text_alone(text: str):
 @pytest.mark.parametrize(
     "text",
     [
-        "5865493786",
-        "(586)5493786",
-        "+15865493786",
-        "586 549 3786",
-        "(586) 549-3786",
-        "586-549-3786",
-        "+1 586.549.3786",
+        "5865550147",
+        "(586)5550147",
+        "+15865550147",
+        "586 555 0147",
+        "(586) 555-0147",
+        "586-555-0147",
+        "+1 586.555.0147",
     ],
 )
 def test_guard_catches_every_phone_format_including_bare_digits(text: str):
@@ -140,9 +140,9 @@ def test_redactor_does_not_eat_ordinary_numbers(text: str):
 @pytest.mark.parametrize(
     "text",
     [
-        "Phone: 586 549 3786",
-        "cell 5865493786",
-        "Tel. +1 586 549 3786",
+        "Phone: 586 555 0147",
+        "cell 5865550147",
+        "Tel. +1 586 555 0147",
     ],
 )
 def test_redactor_strips_ambiguous_formats_when_labelled(text: str):

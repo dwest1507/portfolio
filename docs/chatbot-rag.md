@@ -30,13 +30,13 @@ make build-index
    Redaction and detection are deliberately asymmetric. The redactor in
    `build_index.py` is **precise** — it strips only unambiguous phone shapes
    (parenthesized area code, or dot/dash separators) and labelled ones
-   (`Phone: 586 549 3786`). It rewrites the corpus silently, so a false positive
+   (`Phone: 586 555 0147`). It rewrites the corpus silently, so a false positive
    there deletes real content — a metric, an ID, a quantity — with no signal
    that anything was lost. The guard in `tests/test_pii.py` is **broad**: it
    matches bare 10-digit runs and punctuation-free international forms too. Its
    only power is to fail a build, so a false positive costs one human glance.
 
-   The consequence is intentional: a bare `5865493786` in a source document is
+   The consequence is intentional: a bare `5865550147` in a source document is
    not silently redacted, it fails the test, and the source gets fixed. That is
    the stated order of operations — the sources should be clean to begin with,
    and redaction is only the backstop.

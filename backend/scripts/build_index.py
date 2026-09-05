@@ -57,7 +57,7 @@ CHUNK_OVERLAP = 100
 # that one only has to fail a build, so a false positive there costs one human
 # glance rather than a hole in the index.
 #
-# Concretely: a bare 10-digit run like "5865493786" is NOT redacted here,
+# Concretely: a bare 10-digit run like "5865550147" is NOT redacted here,
 # because it is indistinguishable from an ordinary number. test_pii.py does
 # match it, so it fails the build and the source document gets fixed — which is
 # the stated order of operations anyway ("the sources should be clean to begin
@@ -68,7 +68,7 @@ _PHONE_PUNCT = r"[.-]"
 
 _PII_PATTERNS: list[tuple[re.Pattern, str]] = [
     # Phone numbers written with unambiguous phone punctuation:
-    #   (586) 549-3786 | 586-549-3786 | +1 586.549.3786 | (586)549-3786
+    #   (586) 555-0147 | 586-555-0147 | +1 586.555.0147 | (586)555-0147
     # A parenthesized area code, or dot/dash separators, marks intent. Bare or
     # space-only separated digit runs are left to the test guard (see above).
     (
@@ -81,7 +81,7 @@ _PII_PATTERNS: list[tuple[re.Pattern, str]] = [
     ),
     # Phone numbers with ambiguous separators (spaces, or none at all), but
     # carrying an explicit label that resolves the ambiguity:
-    #   "Phone: 586 549 3786" | "cell 5865493786" | "Tel. +1 586 549 3786"
+    #   "Phone: 586 555 0147" | "cell 5865550147" | "Tel. +1 586 555 0147"
     (
         re.compile(
             r"(?i:\b(?:phone|tel|telephone|mobile|cell|fax|contact)\b\.?\s*:?\s*)"
@@ -90,7 +90,7 @@ _PII_PATTERNS: list[tuple[re.Pattern, str]] = [
         "[redacted]",
     ),
     # Street address followed by a city/state/ZIP, e.g.
-    # "6482 Misty Ct, Waterford, MI 48327"
+    # "742 Evergreen Ter, Springfield, IL 62704"
     (
         re.compile(
             r"\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+)*?\s+"
