@@ -1,0 +1,199 @@
+"""Tests for the artefacts that publish a measured run.
+
+None of these load a pipeline or download model weights: the point of eval/publish.py
+being its own module is that the published document, the verdict, and the markdown block
+can be checked from fixture numbers alone.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from eval.publish import (
+    ARM_SPEC_BY_ID,
+    ARM_SPECS,
+    ARMS,
+    BEGIN_MARKER,
+    END_MARKER,
+    build_results_document,
+    leading_arm,
+    render_markdown,
+    shipped_arm_id,
+    update_markdown_block,
+    verdict_line,
+    write_results_document,
+)
+
+
+def _raw(arm: str, hit: float, mrr: float) -> dict:
+    return {
+        "arm": arm,
+        "top_k": 5,
+        "summary": {"recall@5": 0.5, "hit@5": hit, "mrr": mrr, "ndcg@5": 0.6},
+        "cases": [],
+    }
+
+
+def _document(results=None, **kwargs) -> dict:
+    defaults = dict(corpus_chunks=49, golden_questions=55, top_k=5, gating_metric="hit@5")
+    defaults.update(kwargs)
+    return build_results_document(
+        results or [_raw("bm25", 1.0, 0.892), _raw("rerank", 0.909, 0.853)], **defaults
+    )
+
+
+# ---------------------------------------------------------------------------
+# Arm specs
+# ---------------------------------------------------------------------------
+
+
+class TestArmSpecs:
+    def test_exactly_one_arm_is_shipped(self):
+        """The verdict names the shipped arm, so an ambiguous flag has no answer."""
+        assert [a.id for a in ARM_SPECS if a.shipped] == [shipped_arm_id()]
+
+    def test_shipped_arm_matches_the_production_pipeline(self):
+        """Guards the one fact that goes stale silently.
+
+        RAGPipeline.retrieve is hybrid_search → rerank, so `rerank` is what production
+        runs. If retrieve() changes shape, this flag has to move with it or the public
+        page reports a configuration the site does not actually serve.
+        """
+        import inspect
+
+        from app.rag.pipeline import RAGPipeline
+
+        source = inspect.getsource(RAGPipeline.retrieve)
+        assert "hybrid_search" in source and "rerank" in source
+        assert shipped_arm_id() == "rerank"
+
+    def test_every_arm_has_both_registers_of_description(self):
+        for arm in ARM_SPECS:
+            assert arm.description and arm.technical
+            assert arm.description != arm.technical
+
+    def test_arms_tuple_is_derived_from_the_specs(self):
+        assert ARMS == tuple(ARM_SPEC_BY_ID)
+
+
+# ---------------------------------------------------------------------------
+# The measured-run document
+# ---------------------------------------------------------------------------
+
+
+class TestResultsDocument:
+    def test_carries_provenance_and_arm_metadata(self):
+        doc = _document()
+        assert doc["corpusChunks"] == 49
+        assert doc["goldenQuestions"] == 55
+        assert doc["gatingMetric"] == "hit@5"
+        assert doc["metricNames"] == ["recall@5", "hit@5", "mrr", "ndcg@5"]
+
+        bm25 = next(a for a in doc["arms"] if a["id"] == "bm25")
+        assert bm25["label"] == ARM_SPEC_BY_ID["bm25"].label
+        assert bm25["metrics"]["hit@5"] == 1.0
+        assert bm25["shipped"] is False
+
+    def test_metric_names_follow_the_cutoff(self):
+        """--top-k 10 publishes hit@10, so nothing downstream may assume @5."""
+        doc = _document(
+            results=[
+                {
+                    "arm": "bm25",
+                    "top_k": 10,
+                    "summary": {"recall@10": 0.8, "hit@10": 1.0, "mrr": 0.9, "ndcg@10": 0.8},
+                    "cases": [],
+                }
+            ],
+            top_k=10,
+            gating_metric="hit@10",
+        )
+        assert doc["metricNames"] == ["recall@10", "hit@10", "mrr", "ndcg@10"]
+
+    def test_rejects_an_arm_with_no_published_description(self):
+        with pytest.raises(ValueError, match="ARM_SPECS"):
+            _document(results=[_raw("bm25+rerank", 1.0, 0.9)])
+
+    def test_writes_json_the_frontend_can_import(self, tmp_path):
+        path = tmp_path / "nested" / "evalResults.json"
+        write_results_document(_document(), path)
+        loaded = json.loads(path.read_text())
+        assert loaded["schemaVersion"] == 1
+        assert {a["id"] for a in loaded["arms"]} == {"bm25", "rerank"}
+
+
+# ---------------------------------------------------------------------------
+# Derived claims
+# ---------------------------------------------------------------------------
+
+
+class TestVerdict:
+    def test_names_the_leader_when_the_shipped_arm_loses(self):
+        line = verdict_line(_document())
+        assert "Production runs" in line
+        assert ARM_SPEC_BY_ID["rerank"].label in line
+        assert ARM_SPEC_BY_ID["bm25"].label in line
+        assert "1.000 vs 0.909" in line
+
+    def test_says_so_when_the_shipped_arm_also_leads(self):
+        """The point of generating this line: it heals when the architecture is fixed."""
+        doc = _document(results=[_raw("bm25", 0.8, 0.7), _raw("rerank", 0.95, 0.9)])
+        line = verdict_line(doc)
+        assert "which also leads" in line
+        assert " vs " not in line
+
+    def test_reports_honestly_when_no_arm_is_flagged(self):
+        doc = _document(results=[_raw("bm25", 1.0, 0.9)])
+        for arm in doc["arms"]:
+            arm["shipped"] = False
+        assert "No arm is flagged as shipped" in verdict_line(doc)
+
+    def test_leading_arm_is_per_metric(self):
+        doc = _document(results=[_raw("bm25", 1.0, 0.5), _raw("rerank", 0.9, 0.99)])
+        assert leading_arm(doc, "hit@5")["id"] == "bm25"
+        assert leading_arm(doc, "mrr")["id"] == "rerank"
+
+
+# ---------------------------------------------------------------------------
+# Markdown block
+# ---------------------------------------------------------------------------
+
+
+class TestMarkdown:
+    def test_renders_a_row_per_arm_with_the_winner_bolded(self):
+        md = render_markdown(_document())
+        assert "| `bm25` |" in md
+        assert "| `rerank` _(shipped)_ |" in md
+        assert "**1.000**" in md  # bm25 leads hit@5
+        assert "Measured on 49 chunks and 55 golden questions" in md
+        # Column labels match the page's, so the two surfaces read identically.
+        assert "| MRR |" in md and "| mrr |" not in md
+
+    def test_replaces_only_the_marked_block(self, tmp_path):
+        path = tmp_path / "evaluation.md"
+        path.write_text(
+            f"# Doc\n\nBefore.\n\n{BEGIN_MARKER}\nstale table\n{END_MARKER}\n\nAfter.\n"
+        )
+
+        assert update_markdown_block(path, _document()) is True
+        text = path.read_text()
+        assert "stale table" not in text
+        assert text.startswith("# Doc\n\nBefore.\n")
+        assert text.endswith("After.\n")
+        assert "| `bm25` |" in text
+
+    def test_is_idempotent(self, tmp_path):
+        path = tmp_path / "evaluation.md"
+        path.write_text(f"{BEGIN_MARKER}\n{END_MARKER}\n")
+        doc = _document()
+        update_markdown_block(path, doc)
+        assert update_markdown_block(path, doc) is False
+
+    def test_missing_markers_fail_loudly(self, tmp_path):
+        """Appending a second table to a doc that already has one is worse than failing."""
+        path = tmp_path / "evaluation.md"
+        path.write_text("# Doc with no markers\n")
+        with pytest.raises(ValueError, match="markers"):
+            update_markdown_block(path, _document())

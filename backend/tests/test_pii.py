@@ -18,7 +18,7 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = BACKEND_ROOT.parent
 
 sys.path.insert(0, str(BACKEND_ROOT / "scripts"))
-from build_index import _redact_pii
+from build_index import _redact_pii  # noqa: E402  (needs the sys.path line above)
 
 # Deliberately broader than the redaction patterns in build_index.py, and the
 # asymmetry is the point. The redactor rewrites the corpus silently, so it is

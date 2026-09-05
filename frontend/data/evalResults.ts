@@ -1,86 +1,88 @@
 /**
- * Measured retrieval-eval results for the portfolio chatbot.
+ * The most recent measured run of the retrieval evaluation.
  *
- * These are real numbers, not illustrations. To refresh them after a pipeline
- * or corpus change, run the harness and copy the reported figures:
+ * `evalResults.json` is GENERATED. The `Retrieval eval` CI job runs the harness on pushes
+ * to `main`, writes the file, and commits it — see docs/adr/0001-generated-eval-results.md.
+ * Editing it by hand defeats the point: the next run overwrites it, and in the meantime the
+ * site publishes a number nothing measured.
  *
- *     make eval                                  # prints the arm table
- *     uv run python eval/run_eval.py --json out.json
- *
- * Source of the values below: the `Retrieval eval` job of Backend CI, which is
- * the environment that has the model weights available.
+ * Arm labels, descriptions and the `shipped` flag travel inside the document because the
+ * harness owns them (`backend/eval/publish.py`). Nothing here knows which arms exist, so
+ * adding or retiring one needs no change on this side.
  */
+import run from './evalResults.json'
 
 export interface EvalArm {
   /** Harness arm name, matching `--arms` in eval/run_eval.py. */
   id: string
   label: string
-  /** What this configuration actually does. */
+  /** Written for a non-specialist reader. */
   description: string
-  recallAt5: number
-  hitAt5: number
-  mrr: number
-  ndcgAt5: number
+  /** The implementation detail `description` leaves out. */
+  technical: string
+  /** True for the one arm mirroring what production actually runs. */
+  shipped: boolean
+  /** Keyed by metric name, e.g. `hit@5`. Names come from `metricNames`. */
+  metrics: Record<string, number>
 }
 
 export interface EvalRun {
-  /** Number of chunks in the indexed corpus. */
-  corpusChunks: number
-  /** Number of labelled questions in the golden set. */
-  goldenQuestions: number
+  schemaVersion: number
+  generatedAt: string
   /** Commit the run was measured on. */
   commit: string
-  /** Link to the CI job that produced these numbers. */
-  runUrl: string
+  /** The CI job that produced the numbers, when a run produced them. */
+  runUrl: string | null
+  corpusChunks: number
+  goldenQuestions: number
+  topK: number
+  /** The metric the verdict is decided on. */
+  gatingMetric: string
+  /** Metric column order, following the run's cutoff. */
+  metricNames: string[]
   arms: EvalArm[]
 }
 
-export const evalRun: EvalRun = {
-  corpusChunks: 49,
-  goldenQuestions: 55,
-  commit: 'ee674f2',
-  runUrl: 'https://github.com/dwest1507/portfolio/actions/runs/33891968483',
-  arms: [
-    {
-      id: 'bm25',
-      label: 'BM25 only',
-      description: 'Keyword search. Stemmed, stopword-filtered terms.',
-      recallAt5: 0.73,
-      hitAt5: 1.0,
-      mrr: 0.892,
-      ndcgAt5: 0.758,
-    },
-    {
-      id: 'dense',
-      label: 'Dense only',
-      description: 'FAISS semantic search over all-mpnet-base-v2 vectors.',
-      recallAt5: 0.571,
-      hitAt5: 0.818,
-      mrr: 0.688,
-      ndcgAt5: 0.588,
-    },
-    {
-      id: 'hybrid',
-      label: 'Hybrid',
-      description: 'Weighted reciprocal-rank fusion of both retrievers.',
-      recallAt5: 0.653,
-      hitAt5: 0.927,
-      mrr: 0.75,
-      ndcgAt5: 0.651,
-    },
-    {
-      id: 'rerank',
-      label: 'Hybrid + re-rank',
-      description: 'Hybrid candidates re-ordered by a cross-encoder.',
-      recallAt5: 0.652,
-      hitAt5: 0.909,
-      mrr: 0.853,
-      ndcgAt5: 0.698,
-    },
-  ],
+export const evalRun: EvalRun = run as EvalRun
+
+/** The arm scoring highest on a metric. Ties resolve to the earliest arm listed. */
+export function leadingArm(metric: string, arms: EvalArm[] = evalRun.arms): EvalArm {
+  return arms.reduce((best, arm) =>
+    (arm.metrics[metric] ?? -Infinity) > (best.metrics[metric] ?? -Infinity) ? arm : best
+  )
 }
 
-/** The arm that scored best on a given metric — used to mark the winner. */
-export function bestArmId(metric: keyof Omit<EvalArm, 'id' | 'label' | 'description'>): string {
-  return evalRun.arms.reduce((best, arm) => (arm[metric] > best[metric] ? arm : best)).id
+/** The arm mirroring production, if the run flagged one. */
+export function shippedArm(arms: EvalArm[] = evalRun.arms): EvalArm | undefined {
+  return arms.find((a) => a.shipped)
+}
+
+/**
+ * One generated sentence placing the shipped configuration against the leading one.
+ *
+ * Derived rather than written so it cannot contradict the table beside it, and so it
+ * changes on its own when the shipped configuration does. Mirrors `verdict_line()` in
+ * backend/eval/publish.py.
+ */
+export function verdictLine(run: EvalRun = evalRun): string {
+  const metric = run.gatingMetric
+  const leader = leadingArm(metric, run.arms)
+  const shipped = shippedArm(run.arms)
+  const score = (arm: EvalArm) => (arm.metrics[metric] ?? 0).toFixed(3)
+
+  if (!shipped) {
+    return `${leader.label} leads on ${metric} (${score(leader)}). No arm is flagged as shipped.`
+  }
+  if (shipped.id === leader.id) {
+    return `Production runs ${shipped.label}, which also leads on ${metric} (${score(shipped)}).`
+  }
+  return (
+    `Production runs ${shipped.label}. On the current corpus, ${leader.label} ` +
+    `leads on ${metric} (${score(leader)} vs ${score(shipped)}).`
+  )
+}
+
+/** Display name for a metric column. `mrr` is an initialism; the rest read as written. */
+export function metricLabel(metric: string): string {
+  return metric === 'mrr' ? 'MRR' : metric
 }

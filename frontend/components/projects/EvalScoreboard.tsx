@@ -1,25 +1,20 @@
-import { evalRun, bestArmId, type EvalArm } from '@/data/evalResults'
+import { evalRun, leadingArm, metricLabel, verdictLine, type EvalArm } from '@/data/evalResults'
 
-const METRICS = [
-  { key: 'hitAt5', label: 'hit@5', hint: 'Any relevant chunk in the top 5' },
-  { key: 'recallAt5', label: 'recall@5', hint: 'Share of all relevant chunks in the top 5' },
-  { key: 'mrr', label: 'MRR', hint: 'Mean reciprocal rank of the first relevant chunk' },
-  { key: 'ndcgAt5', label: 'nDCG@5', hint: 'Rank-discounted gain' },
-] as const
-
-type MetricKey = (typeof METRICS)[number]['key']
-
-function format(value: number): string {
-  return value.toFixed(3)
+function format(value: number | undefined): string {
+  return value === undefined ? '—' : value.toFixed(3)
 }
 
+/**
+ * The measured run, rendered.
+ *
+ * Every claim here is derived from `evalResults.json`: which arm leads each column, and
+ * the verdict line beneath the table. Nothing about the outcome is written by hand, so the
+ * component cannot contradict its own numbers and needs no edit when the numbers move, an
+ * arm is added, or the shipped configuration changes.
+ */
 export default function EvalScoreboard() {
-  const winners: Record<MetricKey, string> = {
-    hitAt5: bestArmId('hitAt5'),
-    recallAt5: bestArmId('recallAt5'),
-    mrr: bestArmId('mrr'),
-    ndcgAt5: bestArmId('ndcgAt5'),
-  }
+  const metrics = evalRun.metricNames
+  const winners = Object.fromEntries(metrics.map((m) => [m, leadingArm(m).id]))
 
   return (
     <figure className="my-8">
@@ -49,14 +44,13 @@ export default function EvalScoreboard() {
                 >
                   CONFIGURATION
                 </th>
-                {METRICS.map((m) => (
+                {metrics.map((m) => (
                   <th
-                    key={m.key}
+                    key={m}
                     scope="col"
-                    title={m.hint}
                     className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
                   >
-                    {m.label}
+                    {metricLabel(m)}
                   </th>
                 ))}
               </tr>
@@ -68,21 +62,31 @@ export default function EvalScoreboard() {
                   className="border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02]"
                 >
                   <th scope="row" className="px-4 py-3 align-top font-normal">
-                    <span className="block text-sm text-[#ededef]">{arm.label}</span>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-[#ededef]">{arm.label}</span>
+                      {arm.shipped && (
+                        <span className="rounded-full border border-[#0ea5e9]/30 px-2 py-px font-mono text-[8px] tracking-widest text-[#0ea5e9]">
+                          IN PRODUCTION
+                        </span>
+                      )}
+                    </span>
                     <span className="mt-0.5 block text-xs leading-relaxed text-[#8a8f98]">
                       {arm.description}
                     </span>
+                    <span className="mt-1 block font-mono text-[10px] leading-relaxed text-[#8a8f98]/50">
+                      {arm.technical}
+                    </span>
                   </th>
-                  {METRICS.map((m) => {
-                    const isBest = winners[m.key] === arm.id
+                  {metrics.map((m) => {
+                    const isBest = winners[m] === arm.id
                     return (
                       <td
-                        key={m.key}
+                        key={m}
                         className={`px-4 py-3 text-right align-top font-mono text-sm tabular-nums ${
                           isBest ? 'text-[#0ea5e9]' : 'text-[#8a8f98]'
                         }`}
                       >
-                        {format(arm[m.key])}
+                        {format(arm.metrics[m])}
                         {isBest && <span className="sr-only"> (best)</span>}
                       </td>
                     )
@@ -92,18 +96,28 @@ export default function EvalScoreboard() {
             </tbody>
           </table>
         </div>
+
+        {/* The verdict is computed from the table above it, never typed. */}
+        <div className="border-t border-white/[0.06] bg-white/[0.03] px-4 py-3">
+          <p className="text-sm leading-relaxed text-[#ededef]">{verdictLine()}</p>
+        </div>
       </div>
 
       <figcaption className="mt-3 text-xs leading-relaxed text-[#8a8f98]">
-        Best score per column in blue. Measured on{' '}
-        <a
-          href={evalRun.runUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[#0ea5e9] underline decoration-[#0ea5e9]/30 underline-offset-4 transition-all duration-150 hover:decoration-[#0ea5e9]"
-        >
-          CI run at {evalRun.commit}
-        </a>
+        Best score per column in blue. This table and the sentence above it are generated from the
+        evaluation harness — measured at{' '}
+        {evalRun.runUrl ? (
+          <a
+            href={evalRun.runUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#0ea5e9] underline decoration-[#0ea5e9]/30 underline-offset-4 transition-all duration-150 hover:decoration-[#0ea5e9]"
+          >
+            commit {evalRun.commit}
+          </a>
+        ) : (
+          <span className="font-mono">commit {evalRun.commit}</span>
+        )}
         .
       </figcaption>
     </figure>

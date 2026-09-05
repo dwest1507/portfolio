@@ -17,7 +17,7 @@ export const projects: Project[] = [
     slug: 'portfolio',
     title: 'This Portfolio',
     shortDescription:
-      'The site you are on: a RAG chatbot answering recruiter questions, with a 55-question eval suite that scores retrieval on every commit and gates CI.',
+      'The site you are on: a RAG chatbot answering recruiter questions, with an eval suite that scores retrieval on every commit, gates CI, and publishes its own results.',
     thumbnail: '',
     tags: [
       'Next.js',
@@ -32,7 +32,7 @@ export const projects: Project[] = [
       'CI/CD',
     ],
     liveUrl: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md',
-    liveLabel: 'Eval Results ↗',
+    liveLabel: 'Eval Method ↗',
     repoUrl: 'https://github.com/dwest1507/portfolio',
     featured: true,
     year: 2026,

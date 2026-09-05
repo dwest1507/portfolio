@@ -16,6 +16,7 @@ Usage:
     uv run python eval/run_eval.py --arms bm25          # no model download
     uv run python eval/run_eval.py --check              # exit 1 below thresholds
     uv run python eval/run_eval.py --json results.json  # machine-readable output
+    uv run python eval/run_eval.py --publish            # refresh the published results
 
 A chunk counts as relevant when its text contains any of the case's
 `relevant_phrases`. Labelling by phrase rather than chunk ID keeps the golden
@@ -32,9 +33,23 @@ import sys
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = BACKEND_ROOT.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
+from eval.publish import (  # noqa: E402  (needs the sys.path line above)
+    ARMS,
+    build_results_document,
+    update_markdown_block,
+    verdict_line,
+    write_results_document,
+)
+
 GOLDEN_SET_PATH = Path(__file__).resolve().parent / "golden_set.json"
+
+# Where a published run lands. Both are committed by CI; see
+# docs/adr/0001-generated-eval-results.md.
+RESULTS_PATH = REPO_ROOT / "frontend" / "data" / "evalResults.json"
+EVALUATION_DOC_PATH = REPO_ROOT / "docs" / "evaluation.md"
 
 # Regression floors for `--check`. Not targets — they sit below measured
 # performance so real regressions fail CI while ordinary noise does not.
@@ -46,10 +61,10 @@ GOLDEN_SET_PATH = Path(__file__).resolve().parent / "golden_set.json"
 # hit@5 ("did any grounding text reach the model?") is what actually determines
 # whether the LLM can answer, and MRR captures how far up the list it landed.
 #
-# The floors below are the measured BM25-only baseline rounded down. BM25 alone
-# is the weakest arm, so any arm scoring under it is a genuine regression.
-# Tighten these once the full four-arm run has been recorded — see
-# docs/evaluation.md.
+# The floors sit below measured performance with headroom for noise, so a real
+# regression fails the build while ordinary variation does not. They are floors,
+# never targets: tuning a parameter until a floor is cleared is fitting to the
+# golden set. See docs/evaluation.md.
 _FLOORS = {"hit@5": 0.85, "mrr": 0.75}
 
 # Keyed by metric name at the default cutoff. `--check` is only meaningful at
@@ -57,16 +72,19 @@ _FLOORS = {"hit@5": 0.85, "mrr": 0.75}
 # a hit@20 against a floor calibrated for hit@5.
 DEFAULT_TOP_K = 5
 
+# The metric the published verdict is decided on: "did any grounding text reach the
+# model?" is what determines whether the LLM can answer at all.
+GATING_METRIC = f"hit@{DEFAULT_TOP_K}"
+
 THRESHOLDS: dict[str, dict[str, float]] = {
     "bm25": dict(_FLOORS),
     "hybrid": dict(_FLOORS),
     "rerank": dict(_FLOORS),
-    # NOTE: "dense" is deliberately absent — the arm has never been measured
-    # (see docs/evaluation.md), so there is no honest floor to set. An ungated
-    # arm is reported as such by `--check` instead of quietly passing.
+    # NOTE: "dense" is deliberately absent. It is measured and published as a
+    # baseline for comparison, not defended as a quality bar, so it has no honest
+    # floor. An ungated arm is reported as such by `--check` rather than quietly
+    # passing.
 }
-
-ARMS = ("bm25", "dense", "hybrid", "rerank")
 
 
 def metric_names_for(top_k: int) -> list[str]:
@@ -278,7 +296,13 @@ def main() -> int:
         action="store_true",
         help="Exit non-zero if any evaluated arm falls below its threshold.",
     )
-    parser.add_argument("--json", type=Path, help="Write full results to this path.")
+    parser.add_argument("--json", type=Path, help="Write full per-case results to this path.")
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="Write the measured run to frontend/data/evalResults.json and refresh the "
+        "generated table in docs/evaluation.md. Requires every arm and the default cutoff.",
+    )
     parser.add_argument(
         "--failures",
         action="store_true",
@@ -310,6 +334,37 @@ def main() -> int:
     if args.json:
         args.json.write_text(json.dumps(results, indent=2), encoding="utf-8")
         print(f"\nWrote {args.json}")
+
+    if args.publish:
+        # A partial run would publish a table missing arms, and a non-default cutoff
+        # would publish metrics the prose around them does not describe. Both are worse
+        # than not publishing, so refuse rather than write something misleading.
+        if set(args.arms) != set(ARMS):
+            print(
+                f"\nFAIL — --publish needs every arm ({', '.join(ARMS)}), got "
+                f"{', '.join(args.arms)}. Publishing a partial run would drop rows from "
+                "the public table."
+            )
+            return 1
+        if args.top_k != DEFAULT_TOP_K:
+            print(f"\nFAIL — --publish requires --top-k {DEFAULT_TOP_K}; got {args.top_k}.")
+            return 1
+
+        document = build_results_document(
+            results,
+            corpus_chunks=len(pipeline.chunks),
+            golden_questions=len(cases),
+            top_k=args.top_k,
+            gating_metric=GATING_METRIC,
+        )
+        write_results_document(document, RESULTS_PATH)
+        changed = update_markdown_block(EVALUATION_DOC_PATH, document)
+        print(f"\nPublished {RESULTS_PATH.relative_to(REPO_ROOT)}")
+        print(
+            f"{'Updated' if changed else 'No change to'} "
+            f"{EVALUATION_DOC_PATH.relative_to(REPO_ROOT)}"
+        )
+        print(f"Verdict: {verdict_line(document)}")
 
     if args.check:
         return check_thresholds(results, args.top_k)
