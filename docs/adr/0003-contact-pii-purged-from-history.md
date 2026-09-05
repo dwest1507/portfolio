@@ -1,10 +1,12 @@
-# 3. Contact PII purged from history, and treated as already disclosed
+# 3. Contact PII removed from the tree, to be purged from history, and treated as already disclosed
 
 Date: 2026-09-05
 
 ## Status
 
-Accepted.
+Accepted. The fixture and documentation change below has shipped. The history
+rewrite and the GitHub Support request are **outstanding** — see "Remaining
+work". Until they complete, the strings are still reachable in earlier commits.
 
 ## Context
 
@@ -32,12 +34,12 @@ on the *current* tree. None of them touched:
   number from the range reserved for fiction, and an invented street address.
   Test data that has to *look* like PII must never *be* PII: a regression test is
   read by everyone who reads the repository.
-- All history was rewritten (`git filter-repo`, replacing the strings in every
-  blob on every branch and tag), and the rewritten refs force-pushed.
-- One historical `bm25.pkl` blob carried the same data as pickled tokens.
-  Byte-substitution inside a pickle corrupts it, so that blob's content was
-  replaced wholesale. Historical copies of a generated index are not worth
-  preserving.
+- History is to be rewritten with `git filter-repo`, replacing the strings in
+  every blob on every branch and tag, and the rewritten refs force-pushed.
+- One historical `bm25.pkl` blob carries the same data as pickled tokens.
+  Byte-substitution inside a pickle corrupts it, so that blob's content is
+  replaced wholesale rather than edited. Historical copies of a generated index
+  are not worth preserving.
 
 **And: the data is treated as disclosed, not recovered.** The repository was
 public throughout. A rewrite removes the strings from the surface people
@@ -51,12 +53,19 @@ reach:
 - Forks, clones, mirrors, search indexes, and anything that scraped the repo
   while the data was live.
 
+## Remaining work
+
+1. Run the rewrite and force-push every branch and tag.
+2. Ask GitHub Support to garbage-collect unreachable objects and purge the
+   `refs/pull/*` copies.
+3. Re-clone every working copy.
+
 ## Consequences
 
-- Every commit SHA changed. Existing clones must re-clone (a `git pull` on an
-  old checkout will conflict or re-introduce objects). Release tags now point at
+- Every commit SHA changes. Existing clones must re-clone (a `git pull` on an
+  old checkout will conflict or re-introduce objects). Release tags will point at
   rewritten commits, and commit links in `CHANGELOG.md` and in closed pull
-  requests resolve to SHAs that no longer exist.
+  requests will resolve to SHAs that no longer exist.
 - A GitHub Support request to garbage-collect unreachable objects and purge the
   PR refs is the remaining step. Until it completes, treat the data as reachable.
 - Because the exposure is assumed rather than hoped away: do not reuse that
