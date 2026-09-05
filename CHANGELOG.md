@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/dwest1507/portfolio/compare/portfolio-v0.3.0...portfolio-v0.4.0) (2026-09-05)
+
+
+### Features
+
+* measure retrieval quality, fix a PII disclosure, and surface the eval suite ([51e139e](https://github.com/dwest1507/portfolio/commit/51e139e69f402e01aea022dec718b685772ff179))
+
+
+### Bug Fixes
+
+* **eval:** publish only when the measurement moved ([64adaee](https://github.com/dwest1507/portfolio/commit/64adaeec4c67bc3275cf8786cf4ec3a232c84cd5))
+
 ## [0.3.0](https://github.com/dwest1507/portfolio/compare/portfolio-v0.2.0...portfolio-v0.3.0) (2026-09-04)
 
 
