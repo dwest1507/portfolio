@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/dwest1507/portfolio/compare/portfolio-v0.2.0...portfolio-v0.3.0) (2026-09-04)
+
+
+### Features
+
+* link to new baby names app ([65bfbf0](https://github.com/dwest1507/portfolio/commit/65bfbf04b6045afc48eae8e288357b50b5c4c795))
+
 ## [0.2.0](https://github.com/dwest1507/portfolio/compare/portfolio-v0.1.0...portfolio-v0.2.0) (2026-08-31)
 
 
