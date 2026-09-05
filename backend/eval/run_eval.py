@@ -220,7 +220,8 @@ def _retrievers(pipeline, top_k: int) -> dict:
     than an if/elif chain because arms come and go — see retrievers_for_arms().
 
     The re-ranking arms retrieve twice the cutoff and let the cross-encoder narrow to
-    top_k, mirroring RAGPipeline.retrieve's candidates_k/top_k split.
+    top_k. That ratio lives here now: `RAGPipeline.retrieve` no longer has a candidate
+    stage to mirror, because the arm it implements does not re-rank.
     """
 
     def reranked(retrieve):

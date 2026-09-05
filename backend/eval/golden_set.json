@@ -1,9 +1,10 @@
 {
   "description": "Retrieval ground truth for the portfolio chatbot. Each case is a question a recruiter, hiring manager, or technical interviewer might realistically ask. A retrieved chunk counts as relevant if its text contains ANY phrase in `relevant_phrases` (case-insensitive, whitespace-normalized). Matching on phrases rather than chunk IDs keeps the labels valid across re-chunking and re-indexing.",
   "splits": {
-    "description": "Every case belongs to exactly one split. `dev` is where parameters, weights and stage choices are decided; `holdout` is never looked at while deciding one, so the published numbers are not the numbers something was tuned against. Assignment is deterministic rather than hand-picked — cases sorted by sha256(\"portfolio-golden-split-v1:\" + id), the first 40% held out — so it can be recomputed and audited, and so nobody can move an inconvenient question across the line. It is recorded here rather than computed at run time because a frozen split is the whole point: recomputing it would silently reshuffle every case the day an id is edited or a question is added.",
+    "description": "Every case belongs to exactly one split. `dev` is where parameters, weights and stage choices are decided; `holdout` is never looked at while deciding one, so the published numbers are not the numbers something was tuned against. Assignment is deterministic rather than hand-picked — a case is held out when sha256(salt + ':' + id) sorts below `holdoutBelow` — so it can be recomputed and audited, and nobody can move an inconvenient question across the line. The rule is per-case and depends on nothing but the id: adding, removing or reordering questions cannot move a case that already has a split, which is what lets the recorded labels be frozen and the rule be checked at the same time. A rank-based rule (`the first 40% by hash`) could not do both — its cutoff moves with the size of the set, so every addition would reshuffle cases across the boundary and leak held-out questions into `dev`.",
     "salt": "portfolio-golden-split-v1",
-    "holdoutFraction": 0.4
+    "holdoutBelow": "5000000000000000000000000000000000000000000000000000000000000000",
+    "holdoutShare": "0.3125 of the hash space (5/16). The 55 founding cases split 33 dev / 22 holdout; the boundary was chosen as the round hash value reproducing that draw exactly, so recording it changed no label."
   },
   "cases": [
     {

@@ -124,6 +124,18 @@ class RAGPipeline:
         with open(indexes_dir / "bm25.pkl", "rb") as f:
             self.bm25: BM25Okapi = pickle.load(f)
 
+        # A BM25 index built from a different revision of chunks.json would rank
+        # positions that no longer mean what they meant when it was built. Since
+        # `sparse_search` hands those positions straight to `self.chunks[i]`, a stale
+        # pickle either raises IndexError on a live request or, worse, silently serves
+        # the text of the wrong chunk. This is the guard that used to sit on the FAISS
+        # index; it belongs on whichever index is actually served, and that is this one.
+        if self.bm25.corpus_size != len(self.chunks):
+            raise ValueError(
+                f"Index mismatch: bm25.pkl has {self.bm25.corpus_size} documents but "
+                f"chunks.json has {len(self.chunks)} chunks. Run `make build-index`."
+            )
+
         self._faiss_index: faiss.Index | None = None
         self._embedder = embedder
         self._cross_encoder = cross_encoder
@@ -138,7 +150,8 @@ class RAGPipeline:
         index before the server took traffic. It belongs here now: dense retrieval is
         no longer on the serving path, so a mismatch can no longer return the text of
         the wrong chunk to a visitor — it can only mislead the harness, which is
-        exactly who this raises for.
+        exactly who this raises for. The equivalent guard for the index that *is*
+        served stayed at construction, in `__init__`.
         """
         if self._faiss_index is None:
             import faiss

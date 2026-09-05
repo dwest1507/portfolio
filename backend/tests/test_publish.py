@@ -20,6 +20,7 @@ from eval.publish import (
     SCHEMA_VERSION,
     build_results_document,
     leading_arm,
+    leading_arm_ids,
     render_markdown,
     shipped_arm_id,
     update_markdown_block,
@@ -138,10 +139,17 @@ class TestResultsDocument:
         assert {a["id"] for a in loaded["arms"]} == {"bm25", "rerank"}
 
     def test_writes_arrows_rather_than_escapes(self, tmp_path):
-        """The published file is read by humans; \\u2192 in it is noise."""
+        """The published file is read by humans; \\u2192 in it is noise.
+
+        Anchored to whichever arm actually uses an arrow rather than to `rerank` by name,
+        so rewording one description cannot quietly turn this into a test of nothing.
+        """
+        arm = next((a for a in ARM_SPECS if "\u2192" in a.technical), None)
+        assert arm is not None, "no arm description contains an arrow for this to check"
+
         path = tmp_path / "evalResults.json"
         write_results_document(
-            _document(results=[_raw("rerank", 0.9, 0.85)]),
+            _document(results=[_raw(arm.id, 0.9, 0.85)]),
             path,
         )
         assert "\u2192" in path.read_text(encoding="utf-8")
@@ -164,6 +172,48 @@ class TestResultsDocument:
         assert written is False
         assert path.read_text(encoding="utf-8") == before
         assert document == json.loads(before)
+
+    def test_a_ci_run_replaces_a_local_one_even_when_nothing_moved(self, tmp_path):
+        """Otherwise a developer's local --publish freezes its own provenance forever.
+
+        A local run records a bare commit and no run link. If the next CI run measures
+        the same numbers, the unconditional skip would leave that unattested provenance
+        on the public page indefinitely — "measured at <sha>" with nothing to check it
+        against. A run carrying a runUrl is allowed to take over.
+        """
+        path = tmp_path / "evalResults.json"
+        local = _document()
+        local["runUrl"] = None
+        write_results_document(local, path)
+
+        from_ci = _document()
+        from_ci["runUrl"] = "https://example.test/run/7"
+        from_ci["commit"] = "ci12345"
+        document, written = write_results_document(from_ci, path)
+
+        assert written is True
+        assert document["runUrl"] == "https://example.test/run/7"
+        assert json.loads(path.read_text(encoding="utf-8"))["commit"] == "ci12345"
+
+    def test_the_takeover_happens_only_once(self, tmp_path):
+        """The replacement carries a runUrl of its own, so the next identical CI run
+        takes the ordinary "nothing to commit" branch. Otherwise every push to main
+        would commit a re-measurement that found nothing — the bug MEASURED_KEYS exists
+        to prevent."""
+        path = tmp_path / "evalResults.json"
+        local = _document()
+        local["runUrl"] = None
+        write_results_document(local, path)
+
+        first = _document()
+        first["runUrl"] = "https://example.test/run/7"
+        write_results_document(first, path)
+
+        second = _document()
+        second["runUrl"] = "https://example.test/run/8"
+        _, written = write_results_document(second, path)
+
+        assert written is False
 
     def test_a_changed_split_counts_as_a_new_measurement(self, tmp_path):
         """Identical metrics over a different sample are not the same measurement.
@@ -225,6 +275,21 @@ class TestVerdict:
         assert "which also leads" in line
         assert " vs " not in line
 
+    def test_a_tie_on_the_gating_metric_is_named_not_claimed_as_a_lead(self):
+        """The shipped arm is first in ARM_SPECS, so a positional tie-break resolves
+        every tie in production's favour. On the published run `bm25` and `bm25+rerank`
+        both take hit@5, and the sentence has to say which."""
+        doc = _document(results=[_raw("bm25", 1.0, 0.892), _raw("bm25+rerank", 1.0, 0.85)])
+        line = verdict_line(doc)
+        assert "ties" in line
+        assert ARM_SPEC_BY_ID["bm25+rerank"].label in line
+        assert "which also leads" not in line
+
+    def test_leading_arm_ids_returns_every_tied_arm(self):
+        doc = _document(results=[_raw("bm25", 1.0, 0.5), _raw("rerank", 1.0, 0.99)])
+        assert leading_arm_ids(doc, "hit@5") == ["bm25", "rerank"]
+        assert leading_arm_ids(doc, "mrr") == ["rerank"]
+
     def test_reports_honestly_when_no_arm_is_flagged(self):
         doc = _document(results=[_raw("bm25", 1.0, 0.9)])
         for arm in doc["arms"]:
@@ -253,6 +318,12 @@ class TestVerdict:
 
 
 class TestMarkdown:
+    def test_bolds_every_arm_tied_for_a_column(self):
+        """The caption says "Best score per column in bold", so it has to be every arm
+        holding the best score, not the first one listed."""
+        md = render_markdown(_document(results=[_raw("bm25", 1.0, 0.9), _raw("rerank", 1.0, 0.8)]))
+        assert md.count("**1.000**") == 2
+
     def test_renders_a_row_per_arm_with_the_winner_bolded(self):
         md = render_markdown(_document())
         assert "| `bm25` _(shipped)_ |" in md

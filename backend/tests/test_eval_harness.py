@@ -34,6 +34,13 @@ GOLDEN = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
 CASES = GOLDEN["cases"]
 
 
+def _drawn_into_holdout(case_id: str) -> bool:
+    """The documented split rule, recomputed from golden_set.json's own record of it."""
+    salt = GOLDEN["splits"]["salt"]
+    digest = hashlib.sha256(f"{salt}:{case_id}".encode()).hexdigest()
+    return digest < GOLDEN["splits"]["holdoutBelow"]
+
+
 # ---------------------------------------------------------------------------
 # Arms
 # ---------------------------------------------------------------------------
@@ -58,8 +65,8 @@ class TestArmRegistry:
         pipeline.hybrid_search.assert_not_called()
 
     def test_reranking_arms_hand_the_cross_encoder_twice_the_cutoff(self):
-        """Mirrors RAGPipeline's candidates_k/top_k split: re-ranking five candidates
-        into five slots can only reorder, never rescue."""
+        """Re-ranking five candidates into five slots can only reorder, never rescue, so
+        a re-ranking arm has to be handed more candidates than it returns."""
         pipeline = MagicMock()
         retrievers_for_arms(pipeline, top_k=5)["rerank"]("q")
         pipeline.hybrid_search.assert_called_once_with("q", top_k=10)
@@ -121,14 +128,26 @@ class TestSplits:
         also means a hand-edit would go unnoticed. Recomputing the published rule catches
         an inconvenient question quietly moved across the line.
         """
-        salt = GOLDEN["splits"]["salt"]
-        fraction = GOLDEN["splits"]["holdoutFraction"]
-        ranked = sorted(
-            CASES, key=lambda c: hashlib.sha256(f"{salt}:{c['id']}".encode()).hexdigest()
-        )
-        expected = {c["id"] for c in ranked[: round(len(CASES) * fraction)]}
+        assert {c["id"] for c in CASES if c["split"] == "holdout"} == {
+            c["id"] for c in CASES if _drawn_into_holdout(c["id"])
+        }
 
-        assert {c["id"] for c in CASES if c["split"] == "holdout"} == expected
+    def test_the_rule_cannot_move_a_case_when_the_set_grows(self):
+        """Why the boundary is a hash threshold and not "the first 40% by rank".
+
+        A rank-based cutoff moves with the size of the set, so adding one question
+        reshuffles cases across the boundary — and the test above would then demand that
+        the frozen labels be rewritten to match, quietly moving held-out questions into
+        `dev`. That is the leak the split exists to prevent, arriving through the check
+        meant to protect it. This rule reads one id at a time, so a case's split is
+        decided by its own id and nothing else.
+        """
+        before = {c["id"]: _drawn_into_holdout(c["id"]) for c in CASES}
+
+        grown = CASES + [{"id": f"hypothetical-question-{i}"} for i in range(40)]
+        after = {c["id"]: _drawn_into_holdout(c["id"]) for c in grown}
+
+        assert all(after[case_id] == was_held for case_id, was_held in before.items())
 
     def test_an_unlabelled_case_is_an_error_not_a_silent_exclusion(self):
         with pytest.raises(ValueError, match="no valid split"):

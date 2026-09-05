@@ -53,7 +53,15 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | RAG pipeline | Hybrid search returns relevant chunks (measured arm) |
 | High | RAG pipeline | Cross-encoder re-ranking improves result order (measured arm) |
 | High | RAG pipeline | A stale FAISS index still raises for the harness |
+| High | RAG pipeline | A stale BM25 index refuses to construct — it is the served one |
+| High | RAG pipeline | Boot and a request complete with `faiss`/`sentence_transformers`/`torch` unimportable (subprocess) |
 | High | RAG pipeline | Prompt construction includes context and history |
+| High | Prompt | An empty context is stated, not left as a bare `Context:` heading |
+| High | Eval harness | Every published arm has a retriever, and vice versa |
+| High | Eval harness | Only the shipped arm is gated; a run that gates nothing fails |
+| High | Eval harness | The recorded dev/holdout split matches the rule, and the rule cannot move a case when the set grows |
+| High | Eval publish | A tie on the gating metric is rendered and worded as a tie, not a lead for production |
+| High | Eval publish | A CI-attested run replaces a locally published one; the takeover happens only once |
 | Medium | Rate limiting | Exceeding 30 req/min → 429 |
 | Medium | Chunking | Correct chunk sizes with overlap |
 | High | PII guard | No phone number or street address in the committed index or any indexed source, including the project MDX |

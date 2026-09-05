@@ -83,8 +83,9 @@ ARM_SPECS: tuple[Arm, ...] = (
             "against the question to put the best one first."
         ),
         technical=(
-            "Cross-encoder re-ranking of the fused candidates. Shipped until the harness "
-            "measured it against the keyword arm: hybrid_search(candidates_k) → rerank(top_k)."
+            "Cross-encoder re-ranking of the fused candidates: hybrid_search over 2×k "
+            "candidates → cross-encoder narrows to k. Shipped until the harness measured "
+            "it against the keyword arm."
         ),
     ),
     Arm(
@@ -236,6 +237,15 @@ def write_results_document(document: dict, path: Path) -> tuple[dict, bool]:
     file — provenance included — exactly as it was, and the commit history records the
     runs where a number actually moved.
 
+    The one exception to that rule is a document with no `runUrl`. Skipping the rewrite
+    preserves provenance, which is right for a CI run replacing a CI run and wrong for the
+    first CI run replacing a local one: a developer's `--publish` records a bare commit and
+    no run link, and if the numbers do not move, that unattested provenance is what the
+    public page keeps forever. So a run that carries a `runUrl` may replace one that does
+    not, even when nothing measured changed. It happens at most once per published
+    measurement — the replacement has a `runUrl` of its own — so the "nothing to commit"
+    branch stays reachable.
+
     A file that cannot be parsed is treated as absent and overwritten; a corrupt
     published document is not worth preserving.
     """
@@ -244,7 +254,13 @@ def write_results_document(document: dict, path: Path) -> tuple[dict, bool]:
             existing = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             existing = None
-        if existing is not None and _measurement(existing) == _measurement(document):
+        # True when a CI-attested run is replacing a local one; see the docstring.
+        attests = existing is not None and not existing.get("runUrl") and bool(document["runUrl"])
+        if (
+            existing is not None
+            and not attests
+            and _measurement(existing) == _measurement(document)
+        ):
             return existing, False
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -260,8 +276,24 @@ def write_results_document(document: dict, path: Path) -> tuple[dict, bool]:
 
 
 def leading_arm(document: dict, metric: str) -> dict:
-    """The arm scoring highest on `metric`. Ties resolve to the earliest arm listed."""
+    """The arm scoring highest on `metric`. Ties resolve to the earliest arm listed.
+
+    Use `leading_arm_ids` wherever a tie should be visible. The shipped arm is first in
+    ARM_SPECS, so a positional tie-break here silently resolves every tie in production's
+    favour — which is the one direction this write-up cannot afford to round.
+    """
     return max(document["arms"], key=lambda a: a["metrics"].get(metric, float("-inf")))
+
+
+def leading_arm_ids(document: dict, metric: str) -> list[str]:
+    """Every arm tied for the best score on `metric`, in listed order.
+
+    A tie is a real result and gets rendered as one. `bm25` and `bm25+rerank` currently
+    both take hit@5 = 1.000; highlighting only the first would report the arm that ships
+    as beating an arm it merely matched.
+    """
+    best = leading_arm(document, metric)["metrics"].get(metric, float("-inf"))
+    return [a["id"] for a in document["arms"] if a["metrics"].get(metric) == best]
 
 
 def verdict_line(document: dict) -> str:
@@ -274,6 +306,7 @@ def verdict_line(document: dict) -> str:
     metric = document["gatingMetric"]
     shipped = next((a for a in document["arms"] if a["shipped"]), None)
     leader = leading_arm(document, metric)
+    leaders = leading_arm_ids(document, metric)
 
     if shipped is None:
         return (
@@ -281,10 +314,17 @@ def verdict_line(document: dict) -> str:
             f"({leader['metrics'][metric]:.3f}). No arm is flagged as shipped."
         )
 
-    if shipped["id"] == leader["id"]:
+    if shipped["id"] in leaders:
+        # A tie is named rather than rounded into a win. The shipped arm is listed
+        # first, so "leads" would otherwise be how every tie reads.
+        others = [a["label"] for a in document["arms"] if a["id"] in leaders and a is not shipped]
+        score = f"{shipped['metrics'][metric]:.3f}"
+        if not others:
+            return f"Production runs {shipped['label']}, which also leads on {metric} ({score})."
+        # Arm labels contain commas, so the tied names go last rather than mid-sentence.
         return (
-            f"Production runs {shipped['label']}, which also leads on {metric} "
-            f"({shipped['metrics'][metric]:.3f})."
+            f"Production runs {shipped['label']}, tied for the lead on {metric} "
+            f"({score}) with {', '.join(others)}."
         )
 
     return (
@@ -310,14 +350,16 @@ def render_markdown(document: dict) -> str:
     header = "| Arm | " + " | ".join(metric_label(m) for m in metrics) + " |"
     align = "|-----|" + "|".join(["---------:"] * len(metrics)) + "|"
 
-    bests = {m: leading_arm(document, m)["id"] for m in metrics}
+    # Every arm tied for a column's best is bolded, not just the first one listed —
+    # "Best score per column in bold" has to mean it.
+    bests = {m: set(leading_arm_ids(document, m)) for m in metrics}
 
     rows = []
     for arm in document["arms"]:
         cells = []
         for m in metrics:
             value = f"{arm['metrics'][m]:.3f}"
-            cells.append(f"**{value}**" if bests[m] == arm["id"] else value)
+            cells.append(f"**{value}**" if arm["id"] in bests[m] else value)
         shipped = " _(shipped)_" if arm["shipped"] else ""
         rows.append(f"| `{arm['id']}`{shipped} | " + " | ".join(cells) + " |")
 

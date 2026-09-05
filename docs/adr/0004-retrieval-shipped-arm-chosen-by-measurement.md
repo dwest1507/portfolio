@@ -72,10 +72,12 @@ target anything is tuned toward, so there is no leakage to protect against and t
 sample makes them less twitchy. The two invocations in `scripts/backend-eval.sh` measure
 different samples deliberately.
 
-Assignment is deterministic — cases sorted by `sha256(salt + ":" + id)`, the first 40% held
-out — and recorded in `golden_set.json` rather than recomputed per run, because a rule
-evaluated at run time would reshuffle every case the day a question is added. Recording it
-makes it hand-editable, so a test recomputes the rule and fails if a question was moved.
+Assignment is deterministic — a case is held out when `sha256(salt + ":" + id)` sorts below
+the `holdoutBelow` boundary recorded in `golden_set.json` — and the labels are recorded
+rather than recomputed per run. The rule reads one id at a time, which is what lets both be
+true at once: a test can recompute it to catch a question hand-edited across the line,
+without that test ever demanding the frozen labels change. A rank-based cutoff ("the first
+40%") could not do both, because its boundary moves with the size of the set.
 
 ## Consequences
 

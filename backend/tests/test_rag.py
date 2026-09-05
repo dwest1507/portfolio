@@ -204,6 +204,29 @@ def test_a_stale_dense_index_still_raises_for_the_harness(fake_indexes):
         _ = pipeline.faiss_index
 
 
+def test_a_stale_bm25_index_refuses_to_construct(fake_indexes):
+    """The served index gets the guard the dense index used to have.
+
+    `sparse_search` hands BM25's ranked positions straight to `self.chunks[i]`, so a
+    pickle built from a different revision of chunks.json either raises IndexError on a
+    live request or serves the text of the wrong chunk with no error at all. Neither
+    should be reachable: refuse at construction, the way the FAISS check used to.
+    """
+    from rank_bm25 import BM25Okapi
+
+    from app.rag.tokenize import tokenize
+
+    indexes_dir, chunks = fake_indexes
+    stale = BM25Okapi([tokenize(c["text"]) for c in chunks] + [["extra", "document"]])
+    with open(indexes_dir / "bm25.pkl", "wb") as f:
+        pickle.dump(stale, f)
+
+    from app.rag.pipeline import RAGPipeline
+
+    with pytest.raises(ValueError, match="bm25.pkl has"):
+        RAGPipeline(indexes_dir=indexes_dir)
+
+
 def test_prompt_includes_context_and_history(fake_indexes):
     """build_messages includes context in the system message and preserves history order."""
     from app.llm import SYSTEM_PROMPT, Message, build_messages
@@ -282,6 +305,11 @@ def test_the_pipeline_module_imports_without_the_eval_only_libraries():
     every test here still passed — the dev group has both installed. Run in a subprocess
     with the two libraries made unimportable, which is the only way to reproduce the
     production environment from inside a dev one.
+
+    The subprocess walks the whole boot path, not just the imports: `app.main`'s lifespan
+    calls `get_pipeline()`, and a request calls `retrieve()`. Importing the module alone
+    would miss a lazy `import faiss` inside `RAGPipeline.__init__` — which is exactly the
+    shape of mistake this guards, and would fail only once Railway ran it.
     """
     import subprocess
     import sys
@@ -297,6 +325,12 @@ class Guard:
 
 sys.meta_path.insert(0, Guard())
 import app.main  # noqa: F401
+
+# The startup path (app.main's lifespan) and the request path, against the real
+# committed indexes — both must complete with the ML stack unimportable.
+from app.rag.pipeline import get_pipeline
+
+get_pipeline().retrieve("What does David do?")
 print("ok")
 """
     result = subprocess.run(

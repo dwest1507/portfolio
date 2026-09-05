@@ -45,12 +45,21 @@ that flips can flip back on evidence rather than on a rewrite.
 `holdout` is what `--publish` reports, so no number on the public page is the score of a
 configuration that was chosen using those same questions. `--split` selects the portion.
 
-Assignment is deterministic rather than hand-picked — cases sorted by
-`sha256(salt + ":" + id)`, the first 40% held out — and *recorded* in `golden_set.json`
-rather than recomputed at run time, because a frozen split is the entire point: a rule
-evaluated at run time would silently reshuffle every case the day a question is added.
-Recording it also makes it editable by hand, so `test_the_recorded_split_matches_the_documented_rule`
-recomputes the rule and fails if a question was quietly moved across the line.
+Assignment is deterministic rather than hand-picked: a case is held out when
+`sha256(salt + ":" + id)` sorts below the `holdoutBelow` boundary recorded in
+`golden_set.json`. The labels are *recorded* in the file rather than recomputed at run
+time, because a frozen split is the entire point — and the rule is written so the two can
+never disagree. It reads one id at a time, so a case's portion depends on its own id and
+nothing else; adding, removing or renaming other questions cannot move it.
+
+That is why the boundary is a hash threshold and not "the first 40% by rank". A rank-based
+cutoff moves with the size of the set, so every question added would push some case across
+the line — and `test_the_recorded_split_matches_the_documented_rule`, which recomputes the
+rule to catch a question quietly hand-edited across it, would then be the thing demanding
+that the frozen labels be rewritten, leaking held-out questions into `dev` through the
+check meant to prevent exactly that. The boundary in the file (`0x5…`, 5/16 of the hash
+space) is the round value that reproduces the original 33/22 draw exactly, so recording it
+moved no question.
 
 The trade is sample size. 22 questions move hit@5 in steps of about 0.045, so the
 published numbers are coarser than a run over all 55 would be. That is the price of them

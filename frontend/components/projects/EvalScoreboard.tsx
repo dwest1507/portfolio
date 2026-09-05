@@ -1,6 +1,6 @@
 import {
   evalRun,
-  leadingArm,
+  leadingArmIds,
   metricLabel,
   sampleLabel,
   verdictLine,
@@ -21,7 +21,9 @@ function format(value: number | undefined): string {
  */
 export default function EvalScoreboard() {
   const metrics = evalRun.metricNames
-  const winners = Object.fromEntries(metrics.map((m) => [m, leadingArm(m).id]))
+  // Sets, not single ids: every arm tied for a column's best is highlighted, so the
+  // caption's "Best score per column in blue" stays true when two arms tie.
+  const winners = Object.fromEntries(metrics.map((m) => [m, new Set(leadingArmIds(m))]))
 
   return (
     <figure className="my-8">
@@ -84,7 +86,7 @@ export default function EvalScoreboard() {
                     </span>
                   </th>
                   {metrics.map((m) => {
-                    const isBest = winners[m] === arm.id
+                    const isBest = winners[m].has(arm.id)
                     return (
                       <td
                         key={m}

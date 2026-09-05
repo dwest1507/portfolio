@@ -29,7 +29,8 @@ _Avoid_: Test set, eval set, question bank
 One of the two portions the Golden Set is divided into. Decisions are made against the
 development portion; the held-out portion is measured but never consulted while making
 one, and is what a published Measured Run reports. A Split is a property of a case,
-frozen in the Golden Set rather than computed per run.
+frozen in the Golden Set rather than computed per run, and decided by that case's id
+alone — so growing the Golden Set never moves a case that already has one.
 _Avoid_: Fold, sample, train/test, validation set
 
 **Relevant Phrase**:

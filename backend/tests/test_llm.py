@@ -7,7 +7,7 @@ import pytest
 from dotenv import dotenv_values
 from groq import AsyncGroq
 
-from app.llm import build_messages, generate_stream
+from app.llm import NO_CONTEXT, SYSTEM_PROMPT, build_messages, generate_stream
 
 
 @pytest.mark.asyncio
@@ -59,3 +59,29 @@ async def test_configured_model_exists_at_groq():
     messages = build_messages("David is an engineer.", [], "Hi")
     tokens = [t async for t in generate_stream(messages, client=AsyncGroq(api_key=key))]
     assert "".join(tokens).strip()
+
+
+# ---------------------------------------------------------------------------
+# Empty retrieval
+# ---------------------------------------------------------------------------
+
+
+def test_an_empty_context_is_stated_rather_than_left_blank():
+    """BM25-only retrieval can return nothing; the prompt has to say so.
+
+    `RAGPipeline.retrieve` returns no chunks when the question shares no term with the
+    corpus, which is deliberate. What is not safe is rendering that as a bare "Context:"
+    heading: the model is instructed to answer from the context alone and then handed an
+    empty section, with the conversation history still in the window as the only material
+    left to draw on. Naming the emptiness is what turns "say so honestly" into an
+    instruction the model can follow.
+    """
+    system = build_messages("", [], "What is the capital of France?")[0]["content"]
+
+    assert NO_CONTEXT in system
+    assert not system.rstrip().endswith("Context:")
+
+
+def test_history_is_marked_as_history_not_context():
+    """The instruction that makes an empty context safe when prior turns are present."""
+    assert "history, not context" in SYSTEM_PROMPT

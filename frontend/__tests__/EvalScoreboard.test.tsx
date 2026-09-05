@@ -4,6 +4,7 @@ import EvalScoreboard from '@/components/projects/EvalScoreboard'
 import {
   evalRun,
   leadingArm,
+  leadingArmIds,
   sampleLabel,
   shippedArm,
   verdictLine,
@@ -110,7 +111,10 @@ describe('EvalScoreboard', () => {
 
   it('marks the winning score in each column for screen readers', () => {
     render(<EvalScoreboard />)
-    expect(screen.getAllByText('(best)')).toHaveLength(evalRun.metricNames.length)
+    // One marker per arm tied for a column's best, not one per column: two arms
+    // currently tie on hit@5, and the sighted reader sees both highlighted.
+    const expected = evalRun.metricNames.reduce((n, m) => n + leadingArmIds(m).length, 0)
+    expect(screen.getAllByText('(best)')).toHaveLength(expected)
   })
 })
 
@@ -129,6 +133,18 @@ describe('leadingArm', () => {
   })
 })
 
+describe('leadingArmIds', () => {
+  it('returns every arm tied for the best score', () => {
+    const run = makeRun()
+    run.arms[1].metrics['hit@5'] = 1.0
+    expect(leadingArmIds('hit@5', run.arms)).toEqual(['bm25', 'rerank'])
+  })
+
+  it('returns the single winner when there is no tie', () => {
+    expect(leadingArmIds('mrr', makeRun().arms)).toEqual(['rerank'])
+  })
+})
+
 describe('verdictLine', () => {
   it('names both configurations when the shipped arm is not winning', () => {
     const line = verdictLine(makeRun())
@@ -144,6 +160,16 @@ describe('verdictLine', () => {
     run.arms[1].metrics['hit@5'] = 1.0
     run.arms[0].metrics['hit@5'] = 0.8
     expect(verdictLine(run)).toBe('Production runs Re-ranked, which also leads on hit@5 (1.000).')
+  })
+
+  it('calls a tie a tie rather than a win for production', () => {
+    // The shipped arm is listed first, so a positional tie-break would report every
+    // tie as a lead. Production must not be flattered by list order.
+    const run = makeRun()
+    run.arms[1].metrics['hit@5'] = 1.0
+    expect(verdictLine(run)).toBe(
+      'Production runs Re-ranked, tied for the lead on hit@5 (1.000) with Keyword only.'
+    )
   })
 
   it('says so plainly when no arm is flagged as shipped', () => {

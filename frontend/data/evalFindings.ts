@@ -11,8 +11,11 @@
  * publishing a finding as MDX would change the corpus that produces the next finding. See
  * docs/adr/0002-findings-log-outside-the-corpus.md.
  *
- * Each metric delta must name the corpus it was measured on. Values from different corpora
- * are not comparable, which is also why this log exists instead of a trend chart.
+ * Each metric delta must name the corpus AND the sample it was measured on. Values from
+ * different corpora are not comparable, which is also why this log exists instead of a
+ * trend chart — and since the scoreboard began publishing the held-out portion only, a
+ * delta quoted over the whole set sits beside a table of different numbers unless it says
+ * which sample it came from.
  */
 
 export interface MetricMove {
@@ -20,7 +23,7 @@ export interface MetricMove {
   metric: string
   before: number
   after: number
-  /** Which arm moved, in the language the scoreboard uses. */
+  /** Which arm moved, in the language the scoreboard uses, and over which sample. */
   arm: string
 }
 
@@ -46,8 +49,10 @@ export const findings: Finding[] = [
     date: '2026-09-05',
     title: 'Plain keyword search beat the hybrid pipeline, so the architecture was deleted',
     observed:
-      'On the 73-chunk corpus, BM25 alone scored hit@5 0.982 against the shipped hybrid + ' +
-      'cross-encoder pipeline’s 0.909, and led every other metric too. The tempting ' +
+      'On the 73-chunk corpus, across all 55 labelled questions, BM25 alone scored hit@5 ' +
+      '0.982 against the shipped hybrid + cross-encoder pipeline’s 0.909, and led every ' +
+      'other metric too. (The table above reports the held-out 22 only, so its numbers ' +
+      'are the same finding on a smaller sample.) The tempting ' +
       'reaction was to retune the fusion weights, which would have been the wrong ' +
       'experiment: under reciprocal-rank fusion, driving the dense weight toward zero just ' +
       'converges on BM25’s ordering, so “find the optimal ratio” and “turn dense off” are ' +
@@ -73,7 +78,12 @@ export const findings: Finding[] = [
       'measurement must not be scored by the questions that chose it. The container image ' +
       'went from 17.2GB to 544MB, most of it not model weights but the CUDA libraries that ' +
       'torch pulls in behind the embedding model, shipped into a container with no GPU.',
-    move: { metric: 'hit@5', before: 0.909, after: 0.982, arm: 'shipped configuration' },
+    move: {
+      metric: 'hit@5',
+      before: 0.909,
+      after: 0.982,
+      arm: 'shipped configuration, all 55 questions',
+    },
     href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#the-pipeline-lost-to-plain-keyword-search',
   },
   {
