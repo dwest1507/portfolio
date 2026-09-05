@@ -18,7 +18,7 @@ export const projects: Project[] = [
     title: 'This Portfolio',
     shortDescription:
       'The site you are on: a RAG chatbot answering recruiter questions, with an eval suite that scores retrieval on every commit, gates CI, and publishes its own results.',
-    thumbnail: '',
+    thumbnail: '/projects/portfolio.jpeg',
     tags: [
       'Next.js',
       'TypeScript',
