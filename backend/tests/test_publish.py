@@ -281,7 +281,7 @@ class TestVerdict:
         both take hit@5, and the sentence has to say which."""
         doc = _document(results=[_raw("bm25", 1.0, 0.892), _raw("bm25+rerank", 1.0, 0.85)])
         line = verdict_line(doc)
-        assert "ties" in line
+        assert "tied for the lead" in line
         assert ARM_SPEC_BY_ID["bm25+rerank"].label in line
         assert "which also leads" not in line
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-05T16:32:39+00:00",
-  "commit": "c2d283e",
+  "generatedAt": "2026-09-05T20:29:42+00:00",
+  "commit": "38ea92e",
   "runUrl": null,
   "corpusChunks": 73,
   "goldenQuestions": 22,
@@ -58,7 +58,7 @@
       "id": "rerank",
       "label": "Both combined, then re-ranked",
       "description": "Takes the merged list and has a second, slower model re-read each candidate against the question to put the best one first.",
-      "technical": "Cross-encoder re-ranking of the fused candidates. Shipped until the harness measured it against the keyword arm: hybrid_search(candidates_k) → rerank(top_k).",
+      "technical": "Cross-encoder re-ranking of the fused candidates: hybrid_search over 2×k candidates → cross-encoder narrows to k. Shipped until the harness measured it against the keyword arm.",
       "shipped": false,
       "metrics": {
         "recall@5": 0.6217,
