@@ -34,7 +34,14 @@ export interface EvalRun {
   /** The CI job that produced the numbers, when a run produced them. */
   runUrl: string | null
   corpusChunks: number
+  /** How many questions this run measured — the size of `split`, not of the whole set. */
   goldenQuestions: number
+  /**
+   * Which portion of the golden set was measured: `holdout` for a published run.
+   * Configurations are chosen on the `dev` portion and reported on this one, so a number
+   * on the page is never the number something was tuned against.
+   */
+  split: string
   topK: number
   /** The metric the verdict is decided on. */
   gatingMetric: string
@@ -45,11 +52,29 @@ export interface EvalRun {
 
 export const evalRun: EvalRun = run as EvalRun
 
-/** The arm scoring highest on a metric. Ties resolve to the earliest arm listed. */
+/**
+ * The arm scoring highest on a metric. Ties resolve to the earliest arm listed.
+ *
+ * Use `leadingArmIds` wherever a tie should be visible. The shipped arm is listed first,
+ * so a positional tie-break resolves every tie in production's favour — the one direction
+ * this page cannot afford to round.
+ */
 export function leadingArm(metric: string, arms: EvalArm[] = evalRun.arms): EvalArm {
   return arms.reduce((best, arm) =>
     (arm.metrics[metric] ?? -Infinity) > (best.metrics[metric] ?? -Infinity) ? arm : best
   )
+}
+
+/**
+ * Every arm tied for the best score on a metric, in listed order.
+ *
+ * Mirrors `leading_arm_ids()` in backend/eval/publish.py. A tie is a real result: `bm25`
+ * and `bm25+rerank` currently both take hit@5, and highlighting only the first would show
+ * the shipped arm beating one it merely matched.
+ */
+export function leadingArmIds(metric: string, arms: EvalArm[] = evalRun.arms): string[] {
+  const best = leadingArm(metric, arms).metrics[metric] ?? -Infinity
+  return arms.filter((a) => a.metrics[metric] === best).map((a) => a.id)
 }
 
 /** The arm mirroring production, if the run flagged one. */
@@ -67,14 +92,23 @@ export function shippedArm(arms: EvalArm[] = evalRun.arms): EvalArm | undefined 
 export function verdictLine(run: EvalRun = evalRun): string {
   const metric = run.gatingMetric
   const leader = leadingArm(metric, run.arms)
+  const leaders = leadingArmIds(metric, run.arms)
   const shipped = shippedArm(run.arms)
   const score = (arm: EvalArm) => (arm.metrics[metric] ?? 0).toFixed(3)
 
   if (!shipped) {
     return `${leader.label} leads on ${metric} (${score(leader)}). No arm is flagged as shipped.`
   }
-  if (shipped.id === leader.id) {
-    return `Production runs ${shipped.label}, which also leads on ${metric} (${score(shipped)}).`
+  if (leaders.includes(shipped.id)) {
+    // A tie is named rather than rounded into a win: the shipped arm is listed first,
+    // so "leads" is otherwise how every tie would read.
+    const others = run.arms.filter((a) => leaders.includes(a.id) && a.id !== shipped.id)
+    if (!others.length) {
+      return `Production runs ${shipped.label}, which also leads on ${metric} (${score(shipped)}).`
+    }
+    // Arm labels contain commas, so the tied names go last rather than mid-sentence.
+    const named = others.map((a) => a.label).join(', ')
+    return `Production runs ${shipped.label}, tied for the lead on ${metric} (${score(shipped)}) with ${named}.`
   }
   return (
     `Production runs ${shipped.label}. On the current corpus, ${leader.label} ` +
@@ -85,4 +119,18 @@ export function verdictLine(run: EvalRun = evalRun): string {
 /** Display name for a metric column. `mrr` is an initialism; the rest read as written. */
 export function metricLabel(metric: string): string {
   return metric === 'mrr' ? 'MRR' : metric
+}
+
+/**
+ * How to describe the measured sample in one phrase.
+ *
+ * Derived from the run rather than written into the page, because which portion gets
+ * published is the harness's decision (`PUBLISHED_SPLIT` in eval/run_eval.py). A page
+ * that hardcoded "held-out" would keep saying it after that decision changed.
+ */
+export function sampleLabel(run: EvalRun = evalRun): string {
+  const noun = run.goldenQuestions === 1 ? 'question' : 'questions'
+  return run.split === 'holdout'
+    ? `${run.goldenQuestions} held-out ${noun}`
+    : `${run.goldenQuestions} ${noun}`
 }

@@ -62,10 +62,13 @@ would install dependencies and download models at runtime. Build and deploy sett
 live in the dashboard; see [deployment.md](deployment.md#step-2--deploy-the-backend-railway):
 
 - `python:3.14-slim` + `uv sync --frozen --no-dev` from `uv.lock`
-- Embedding + cross-encoder models are **baked into the image**, so cold starts never
-  download from Hugging Face
-- FAISS/BM25 indexes are copied from `backend/indexes/` (build them with `make build-index`
-  and commit before deploying)
+- **No ML stack.** Retrieval is BM25, so the image carries neither `faiss-cpu` nor
+  `sentence-transformers` — they are in the `dev` group, which `--no-dev` skips. That took
+  the built image from 17.2GB to 544MB: 535MB of baked model weights, and far more than
+  that in `torch`'s CUDA wheels. See [evaluation.md](evaluation.md) for why the stages that
+  needed them were removed
+- Indexes are copied from `backend/indexes/` (build them with `make build-index` and commit
+  before deploying)
 - Runs as a non-root user; Railway health-checks `/api/health` with a 300s startup budget
 
 ## Releases

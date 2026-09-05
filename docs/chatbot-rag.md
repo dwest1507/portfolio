@@ -48,7 +48,19 @@ make build-index
    query terms always agree.
 5. **Save** — Writes `backend/indexes/faiss.index`, `bm25.pkl`, and `chunks.json`
 
-The indexes are committed to the repo and loaded into memory at FastAPI startup.
+The indexes are committed to the repo. `chunks.json` and `bm25.pkl` are loaded into memory
+at FastAPI startup; `faiss.index` is not, because the served pipeline does not use it —
+steps 3 and 4's vector half exist for the evaluation harness. See
+[evaluation.md](evaluation.md).
+
+The three artefacts are built together and must stay together. `RAGPipeline.__init__`
+refuses to construct when `bm25.pkl` and `chunks.json` disagree on how many documents
+exist, because BM25 returns *positions* that `sparse_search` hands straight to
+`chunks[i]`: a stale pickle either raises on a live request or, worse, serves the text of
+the wrong chunk with no error at all. The equivalent check for `faiss.index` moved to the
+lazy loader when dense retrieval left the serving path — a stale dense index can now only
+mislead the harness, which is who it raises for. Rebuild all three with `make build-index`
+and commit them together.
 
 ## Runtime Pipeline (`POST /api/chat`)
 
@@ -56,25 +68,36 @@ The indexes are committed to the repo and loaded into memory at FastAPI startup.
 User query
     │
     ▼
-Embed query (all-mpnet-base-v2)
+BM25 keyword search
+(shared stemmed, stopword-filtered tokenizer)
+Top 5 chunks selected — fewer if the query
+shares no term with any chunk
     │
-    ├──► FAISS semantic search  ─┐
-    │    (top-k candidates)      ├──► Weighted RRF fusion
-    └──► BM25 keyword search   ──┘     (0.7 semantic / 0.3 keyword)
-                                 │
-                                 ▼
-                    Cross-encoder re-ranking
-                    (ms-marco-MiniLM-L-6-v2)
-                    Top 5 chunks selected
-                                 │
-                                 ▼
-                    Prompt construction
-                    (system + context + history)
-                                 │
-                                 ▼
-                    Groq API (GROQ_MODEL env var)
-                    Streaming SSE response
+    ▼
+Prompt construction
+(system + context + history)
+    │
+    ▼
+Groq API (GROQ_MODEL env var)
+Streaming SSE response
 ```
+
+No embedding model, no vector search, no re-ranker. The pipeline used to run all three;
+the evaluation harness measured each against plain BM25 on this corpus and none of them
+won, so they were removed from the serving path. `RAGPipeline` still implements them and
+the harness still measures them on every run — see [evaluation.md](evaluation.md) and
+[ADR-0004](adr/0004-retrieval-shipped-arm-chosen-by-measurement.md).
+
+An empty context is a deliberate outcome rather than a bug: the system prompt tells the
+model to say so honestly when the context does not contain the answer, which is a better
+failure than five irrelevant chunks to sound confident from.
+
+It is *stated*, not merely left blank. `build_messages` substitutes
+`(No relevant context was retrieved for this question.)` for an empty context, and the
+system prompt names the conversation history as history rather than context. Both exist
+for the same reason: a bare `Context:` heading tells a model instructed to use only the
+context that there is nothing to use, while leaving up to ten prior turns in the window as
+the one remaining source of material to answer from.
 
 ### Prompt Template
 
@@ -83,9 +106,11 @@ System: You are David West's AI assistant on his portfolio website.
 Answer questions about David's experience, skills, and projects using
 ONLY the provided context. If the context doesn't contain the answer,
 say so honestly. Be concise and professional. Do not make up information.
+Earlier turns of the conversation are history, not context: never answer
+from them when the context below is empty.
 
 Context:
-{top 5 re-ranked chunks}
+{top 5 retrieved chunks, or "(No relevant context was retrieved for this question.)"}
 
 Conversation history:
 {last 10 messages}
@@ -106,11 +131,14 @@ Conversation history:
 
 ## Models Used
 
-| Purpose | Model |
-|---------|-------|
-| Embedding | `sentence-transformers/all-mpnet-base-v2` |
-| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
-| LLM | `openai/gpt-oss-120b` via Groq, overridable with `GROQ_MODEL` |
+| Purpose | Model | Where it runs |
+|---------|-------|---------------|
+| LLM | `openai/gpt-oss-120b` via Groq, overridable with `GROQ_MODEL` | Production |
+| Embedding | `sentence-transformers/all-mpnet-base-v2` | Index build + eval only |
+| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Eval only |
+
+Neither model is installed in the production image: `faiss-cpu` and `sentence-transformers`
+live in the `dev` dependency group, which the Dockerfile's `uv sync --no-dev` skips.
 
 ## Environment Variables
 

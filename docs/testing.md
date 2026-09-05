@@ -48,9 +48,20 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | `POST /api/chat` | Empty message → 400 |
 | High | `POST /api/chat` | Message > 500 chars → 400 |
 | High | `POST /api/chat` | Groq API error → 500 with safe message |
-| High | RAG pipeline | Hybrid search returns relevant chunks |
-| High | RAG pipeline | Cross-encoder re-ranking improves result order |
+| High | RAG pipeline | Served retrieval works with no model weights and no FAISS index present |
+| High | RAG pipeline | An off-topic query returns no context rather than the least-bad chunks |
+| High | RAG pipeline | Hybrid search returns relevant chunks (measured arm) |
+| High | RAG pipeline | Cross-encoder re-ranking improves result order (measured arm) |
+| High | RAG pipeline | A stale FAISS index still raises for the harness |
+| High | RAG pipeline | A stale BM25 index refuses to construct — it is the served one |
+| High | RAG pipeline | Boot and a request complete with `faiss`/`sentence_transformers`/`torch` unimportable (subprocess) |
 | High | RAG pipeline | Prompt construction includes context and history |
+| High | Prompt | An empty context is stated, not left as a bare `Context:` heading |
+| High | Eval harness | Every published arm has a retriever, and vice versa |
+| High | Eval harness | Only the shipped arm is gated; a run that gates nothing fails |
+| High | Eval harness | The recorded dev/holdout split matches the rule, and the rule cannot move a case when the set grows |
+| High | Eval publish | A tie on the gating metric is rendered and worded as a tie, not a lead for production |
+| High | Eval publish | A CI-attested run replaces a locally published one; the takeover happens only once |
 | Medium | Rate limiting | Exceeding 30 req/min → 429 |
 | Medium | Chunking | Correct chunk sizes with overlap |
 | High | PII guard | No phone number or street address in the committed index or any indexed source, including the project MDX |
@@ -58,6 +69,10 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | Tokenizer | Stemming unifies "engineer"/"engineering"; stopwords dropped; "R" survives |
 | High | RRF fusion | Agreement between retrievers wins; weights shift order; no item zeroed; a BM25-only hit reaches the candidate set |
 | Medium | Eval metrics | recall@k, hit@k, MRR, nDCG@k computed correctly |
+| High | Eval arms | Every published arm has a retriever and vice versa; `bm25+rerank` never touches the dense stage |
+| High | Eval gate | The shipped arm is what is gated; a run that gates nothing fails; a single split cannot be gated |
+| High | Golden splits | dev and holdout partition the set, and the recorded split still matches the documented hash rule |
+| High | Published run | The published document reports the held-out split, and a changed split counts as a new measurement |
 | Medium | `GET /api/health` | Returns 200 `{ "status": "ok" }` |
 
 Test files are in `backend/tests/`. Fixtures (including mock indexes) are defined
@@ -108,5 +123,9 @@ golden set scored on hit@5, recall@5, MRR, and nDCG@5, and gated in CI:
 make eval        # all arms (downloads ~500MB of models on first run)
 make eval-fast   # BM25 arm only — no model download
 ```
+
+The golden set is split 33 dev / 22 held-out. Decisions are made against `dev`; the
+published table reports `holdout`, so no number on the public page is the score of a
+configuration chosen using those same questions.
 
 See [evaluation.md](evaluation.md) for method, current numbers, and thresholds.

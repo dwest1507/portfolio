@@ -5,16 +5,20 @@
 ```
 Browser → Next.js (Vercel)                     Python FastAPI (Railway)
             ├── Static pages (SSG)               ├── POST /api/chat
-            │   ├── Home (hero, projects,        │     ├── Embed query (sentence-transformers)
-            │   │   about, contact)              │     ├── Hybrid search (FAISS + BM25)
-            │   └── Project detail pages (MDX)   │     ├── Reciprocal-rank fusion
-            ├── /api/chat (proxy) ─────────────→ │     ├── Cross-encoder re-ranking
-            │     (forwards to FastAPI)          │     ├── Prompt construction
-            └── Static assets                    │     └── Groq LLM (streaming)
-                                                 ├── FAISS index (pre-built, loaded at startup)
-                                                 ├── BM25 index (stemmed, stopword-filtered)
+            │   ├── Home (hero, projects,        │     ├── BM25 keyword search
+            │   │   about, contact)              │     ├── Top 5 chunks as context
+            │   └── Project detail pages (MDX)   │     ├── Prompt construction
+            ├── /api/chat (proxy) ─────────────→ │     └── Groq LLM (streaming)
+            │     (forwards to FastAPI)          ├── BM25 index (stemmed, stopword-filtered)
+            └── Static assets                    ├── chunks.json (the corpus)
                                                  └── Rate limiting (in-memory + Groq backstop)
 ```
+
+The served path carries no embedding model, no vector index and no re-ranker. It used to
+carry all three; the evaluation harness measured them against plain BM25 on this corpus
+and none of them won, so they were removed from production. They are still implemented in
+`app/rag/pipeline.py` and still measured on every eval run — see
+[docs/evaluation.md](evaluation.md) for the numbers and the reasoning.
 
 ## Tech Stack
 
@@ -25,8 +29,9 @@ Browser → Next.js (Vercel)                     Python FastAPI (Railway)
 | Styling | Tailwind CSS v4 |
 | Project Content | MDX (`@next/mdx`) |
 | Backend Framework | Python FastAPI |
-| RAG Pipeline | FAISS + BM25 fused by weighted reciprocal-rank fusion, sentence-transformers, cross-encoder re-ranking |
-| Retrieval Eval | 55-question golden set; hit@5 / recall@5 / MRR / nDCG@5, gated in CI |
+| RAG Pipeline (served) | BM25 over a stemmed, stopword-filtered index. No model weights. |
+| RAG Pipeline (measured) | Also FAISS + sentence-transformers, weighted reciprocal-rank fusion, and cross-encoder re-ranking — eval-only, `dev` dependency group |
+| Retrieval Eval | 55-question golden set split 33 dev / 22 held-out; hit@5 / recall@5 / MRR / nDCG@5, gated in CI on the shipped arm |
 | LLM API | Groq (`GROQ_MODEL`, default `openai/gpt-oss-120b`) |
 | Streaming | Vercel AI SDK (`useChat` hook) |
 | Frontend Deployment | Vercel (free tier) |
@@ -38,7 +43,12 @@ Browser → Next.js (Vercel)                     Python FastAPI (Railway)
 
 ## Key Decisions
 
-**Separate Python backend.** The RAG pipeline depends on FAISS, sentence-transformers, and cross-encoder re-ranking — all Python-native ML libraries. A dedicated FastAPI service avoids serverless cold-start issues with large ML models and enables proper server-side rate limiting.
+**Separate Python backend.** Originally because the RAG pipeline depended on FAISS,
+sentence-transformers and cross-encoder re-ranking — Python-native ML libraries whose
+cold-start cost is a poor fit for serverless. The evaluation has since removed all three
+from the serving path, so that reason no longer holds; the service stays because the index
+builder and the eval harness are Python, `rank-bm25` and the shared tokenizer are Python,
+and server-side rate limiting still wants a long-lived process.
 
 **Static-first frontend.** The Next.js app is entirely SSG except for the `/api/chat` proxy route. All project data and MDX content are defined in code — no CMS, no database.
 
@@ -75,12 +85,13 @@ backend/
 ├── app/
 │   ├── main.py                    FastAPI app, CORS, middleware
 │   ├── config.py                  Environment variable loading
-│   ├── rag/pipeline.py            Embedding, hybrid search, re-ranking
+│   ├── rag/pipeline.py            BM25 retrieval (served); dense + re-ranking (measured)
 │   └── routes/
 │       ├── chat.py                POST /api/chat
 │       └── health.py              GET /api/health
 ├── scripts/build_index.py         Offline index builder
-└── indexes/                       Pre-built FAISS index, BM25 model, chunks JSON
+├── eval/                          Golden set, retrieval harness, publishing
+└── indexes/                       BM25 model, chunks JSON, FAISS index (eval-only)
 ```
 
 ## Data Flow: Chat Request
@@ -88,7 +99,7 @@ backend/
 1. User types a message in the chatbot widget
 2. `useChat` (Vercel AI SDK) sends `POST /api/chat` to Next.js proxy
 3. Next.js proxy forwards to `POST /api/chat` on FastAPI
-4. FastAPI embeds the query, runs hybrid search, re-ranks results
+4. FastAPI runs BM25 keyword search over the chunk index and takes the top 5
 5. Constructs a prompt with context chunks + conversation history
 6. Streams Groq LLM response back through the proxy to the browser
 7. `useChat` renders tokens as they arrive

@@ -6,10 +6,11 @@ actually work, and do the weights and stage choices earn their keep?
 Runs the golden question set through each retrieval arm and reports recall@k,
 MRR, and nDCG@k so the arms can be compared directly:
 
-    bm25    keyword only (no embedding model required)
-    dense   FAISS semantic only
-    hybrid  weighted reciprocal-rank fusion of both
-    rerank  hybrid candidates re-ordered by the cross-encoder
+    bm25         keyword only (no embedding model required)
+    dense        FAISS semantic only
+    hybrid       weighted reciprocal-rank fusion of both
+    rerank       hybrid candidates re-ordered by the cross-encoder
+    bm25+rerank  keyword candidates re-ordered by the cross-encoder, no dense stage
 
 Usage:
     uv run python eval/run_eval.py                      # all arms
@@ -21,6 +22,10 @@ Usage:
 A chunk counts as relevant when its text contains any of the case's
 `relevant_phrases`. Labelling by phrase rather than chunk ID keeps the golden
 set valid when the corpus is re-chunked.
+
+The golden set is split into `dev` and `holdout` portions (see golden_set.json).
+Decide things on `dev`; `holdout` is what gets published, so a published number is
+never a number something was tuned against. `--split` selects which portion runs.
 """
 
 from __future__ import annotations
@@ -39,6 +44,7 @@ sys.path.insert(0, str(BACKEND_ROOT))
 from eval.publish import (  # (needs the sys.path line above)
     ARMS,
     build_results_document,
+    shipped_arm_id,
     update_markdown_block,
     verdict_line,
     write_results_document,
@@ -76,15 +82,36 @@ DEFAULT_TOP_K = 5
 # model?" is what determines whether the LLM can answer at all.
 GATING_METRIC = f"hit@{DEFAULT_TOP_K}"
 
-THRESHOLDS: dict[str, dict[str, float]] = {
-    "bm25": dict(_FLOORS),
-    "hybrid": dict(_FLOORS),
-    "rerank": dict(_FLOORS),
-    # NOTE: "dense" is deliberately absent. It is measured and published as a
-    # baseline for comparison, not defended as a quality bar, so it has no honest
-    # floor. An ungated arm is reported as such by `--check` rather than quietly
-    # passing.
-}
+# Golden-set portions. "all" is not a third portion, it is both of them together.
+SPLITS = ("all", "dev", "holdout")
+
+# The two splits that are not interchangeable, and why each is what it is.
+#
+# `--publish` reports the HELD-OUT portion. Nothing is ever chosen against those
+# questions, so the number on the public page is a measurement rather than the score
+# of whatever configuration happened to win on the questions it was picked with.
+# It is a smaller sample and therefore a coarser number — 22 questions move hit@5 in
+# steps of ~0.045 — which is the price of it meaning what it says.
+#
+# `--check` gates the WHOLE set. The floors are regression detection, not a target
+# anything is tuned toward, so there is no leakage to protect against and the larger
+# sample makes them less twitchy.
+PUBLISHED_SPLIT = "holdout"
+GATED_SPLIT = "all"
+
+# Gated arms, keyed by ID. Only the SHIPPED arm is gated, and it is looked up rather
+# than named so the gate follows production when the shipped arm changes.
+#
+# Every other arm is measured and published as a baseline for comparison, not defended
+# as a quality bar. Two reasons that is the right line to draw. A floor is there to stop
+# a change degrading what a visitor is actually served, and nothing is served by an arm
+# production does not run. And floors are calibrated against a corpus: when the corpus
+# grows, floors on four arms means four constants to re-justify, and a constant nudged
+# to make a build pass is the magic number this file exists to argue against.
+#
+# `--check` names every ungated arm explicitly, and a run that gates nothing is a
+# failure, so this cannot quietly become a gate over nothing.
+THRESHOLDS: dict[str, dict[str, float]] = {shipped_arm_id(): dict(_FLOORS)}
 
 
 def metric_names_for(top_k: int) -> list[str]:
@@ -108,6 +135,33 @@ def is_relevant(chunk_text: str, phrases: list[str]) -> bool:
 
 def relevant_ids(chunks: list[dict], phrases: list[str]) -> set[int]:
     return {i for i, c in enumerate(chunks) if is_relevant(c["text"], phrases)}
+
+
+# ---------------------------------------------------------------------------
+# Golden-set splits
+# ---------------------------------------------------------------------------
+
+
+def select_cases(cases: list[dict], split: str) -> list[dict]:
+    """The cases belonging to `split`.
+
+    An unlabelled or misspelt case is an error rather than a silent exclusion: a case
+    quietly dropped from both portions would shrink the set nobody is watching, and a
+    case quietly dropped from `holdout` alone would shrink the published sample.
+    """
+    if split not in SPLITS:
+        raise ValueError(f"Unknown split: {split!r}. Expected one of {', '.join(SPLITS)}.")
+
+    unlabelled = [c["id"] for c in cases if c.get("split") not in ("dev", "holdout")]
+    if unlabelled:
+        raise ValueError(
+            "Golden cases carry no valid split: "
+            f"{', '.join(unlabelled)}. Every case belongs to exactly one of dev/holdout."
+        )
+
+    if split == "all":
+        return list(cases)
+    return [c for c in cases if c["split"] == split]
 
 
 # ---------------------------------------------------------------------------
@@ -159,8 +213,60 @@ def ndcg_at_k(retrieved: list[int], relevant: set[int], k: int) -> float:
 # ---------------------------------------------------------------------------
 
 
+def _retrievers(pipeline, top_k: int) -> dict:
+    """How each arm retrieves, keyed by the same IDs as ARM_SPECS.
+
+    ARM_SPECS owns how an arm is described; this owns what it does. A mapping rather
+    than an if/elif chain because arms come and go — see retrievers_for_arms().
+
+    The re-ranking arms retrieve twice the cutoff and let the cross-encoder narrow to
+    top_k. That ratio lives here now: `RAGPipeline.retrieve` no longer has a candidate
+    stage to mirror, because the arm it implements does not re-rank.
+    """
+
+    def reranked(retrieve):
+        def run(question: str) -> list[int]:
+            candidates = retrieve(question, top_k=top_k * 2)
+            return pipeline.rerank(question, candidates, top_k=top_k)
+
+        return run
+
+    return {
+        "bm25": lambda q: pipeline.sparse_search(q, top_k=top_k),
+        "dense": lambda q: pipeline.dense_search(q, top_k=top_k),
+        "hybrid": lambda q: pipeline.hybrid_search(q, top_k=top_k),
+        "rerank": reranked(pipeline.hybrid_search),
+        "bm25+rerank": reranked(pipeline.sparse_search),
+    }
+
+
+def retrievers_for_arms(pipeline, top_k: int) -> dict:
+    """The retrieval callables, checked against the published arm list.
+
+    A published arm with no implementation would fail only once someone selected it,
+    and an implemented arm with no spec would fail only at `--publish`. Both are the
+    same mistake — adding or retiring an arm in one place and not the other — so both
+    are caught here, before any case runs.
+    """
+    retrievers = _retrievers(pipeline, top_k)
+    if set(retrievers) != set(ARMS):
+        missing = sorted(set(ARMS) - set(retrievers))
+        extra = sorted(set(retrievers) - set(ARMS))
+        raise ValueError(
+            "Arm specs and retrievers disagree — "
+            f"specs with no retriever: {missing or 'none'}; "
+            f"retrievers with no spec: {extra or 'none'}."
+        )
+    return retrievers
+
+
 def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
     """Run every case through one retrieval arm and average the metrics."""
+    retrievers = retrievers_for_arms(pipeline, top_k)
+    if arm not in retrievers:
+        raise ValueError(f"Unknown arm: {arm}")
+    retrieve = retrievers[arm]
+
     per_case = []
 
     for case in cases:
@@ -171,17 +277,7 @@ def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
                 "Fix the phrases or rebuild the index."
             )
 
-        if arm == "bm25":
-            retrieved = pipeline.sparse_search(case["question"], top_k=top_k)
-        elif arm == "dense":
-            retrieved = pipeline.dense_search(case["question"], top_k=top_k)
-        elif arm == "hybrid":
-            retrieved = pipeline.hybrid_search(case["question"], top_k=top_k)
-        elif arm == "rerank":
-            candidates = pipeline.hybrid_search(case["question"], top_k=top_k * 2)
-            retrieved = pipeline.rerank(case["question"], candidates, top_k=top_k)
-        else:
-            raise ValueError(f"Unknown arm: {arm}")
+        retrieved = retrieve(case["question"])
 
         per_case.append(
             {
@@ -212,7 +308,12 @@ def build_pipeline():
 
 def format_table(results: list[dict], top_k: int) -> str:
     headers = ["arm"] + metric_names_for(top_k)
+    # The arm column sizes to the longest arm name. Arms are added and retired, and
+    # "bm25+rerank" already overflows a fixed width — a table whose columns stop
+    # lining up is how a reader misreads a row.
     widths = [max(len(h), 8) for h in headers]
+    if results:
+        widths[0] = max(widths[0], max(len(r["arm"]) for r in results))
     lines = [
         "  ".join(h.ljust(w) for h, w in zip(headers, widths)),
         "  ".join("-" * w for w in widths),
@@ -223,10 +324,11 @@ def format_table(results: list[dict], top_k: int) -> str:
     return "\n".join(lines)
 
 
-def check_thresholds(results: list[dict], top_k: int) -> int:
+def check_thresholds(results: list[dict], top_k: int, split: str = GATED_SPLIT) -> int:
     """Gate the run against THRESHOLDS. Returns a process exit code.
 
-    Two ways this used to pass when it should not have:
+    Three ways a run can look gated without being gated. The first two were real
+    behaviour once; the third is what a `--split` flag would have introduced:
 
     1. An arm with no THRESHOLDS entry (``dense``) contributed no checks, so a
        dense-only ``--check`` run compared nothing and still printed "OK". A run
@@ -235,11 +337,21 @@ def check_thresholds(results: list[dict], top_k: int) -> int:
     2. Floors are calibrated at k=5. Comparing them against metrics measured at
        another cutoff is meaningless, so a non-default ``--top-k`` cannot be
        gated.
+    3. Floors are calibrated on the whole golden set. A single split is a smaller,
+       noisier sample against the same absolute numbers, so gating one would fail
+       the build on sampling noise or pass a real regression by luck.
     """
     if top_k != DEFAULT_TOP_K:
         print(
             f"\nFAIL — --check is calibrated for --top-k {DEFAULT_TOP_K}, got {top_k}. "
             "Re-run at the default cutoff, or update THRESHOLDS deliberately."
+        )
+        return 1
+
+    if split != GATED_SPLIT:
+        print(
+            f"\nFAIL — --check is calibrated on the {GATED_SPLIT} golden set, got "
+            f"--split {split}. A split is a smaller sample against the same floors."
         )
         return 1
 
@@ -292,6 +404,13 @@ def main() -> int:
         "--check requires the default.",
     )
     parser.add_argument(
+        "--split",
+        default="all",
+        choices=SPLITS,
+        help="Golden-set portion to measure (default: all). Decide things on dev; "
+        f"--publish reports {PUBLISHED_SPLIT} and --check gates {GATED_SPLIT}.",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Exit non-zero if any evaluated arm falls below its threshold.",
@@ -301,7 +420,8 @@ def main() -> int:
         "--publish",
         action="store_true",
         help="Write the measured run to frontend/data/evalResults.json and refresh the "
-        "generated table in docs/evaluation.md. Requires every arm and the default cutoff.",
+        f"generated table in docs/evaluation.md. Requires every arm, the default cutoff, "
+        f"and --split {PUBLISHED_SPLIT}.",
     )
     parser.add_argument(
         "--failures",
@@ -311,10 +431,13 @@ def main() -> int:
     args = parser.parse_args()
 
     golden = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
-    cases = golden["cases"]
+    cases = select_cases(golden["cases"], args.split)
 
     pipeline = build_pipeline()
-    print(f"Corpus: {len(pipeline.chunks)} chunks | Golden set: {len(cases)} questions\n")
+    print(
+        f"Corpus: {len(pipeline.chunks)} chunks | "
+        f"Golden set: {len(cases)} questions ({args.split})\n"
+    )
 
     results = [evaluate_arm(pipeline, arm, cases, args.top_k) for arm in args.arms]
     print(format_table(results, args.top_k))
@@ -349,6 +472,15 @@ def main() -> int:
         if args.top_k != DEFAULT_TOP_K:
             print(f"\nFAIL — --publish requires --top-k {DEFAULT_TOP_K}; got {args.top_k}.")
             return 1
+        # Publishing the dev portion would put the questions the configuration was
+        # chosen on onto the public page as if they were evidence about it.
+        if args.split != PUBLISHED_SPLIT:
+            print(
+                f"\nFAIL — --publish reports the {PUBLISHED_SPLIT} split; got "
+                f"--split {args.split}. Published numbers must be numbers nothing was "
+                "tuned against."
+            )
+            return 1
 
         document = build_results_document(
             results,
@@ -356,6 +488,7 @@ def main() -> int:
             golden_questions=len(cases),
             top_k=args.top_k,
             gating_metric=GATING_METRIC,
+            split=args.split,
         )
         # An unchanged measurement leaves both files alone, so the publishing job has
         # something real to test for. `document` is rebound to whatever is now on disk:
@@ -374,7 +507,7 @@ def main() -> int:
         print(f"Verdict: {verdict_line(document)}")
 
     if args.check:
-        return check_thresholds(results, args.top_k)
+        return check_thresholds(results, args.top_k, args.split)
 
     return 0
 

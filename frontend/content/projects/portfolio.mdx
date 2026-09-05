@@ -24,6 +24,8 @@ Labelling by _phrase_ rather than by document ID is the decision I would defend 
 
 The thresholds sit _below_ measured performance with headroom for noise. They are floors, not targets. Tuning parameters until a floor is cleared would be fitting to my own test set, which produces numbers that look better and mean less.
 
+**The questions are split** into a development portion and a held-out portion, and the table below reports the held-out one. Choices about the architecture are made against the development questions; the held-out questions are never looked at while making one. It is a smaller sample and therefore a coarser number, and I would rather publish a coarse number that means what it says than a precise one that is really the score of whatever configuration won on the questions used to pick it. The split is assigned by hashing each question's ID, so I cannot move an inconvenient question across the line without it showing up in a test.
+
 ## The current results
 
 Everything in this table is generated. The harness runs in CI, writes its results to a file, and commits them; this page renders that file. The sentence underneath the table — which configuration is in production, and which one is actually winning — is derived from the numbers rather than written by me.
@@ -40,11 +42,15 @@ Metrics are only worth collecting if they alter what you build. This is the runn
 
 <FindingsLog />
 
-The pattern in both entries is the one I find most useful to have learned: the code looked correct, every component behaved exactly as specified, and every test passed. Nothing was going to surface either problem except a number moving. That is the argument for evaluation in a sentence — unit tests tell you the parts do what you said, and only measurement tells you the system does what you meant.
+Two of those entries share a pattern I found useful to learn: the code looked correct, every component behaved exactly as specified, every test passed, and nothing was going to surface the problem except a number moving. Unit tests tell you the parts do what you said; only measurement tells you the system does what you meant.
+
+The third one is the one I would actually want to be asked about. I built a hybrid retrieval pipeline — semantic search fused with keyword search, then a cross-encoder re-ranking the candidates — because that is the architecture you build when you are demonstrating that you can build it. The evaluation said plain keyword search beat it on every metric. The tempting response was to retune the fusion weights until the numbers came back, and that would have been the wrong experiment: under the fusion formula I was using, tuning the semantic weight toward zero and switching the semantic stage off are the same experiment, so "find the optimal ratio" would have been a slower path to the answer I already had, ending in a magic constant with nothing behind it. So I ran the experiment that actually asked the question — keyword candidates fed straight to the re-ranker, no semantic stage at all — and it beat the full pipeline. Then the re-ranker failed the same test against keyword search alone.
+
+The fix was to delete the architecture. Production retrieval is now keyword search and nothing else, which cut the backend from 87 production dependencies to 40 and the deployed container image from 17.2GB to 544MB. Most of that was not the model weights — it was `torch`, which the embedding library pulls in, and whose default Linux wheels ship the NVIDIA CUDA runtime into a container that has no GPU. I had been deploying several gigabytes of GPU libraries to serve keyword search, and nothing was ever going to tell me that except deciding the stage that needed them had not earned its place. Cheaper _and_ better is a stronger result than a tuned constant, and it is not the result I wanted when I started. Every deleted stage is still measured as a configuration on every run, because this corpus is written as anticipated questions and answers — the exact condition that flatters keyword matching — and I expect that to stop being true as the corpus grows. When it does, I want the harness to be what tells me, not a rebuild from scratch.
 
 ## Engineering around it
 
-The eval is a CI gate, not a notebook. It runs on every backend change and fails the build if any gated configuration drops below its floor, so retrieval quality cannot regress silently between commits. A keyword-only mode runs in seconds without downloading half a gigabyte of model weights, so the fast feedback loop stays fast.
+The eval is a CI gate, not a notebook. It runs on every backend change and fails the build if the shipped configuration drops below its floor, so retrieval quality cannot regress silently between commits. The other configurations are measured and published for comparison but not gated: a floor exists to stop a change degrading what a visitor is served, and nothing is served by a configuration production does not run. Because production is now keyword-only, the gate itself runs in seconds and needs no model weights at all.
 
 The rest of the pipeline is held to the same standard. Ruff, ESLint, Prettier, and `tsc` gate every push. CodeQL, gitleaks, `pip-audit`, `npm audit`, and dependency review run on every pull request and weekly against unchanged code. Lighthouse CI watches performance and accessibility budgets. Every check lives in `scripts/` and is shared verbatim between the Makefile and GitHub Actions, so `make ci-cd` reproduces the PR gates exactly — no drift between what passes locally and what passes in CI.
 
@@ -54,10 +60,12 @@ One gate is there because of a specific mistake. My resume is a source document 
 
 The corpus is small, and much of it is written as anticipated questions with answers — which is exactly the condition that favours keyword matching over semantic search. Relevance is also labelled by exact phrase presence, which is close to what keyword ranking measures. Every configuration is scored against identical labels, so the comparison is internally fair, but any conclusion it supports is about _this_ corpus rather than about retrieval in general.
 
+That bias cuts directly against the conclusion I drew from it, which is why the retired configurations are still measured rather than deleted from the harness: the result that told me to remove them is the same result I expect to reverse as the corpus grows past the point where the questions and the documents share vocabulary.
+
 I would rather state that plainly than let a table imply more than it earned. The full write-up of the method, the biases, and what is still unmeasured — generation faithfulness, refusal behaviour on out-of-scope questions, adversarial robustness — is in the repository.
 
 ## Skills Demonstrated
 
 The RAG pipeline is the part that looks impressive. The evaluation suite is the part that matters, and it is the difference between an engineer who assembles components and one who can tell you whether the assembly works.
 
-This project shows I can define what "good" means for a system whose output is text, label ground truth in a form that survives the corpus changing underneath it, choose metrics for what they decide rather than what is easy to report, wire the result into CI as a gate rather than a report — and build the publishing path so that the conclusions stay honest as the system evolves, including when the measurement contradicts the architecture I had already built.
+This project shows I can define what "good" means for a system whose output is text, label ground truth in a form that survives the corpus changing underneath it, hold a portion of it back so published numbers are not tuned numbers, choose metrics for what they decide rather than what is easy to report, wire the result into CI as a gate rather than a report — and build the publishing path so that the conclusions stay honest as the system evolves, including the time the measurement contradicted the architecture I had already built and the right answer was to delete it.

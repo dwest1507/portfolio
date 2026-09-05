@@ -27,7 +27,16 @@
 
 ## 1. Overview
 
-A modern portfolio website for David West, an AI Engineer with 5+ years of data science and AI experience and 8+ years in the defense industry. The site showcases 4 portfolio projects and includes an AI-powered chatbot that recruiters can use to ask questions about David's qualifications. The chatbot uses a Python FastAPI backend with a full RAG pipeline (FAISS + BM25 hybrid search, cross-encoder re-ranking) and Groq for LLM inference.
+A modern portfolio website for David West, an AI Engineer with 5+ years of data science and AI experience and 8+ years in the defense industry. The site showcases 4 portfolio projects and includes an AI-powered chatbot that recruiters can use to ask questions about David's qualifications. The chatbot uses a Python FastAPI backend with a RAG pipeline and Groq for LLM inference.
+
+> **Superseded in part.** This document is the original specification and is kept as the
+> record of what was planned. The RAG design it describes — hybrid FAISS + BM25 search with
+> cross-encoder re-ranking — was built, then measured against plain BM25 by the evaluation
+> harness added later, and lost on every metric. Production retrieval is now BM25 alone; the
+> other configurations remain implemented and measured, but are not served. Where this
+> document and [docs/evaluation.md](docs/evaluation.md) or
+> [docs/architecture.md](docs/architecture.md) disagree about the pipeline, those describe
+> what is running and this describes what was intended.
 
 ### What This Is
 
@@ -516,7 +525,7 @@ export default function RootLayout({ children }) {
 | Resource | Free Tier Limit | Expected Usage |
 |----------|----------------|----------------|
 | Execution | 500 hours/month | ~720 hrs if always on; use sleep-on-idle |
-| Memory | 512 MB | FAISS index + models should fit |
+| Memory | 512 MB | BM25 index + chunks only; the models this row assumed are no longer deployed |
 | Networking | Outbound included | Groq API calls only |
 
 **Cold start mitigation:** Railway free tier sleeps after inactivity. Options:

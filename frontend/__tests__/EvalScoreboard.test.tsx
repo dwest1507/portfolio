@@ -1,17 +1,26 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import EvalScoreboard from '@/components/projects/EvalScoreboard'
-import { evalRun, leadingArm, shippedArm, verdictLine, type EvalRun } from '@/data/evalResults'
+import {
+  evalRun,
+  leadingArm,
+  leadingArmIds,
+  sampleLabel,
+  shippedArm,
+  verdictLine,
+  type EvalRun,
+} from '@/data/evalResults'
 
 /** A run with two arms, shaped exactly like the generated file. */
 function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-09-04T00:00:00+00:00',
     commit: 'abc1234',
     runUrl: 'https://example.test/run/1',
     corpusChunks: 10,
     goldenQuestions: 20,
+    split: 'holdout',
     topK: 5,
     gatingMetric: 'hit@5',
     metricNames: ['hit@5', 'mrr'],
@@ -79,11 +88,17 @@ describe('EvalScoreboard', () => {
     expect(screen.getByText(verdictLine())).toBeInTheDocument()
   })
 
-  it('reports the corpus and golden set size', () => {
+  it('reports the corpus and the measured sample', () => {
     render(<EvalScoreboard />)
     expect(
-      screen.getByText(`${evalRun.goldenQuestions} questions · ${evalRun.corpusChunks} chunks`)
+      screen.getByText(`${sampleLabel()} · ${evalRun.corpusChunks} chunks`)
     ).toBeInTheDocument()
+  })
+
+  it('says the published questions are held out, so nothing was tuned against them', () => {
+    render(<EvalScoreboard />)
+    if (evalRun.split !== 'holdout') return
+    expect(screen.getByText(/held-out portion of the labelled set/)).toBeInTheDocument()
   })
 
   it('links to the CI run the numbers came from', () => {
@@ -96,7 +111,10 @@ describe('EvalScoreboard', () => {
 
   it('marks the winning score in each column for screen readers', () => {
     render(<EvalScoreboard />)
-    expect(screen.getAllByText('(best)')).toHaveLength(evalRun.metricNames.length)
+    // One marker per arm tied for a column's best, not one per column: two arms
+    // currently tie on hit@5, and the sighted reader sees both highlighted.
+    const expected = evalRun.metricNames.reduce((n, m) => n + leadingArmIds(m).length, 0)
+    expect(screen.getAllByText('(best)')).toHaveLength(expected)
   })
 })
 
@@ -112,6 +130,18 @@ describe('leadingArm', () => {
       const max = Math.max(...evalRun.arms.map((a) => a.metrics[metric]))
       expect(leadingArm(metric).metrics[metric]).toBe(max)
     }
+  })
+})
+
+describe('leadingArmIds', () => {
+  it('returns every arm tied for the best score', () => {
+    const run = makeRun()
+    run.arms[1].metrics['hit@5'] = 1.0
+    expect(leadingArmIds('hit@5', run.arms)).toEqual(['bm25', 'rerank'])
+  })
+
+  it('returns the single winner when there is no tie', () => {
+    expect(leadingArmIds('mrr', makeRun().arms)).toEqual(['rerank'])
   })
 })
 
@@ -132,6 +162,16 @@ describe('verdictLine', () => {
     expect(verdictLine(run)).toBe('Production runs Re-ranked, which also leads on hit@5 (1.000).')
   })
 
+  it('calls a tie a tie rather than a win for production', () => {
+    // The shipped arm is listed first, so a positional tie-break would report every
+    // tie as a lead. Production must not be flattered by list order.
+    const run = makeRun()
+    run.arms[1].metrics['hit@5'] = 1.0
+    expect(verdictLine(run)).toBe(
+      'Production runs Re-ranked, tied for the lead on hit@5 (1.000) with Keyword only.'
+    )
+  })
+
   it('says so plainly when no arm is flagged as shipped', () => {
     const run = makeRun()
     run.arms.forEach((a) => (a.shipped = false))
@@ -146,7 +186,23 @@ describe('verdictLine', () => {
   })
 })
 
+describe('sampleLabel', () => {
+  it('says a held-out run is held out', () => {
+    expect(sampleLabel(makeRun())).toBe('20 held-out questions')
+  })
+
+  it('claims nothing extra for a run over the whole set', () => {
+    // Which portion gets published is the harness's decision; the page must follow it
+    // rather than assert "held-out" forever.
+    expect(sampleLabel(makeRun({ split: 'all' }))).toBe('20 questions')
+  })
+})
+
 describe('the generated results file', () => {
+  it('publishes the portion no configuration was chosen against', () => {
+    expect(evalRun.split).toBe('holdout')
+  })
+
   it('flags exactly one arm as shipped', () => {
     expect(evalRun.arms.filter((a) => a.shipped)).toHaveLength(1)
   })

@@ -1,25 +1,54 @@
-"""RAG pipeline: hybrid search (FAISS + BM25) + cross-encoder re-ranking."""
+"""Retrieval over the pre-built portfolio indexes.
+
+Production retrieves with BM25 keyword search and nothing else. That is not the
+configuration this pipeline was designed with — it is the one the evaluation harness
+picked out of five. Semantic search, fusion and cross-encoder re-ranking were all
+measured against plain keyword search on this corpus and none of them beat it; see
+docs/evaluation.md and the findings log for the numbers and the reasoning.
+
+Those stages still live here, because retiring an arm from production is not the same
+as deciding it will never be worth running again. `eval/run_eval.py` measures every one
+of them on every run, so the day the corpus grows past the point where keyword matching
+suffices, the harness is what says so.
+
+They are inert until an arm asks for them: faiss and sentence-transformers are imported
+inside the lazy loaders below, not at module scope, so the production image installs
+neither and startup loads neither. Both are declared in the `dev` dependency group,
+which the Dockerfile's `uv sync --no-dev` skips.
+"""
+
+from __future__ import annotations
 
 import json
 import pickle
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import faiss
 import numpy as np
 from rank_bm25 import BM25Okapi
-from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from ..config import INDEXES_DIR
 from .tokenize import tokenize
 
+if TYPE_CHECKING:  # imported for typing only; see the module docstring
+    import faiss
+    from sentence_transformers import CrossEncoder, SentenceTransformer
+
 EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
-# Weights applied to each retriever's reciprocal-rank contribution. Semantic
-# search leads because most recruiter questions are paraphrases rather than
-# exact-term lookups; BM25 is the backstop for proper nouns ("TACOM", "FAISS")
-# that embeddings blur together. Tuned against eval/golden_set.json — see
-# `make eval`.
+# Weights applied to each retriever's reciprocal-rank contribution in the `hybrid` and
+# `rerank` arms. Semantic search leads on the assumption that most recruiter questions
+# are paraphrases rather than exact-term lookups, with BM25 as the backstop for proper
+# nouns ("TACOM", "FAISS") that embeddings blur together.
+#
+# These were never tuned, and deliberately were not. Under RRF, driving DENSE_WEIGHT
+# toward zero makes `hybrid` converge on BM25's ordering — so on a corpus where BM25
+# already leads every metric, "find the best ratio" and "turn dense off" are the same
+# experiment, and the second one is the honest way to run it. It was run, dense lost,
+# and tuning the split would have been optimising a stage on its way off the serving
+# path. They stay at their original values so the measured arms keep meaning what they
+# have always meant.
 DENSE_WEIGHT = 0.7
 SPARSE_WEIGHT = 0.3
 
@@ -71,12 +100,12 @@ def reciprocal_rank_fusion(
 
 
 class RAGPipeline:
-    """Hybrid retrieval over the pre-built portfolio indexes.
+    """Retrieval over the pre-built portfolio indexes.
 
-    The embedding and cross-encoder models are loaded lazily on first use. That
-    keeps keyword-only paths (the BM25 arm of the eval harness, most unit tests)
-    runnable without downloading ~500MB of weights, and lets the API server
-    control when it pays that cost via :meth:`warm`.
+    Only the chunks and the BM25 index are loaded on construction, because only those
+    are on the serving path. The FAISS index, the embedding model and the cross-encoder
+    load on first use, which in production is never — the evaluation harness is the only
+    caller that reaches them.
     """
 
     def __init__(
@@ -85,61 +114,86 @@ class RAGPipeline:
         embedder: SentenceTransformer | None = None,
         cross_encoder: CrossEncoder | None = None,
     ) -> None:
+        self._indexes_dir = indexes_dir
+
         # Load chunks
         with open(indexes_dir / "chunks.json") as f:
             self.chunks: list[dict] = json.load(f)
-
-        # Load FAISS index (inner product = cosine sim on normalized vectors)
-        self.faiss_index = faiss.read_index(str(indexes_dir / "faiss.index"))
-
-        # A FAISS index built from a different revision of chunks.json would
-        # silently return the text of the wrong chunk IDs, so refuse to start.
-        if self.faiss_index.ntotal != len(self.chunks):
-            raise ValueError(
-                f"Index mismatch: faiss.index has {self.faiss_index.ntotal} vectors but "
-                f"chunks.json has {len(self.chunks)} chunks. Run `make build-index`."
-            )
 
         # Load BM25 index
         with open(indexes_dir / "bm25.pkl", "rb") as f:
             self.bm25: BM25Okapi = pickle.load(f)
 
+        # A BM25 index built from a different revision of chunks.json would rank
+        # positions that no longer mean what they meant when it was built. Since
+        # `sparse_search` hands those positions straight to `self.chunks[i]`, a stale
+        # pickle either raises IndexError on a live request or, worse, silently serves
+        # the text of the wrong chunk. This is the guard that used to sit on the FAISS
+        # index; it belongs on whichever index is actually served, and that is this one.
+        if self.bm25.corpus_size != len(self.chunks):
+            raise ValueError(
+                f"Index mismatch: bm25.pkl has {self.bm25.corpus_size} documents but "
+                f"chunks.json has {len(self.chunks)} chunks. Run `make build-index`."
+            )
+
+        self._faiss_index: faiss.Index | None = None
         self._embedder = embedder
         self._cross_encoder = cross_encoder
 
-    # -- Lazily loaded models ------------------------------------------------
+    # -- Lazily loaded indexes and models ------------------------------------
+
+    @property
+    def faiss_index(self) -> faiss.Index:
+        """The dense index, read on first use.
+
+        The consistency check below used to run at construction, catching a stale
+        index before the server took traffic. It belongs here now: dense retrieval is
+        no longer on the serving path, so a mismatch can no longer return the text of
+        the wrong chunk to a visitor — it can only mislead the harness, which is
+        exactly who this raises for. The equivalent guard for the index that *is*
+        served stayed at construction, in `__init__`.
+        """
+        if self._faiss_index is None:
+            import faiss
+
+            index = faiss.read_index(str(self._indexes_dir / "faiss.index"))
+            if index.ntotal != len(self.chunks):
+                raise ValueError(
+                    f"Index mismatch: faiss.index has {index.ntotal} vectors but "
+                    f"chunks.json has {len(self.chunks)} chunks. Run `make build-index`."
+                )
+            self._faiss_index = index
+        return self._faiss_index
 
     @property
     def embedder(self) -> SentenceTransformer:
         if self._embedder is None:
+            from sentence_transformers import SentenceTransformer
+
             self._embedder = SentenceTransformer(EMBEDDING_MODEL)
         return self._embedder
 
     @property
     def cross_encoder(self) -> CrossEncoder:
         if self._cross_encoder is None:
+            from sentence_transformers import CrossEncoder
+
             self._cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL)
         return self._cross_encoder
 
-    def warm(self) -> None:
-        """Force both models to load. Called at API startup so the first
-        request doesn't pay the download/initialization cost."""
-        _ = self.embedder
-        _ = self.cross_encoder
-
     # -- Retrieval -----------------------------------------------------------
 
-    def retrieve(self, query: str, top_k: int = 5, candidates_k: int = 10) -> list[str]:
-        """Full pipeline: hybrid search → cross-encoder re-ranking → top_k chunk texts."""
-        candidate_ids = self.hybrid_search(query, top_k=candidates_k)
-        reranked_ids = self.rerank(query, candidate_ids, top_k=top_k)
-        return [self.chunks[i]["text"] for i in reranked_ids]
+    def retrieve(self, query: str, top_k: int = 5) -> list[str]:
+        """What production runs: BM25 keyword search → top_k chunk texts.
 
-    def dense_search(self, query: str, top_k: int = 10) -> list[int]:
-        """Semantic search over the FAISS index. Returns chunk IDs, best first."""
-        query_vec = self.embedder.encode([query], normalize_embeddings=True).astype(np.float32)
-        _, indices = self.faiss_index.search(query_vec, top_k)
-        return [int(i) for i in indices[0] if i >= 0]
+        Returns fewer than `top_k` texts — possibly none — when the query shares no
+        term with any chunk. That is deliberate. The alternative is padding the prompt
+        with the least-bad chunks in the corpus, which is how a model ends up
+        confidently answering an off-topic question from unrelated context. An empty
+        context leaves the system prompt's "say so honestly" instruction with nothing
+        to contradict it.
+        """
+        return [self.chunks[i]["text"] for i in self.sparse_search(query, top_k=top_k)]
 
     def sparse_search(self, query: str, top_k: int = 10) -> list[int]:
         """BM25 keyword search. Returns chunk IDs, best first."""
@@ -150,10 +204,19 @@ class RAGPipeline:
         # merely padded out the list.
         return [int(i) for i in ranked if scores[i] > 0]
 
+    def dense_search(self, query: str, top_k: int = 10) -> list[int]:
+        """Semantic search over the FAISS index. Returns chunk IDs, best first.
+
+        Measured, not shipped — see the module docstring.
+        """
+        query_vec = self.embedder.encode([query], normalize_embeddings=True).astype(np.float32)
+        _, indices = self.faiss_index.search(query_vec, top_k)
+        return [int(i) for i in indices[0] if i >= 0]
+
     def hybrid_search(self, query: str, top_k: int = 10) -> list[int]:
         """Weighted reciprocal-rank fusion of dense and sparse retrieval.
 
-        Returns chunk IDs, best first.
+        Returns chunk IDs, best first. Measured, not shipped.
         """
         dense = self.dense_search(query, top_k=top_k)
         sparse = self.sparse_search(query, top_k=top_k)
@@ -161,7 +224,10 @@ class RAGPipeline:
         return [doc_id for doc_id, _ in fused[:top_k]]
 
     def rerank(self, query: str, candidate_ids: list[int], top_k: int = 5) -> list[int]:
-        """Cross-encoder re-ranking. Returns chunk IDs, best first."""
+        """Cross-encoder re-ranking. Returns chunk IDs, best first.
+
+        Measured, not shipped.
+        """
         if len(candidate_ids) <= 1:
             return candidate_ids[:top_k]
         pairs = [[query, self.chunks[i]["text"]] for i in candidate_ids]

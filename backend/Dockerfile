@@ -1,5 +1,13 @@
 # Production image for the FastAPI RAG backend (Railway).
-# Models are baked into the image so container startup never hits Hugging Face.
+#
+# There are no model weights in this image, and that is the interesting part. The
+# evaluation harness measured semantic search, hybrid fusion and cross-encoder
+# re-ranking against plain BM25 on this corpus, and plain BM25 won — so the served
+# pipeline is keyword retrieval over a pickled index. See docs/evaluation.md.
+#
+# What that removes: ~500MB of embedding and re-ranking weights that used to be baked in
+# here, the faiss-cpu and sentence-transformers wheels, the Hugging Face cache directory,
+# and the model-loading step from container start.
 
 FROM python:3.14-slim
 
@@ -8,24 +16,20 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    PYTHONUNBUFFERED=1 \
-    HF_HOME=/app/.hf-cache
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install dependencies first for layer caching
+# Install dependencies first for layer caching. --no-dev is what keeps faiss-cpu and
+# sentence-transformers out: they are declared in the dev group because only the index
+# builder and the eval harness use them.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Pre-download embedding + re-ranking models into the image
-RUN python -c "\
-from sentence_transformers import CrossEncoder, SentenceTransformer; \
-SentenceTransformer('sentence-transformers/all-mpnet-base-v2'); \
-CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
-
-# Application code + pre-built FAISS/BM25 indexes
+# Application code + pre-built indexes. faiss.index ships too — it is a few hundred KB,
+# and shipping the whole directory keeps the image a faithful copy of what was measured.
 COPY app ./app
 COPY indexes ./indexes
 

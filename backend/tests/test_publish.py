@@ -17,8 +17,10 @@ from eval.publish import (
     ARMS,
     BEGIN_MARKER,
     END_MARKER,
+    SCHEMA_VERSION,
     build_results_document,
     leading_arm,
+    leading_arm_ids,
     render_markdown,
     shipped_arm_id,
     update_markdown_block,
@@ -42,6 +44,7 @@ def _document(results=None, **kwargs) -> dict:
         "golden_questions": 55,
         "top_k": 5,
         "gating_metric": "hit@5",
+        "split": "all",
     }
     defaults.update(kwargs)
     return build_results_document(
@@ -62,17 +65,18 @@ class TestArmSpecs:
     def test_shipped_arm_matches_the_production_pipeline(self):
         """Guards the one fact that goes stale silently.
 
-        RAGPipeline.retrieve is hybrid_search → rerank, so `rerank` is what production
-        runs. If retrieve() changes shape, this flag has to move with it or the public
-        page reports a configuration the site does not actually serve.
+        RAGPipeline.retrieve is sparse_search and nothing else, so `bm25` is what
+        production runs. If retrieve() changes shape, this flag has to move with it or
+        the public page reports a configuration the site does not actually serve.
         """
         import inspect
 
         from app.rag.pipeline import RAGPipeline
 
         source = inspect.getsource(RAGPipeline.retrieve)
-        assert "hybrid_search" in source and "rerank" in source
-        assert shipped_arm_id() == "rerank"
+        assert "sparse_search" in source
+        assert "hybrid_search" not in source and "self.rerank" not in source
+        assert shipped_arm_id() == "bm25"
 
     def test_every_arm_has_both_registers_of_description(self):
         for arm in ARM_SPECS:
@@ -94,12 +98,16 @@ class TestResultsDocument:
         assert doc["corpusChunks"] == 49
         assert doc["goldenQuestions"] == 55
         assert doc["gatingMetric"] == "hit@5"
+        assert doc["split"] == "all"
         assert doc["metricNames"] == ["recall@5", "hit@5", "mrr", "ndcg@5"]
 
         bm25 = next(a for a in doc["arms"] if a["id"] == "bm25")
         assert bm25["label"] == ARM_SPEC_BY_ID["bm25"].label
         assert bm25["metrics"]["hit@5"] == 1.0
-        assert bm25["shipped"] is False
+        assert bm25["shipped"] is True
+
+        rerank = next(a for a in doc["arms"] if a["id"] == "rerank")
+        assert rerank["shipped"] is False
 
     def test_metric_names_follow_the_cutoff(self):
         """--top-k 10 publishes hit@10, so nothing downstream may assume @5."""
@@ -119,7 +127,7 @@ class TestResultsDocument:
 
     def test_rejects_an_arm_with_no_published_description(self):
         with pytest.raises(ValueError, match="ARM_SPECS"):
-            _document(results=[_raw("bm25+rerank", 1.0, 0.9)])
+            _document(results=[_raw("colbert", 1.0, 0.9)])
 
     def test_writes_json_the_frontend_can_import(self, tmp_path):
         path = tmp_path / "nested" / "evalResults.json"
@@ -127,14 +135,21 @@ class TestResultsDocument:
         loaded = json.loads(path.read_text())
         assert written is True
         assert loaded == document
-        assert loaded["schemaVersion"] == 1
+        assert loaded["schemaVersion"] == SCHEMA_VERSION
         assert {a["id"] for a in loaded["arms"]} == {"bm25", "rerank"}
 
     def test_writes_arrows_rather_than_escapes(self, tmp_path):
-        """The published file is read by humans; \\u2192 in it is noise."""
+        """The published file is read by humans; \\u2192 in it is noise.
+
+        Anchored to whichever arm actually uses an arrow rather than to `rerank` by name,
+        so rewording one description cannot quietly turn this into a test of nothing.
+        """
+        arm = next((a for a in ARM_SPECS if "\u2192" in a.technical), None)
+        assert arm is not None, "no arm description contains an arrow for this to check"
+
         path = tmp_path / "evalResults.json"
         write_results_document(
-            _document(results=[_raw("rerank", 0.9, 0.85)]),
+            _document(results=[_raw(arm.id, 0.9, 0.85)]),
             path,
         )
         assert "\u2192" in path.read_text(encoding="utf-8")
@@ -158,6 +173,63 @@ class TestResultsDocument:
         assert path.read_text(encoding="utf-8") == before
         assert document == json.loads(before)
 
+    def test_a_ci_run_replaces_a_local_one_even_when_nothing_moved(self, tmp_path):
+        """Otherwise a developer's local --publish freezes its own provenance forever.
+
+        A local run records a bare commit and no run link. If the next CI run measures
+        the same numbers, the unconditional skip would leave that unattested provenance
+        on the public page indefinitely — "measured at <sha>" with nothing to check it
+        against. A run carrying a runUrl is allowed to take over.
+        """
+        path = tmp_path / "evalResults.json"
+        local = _document()
+        local["runUrl"] = None
+        write_results_document(local, path)
+
+        from_ci = _document()
+        from_ci["runUrl"] = "https://example.test/run/7"
+        from_ci["commit"] = "ci12345"
+        document, written = write_results_document(from_ci, path)
+
+        assert written is True
+        assert document["runUrl"] == "https://example.test/run/7"
+        assert json.loads(path.read_text(encoding="utf-8"))["commit"] == "ci12345"
+
+    def test_the_takeover_happens_only_once(self, tmp_path):
+        """The replacement carries a runUrl of its own, so the next identical CI run
+        takes the ordinary "nothing to commit" branch. Otherwise every push to main
+        would commit a re-measurement that found nothing — the bug MEASURED_KEYS exists
+        to prevent."""
+        path = tmp_path / "evalResults.json"
+        local = _document()
+        local["runUrl"] = None
+        write_results_document(local, path)
+
+        first = _document()
+        first["runUrl"] = "https://example.test/run/7"
+        write_results_document(first, path)
+
+        second = _document()
+        second["runUrl"] = "https://example.test/run/8"
+        _, written = write_results_document(second, path)
+
+        assert written is False
+
+    def test_a_changed_split_counts_as_a_new_measurement(self, tmp_path):
+        """Identical metrics over a different sample are not the same measurement.
+
+        `split` sits in MEASURED_KEYS for this reason: without it, switching what is
+        published from the whole set to the held-out portion would leave the old
+        document in place whenever the two happened to score alike.
+        """
+        path = tmp_path / "evalResults.json"
+        write_results_document(_document(), path)
+
+        _, written = write_results_document(_document(split="holdout"), path)
+
+        assert written is True
+        assert json.loads(path.read_text(encoding="utf-8"))["split"] == "holdout"
+
     def test_a_moved_metric_is_published(self, tmp_path):
         path = tmp_path / "evalResults.json"
         write_results_document(_document(), path)
@@ -175,7 +247,7 @@ class TestResultsDocument:
         _, written = write_results_document(_document(), path)
 
         assert written is True
-        assert json.loads(path.read_text(encoding="utf-8"))["schemaVersion"] == 1
+        assert json.loads(path.read_text(encoding="utf-8"))["schemaVersion"] == SCHEMA_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -185,18 +257,38 @@ class TestResultsDocument:
 
 class TestVerdict:
     def test_names_the_leader_when_the_shipped_arm_loses(self):
-        line = verdict_line(_document())
+        """The state the page was in before #23: production was not the best arm."""
+        doc = _document(results=[_raw("bm25", 0.909, 0.853), _raw("dense", 1.0, 0.892)])
+        line = verdict_line(doc)
         assert "Production runs" in line
-        assert ARM_SPEC_BY_ID["rerank"].label in line
         assert ARM_SPEC_BY_ID["bm25"].label in line
+        assert ARM_SPEC_BY_ID["dense"].label in line
         assert "1.000 vs 0.909" in line
 
     def test_says_so_when_the_shipped_arm_also_leads(self):
-        """The point of generating this line: it heals when the architecture is fixed."""
-        doc = _document(results=[_raw("bm25", 0.8, 0.7), _raw("rerank", 0.95, 0.9)])
-        line = verdict_line(doc)
+        """The point of generating this line: it healed when the architecture was fixed.
+
+        This is what the published verdict says today — the shipped arm is the leading
+        arm, because the shipped arm was chosen by the measurement.
+        """
+        line = verdict_line(_document())
         assert "which also leads" in line
         assert " vs " not in line
+
+    def test_a_tie_on_the_gating_metric_is_named_not_claimed_as_a_lead(self):
+        """The shipped arm is first in ARM_SPECS, so a positional tie-break resolves
+        every tie in production's favour. On the published run `bm25` and `bm25+rerank`
+        both take hit@5, and the sentence has to say which."""
+        doc = _document(results=[_raw("bm25", 1.0, 0.892), _raw("bm25+rerank", 1.0, 0.85)])
+        line = verdict_line(doc)
+        assert "tied for the lead" in line
+        assert ARM_SPEC_BY_ID["bm25+rerank"].label in line
+        assert "which also leads" not in line
+
+    def test_leading_arm_ids_returns_every_tied_arm(self):
+        doc = _document(results=[_raw("bm25", 1.0, 0.5), _raw("rerank", 1.0, 0.99)])
+        assert leading_arm_ids(doc, "hit@5") == ["bm25", "rerank"]
+        assert leading_arm_ids(doc, "mrr") == ["rerank"]
 
     def test_reports_honestly_when_no_arm_is_flagged(self):
         doc = _document(results=[_raw("bm25", 1.0, 0.9)])
@@ -209,6 +301,16 @@ class TestVerdict:
         assert leading_arm(doc, "hit@5")["id"] == "bm25"
         assert leading_arm(doc, "mrr")["id"] == "rerank"
 
+    def test_a_retired_arm_stays_publishable(self):
+        """Arms come and go; #23 retired three from production in one change.
+
+        Nothing downstream may assume a fixed set, so a document listing only the
+        arms that ran must still render a verdict.
+        """
+        doc = _document(results=[_raw("bm25", 1.0, 0.9)])
+        assert [a["id"] for a in doc["arms"]] == ["bm25"]
+        assert "which also leads" in verdict_line(doc)
+
 
 # ---------------------------------------------------------------------------
 # Markdown block
@@ -216,14 +318,26 @@ class TestVerdict:
 
 
 class TestMarkdown:
+    def test_bolds_every_arm_tied_for_a_column(self):
+        """The caption says "Best score per column in bold", so it has to be every arm
+        holding the best score, not the first one listed."""
+        md = render_markdown(_document(results=[_raw("bm25", 1.0, 0.9), _raw("rerank", 1.0, 0.8)]))
+        assert md.count("**1.000**") == 2
+
     def test_renders_a_row_per_arm_with_the_winner_bolded(self):
         md = render_markdown(_document())
-        assert "| `bm25` |" in md
-        assert "| `rerank` _(shipped)_ |" in md
+        assert "| `bm25` _(shipped)_ |" in md
+        assert "| `rerank` |" in md
         assert "**1.000**" in md  # bm25 leads hit@5
         assert "Measured on 49 chunks and 55 golden questions" in md
         # Column labels match the page's, so the two surfaces read identically.
         assert "| MRR |" in md and "| mrr |" not in md
+
+    def test_provenance_names_a_held_out_sample_as_held_out(self):
+        """A number measured on 22 questions nothing was tuned against is a different
+        claim from one measured on all 55, and the reader is told which it is."""
+        md = render_markdown(_document(golden_questions=22, split="holdout"))
+        assert "the 22 held-out golden questions" in md
 
     def test_replaces_only_the_marked_block(self, tmp_path):
         path = tmp_path / "evaluation.md"
@@ -236,7 +350,7 @@ class TestMarkdown:
         assert "stale table" not in text
         assert text.startswith("# Doc\n\nBefore.\n")
         assert text.endswith("After.\n")
-        assert "| `bm25` |" in text
+        assert "| `bm25` _(shipped)_ |" in text
 
     def test_is_idempotent(self, tmp_path):
         path = tmp_path / "evaluation.md"
