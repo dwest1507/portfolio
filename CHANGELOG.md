@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.0](https://github.com/dwest1507/portfolio/compare/portfolio-v0.4.1...portfolio-v1.0.0) (2026-09-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **rag:** evalResults.json is schemaVersion 2 — it gains `split`, and `goldenQuestions` now counts the measured portion rather than the whole set. A v1 document measured all 55 questions and is not comparable with a v2 held-out run. RAGPipeline.retrieve() drops its candidates_k parameter and RAGPipeline.warm() is gone; there are no model weights left to warm.
+
+### Features
+
+* image for portfolio card ([1cd327c](https://github.com/dwest1507/portfolio/commit/1cd327c1303bca5d0a8afd7e404cd7b00d1b8951))
+* **rag:** retire the dense and re-ranking stages from production ([0856ea5](https://github.com/dwest1507/portfolio/commit/0856ea5dedaca4ae7516942b1e8f33fded89d4e3)), closes [#23](https://github.com/dwest1507/portfolio/issues/23)
+
+
+### Bug Fixes
+
+* **rag:** guard the served index, state an empty context, and stop ties reading as wins ([38ea92e](https://github.com/dwest1507/portfolio/commit/38ea92e09a31f1b0e1b205084298b70f36911cc2))
+
 ## [0.4.1](https://github.com/dwest1507/portfolio/compare/portfolio-v0.4.0...portfolio-v0.4.1) (2026-09-05)
 
 
