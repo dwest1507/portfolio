@@ -12,6 +12,9 @@ updates:
           - patch
     open-pull-requests-limit: 5
 
+  # Covers backend/pyproject.toml, backend/uv.lock and backend/requirements.txt.
+  # requirements.txt is a mirror of the pyproject constraints — keep the two in
+  # sync so the scanned surface matches what uv.lock actually resolves.
   - package-ecosystem: uv
     directory: /backend
     schedule:
@@ -26,6 +29,13 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+
+  # Base image for the backend container (backend/Dockerfile)
+  - package-ecosystem: docker
+    directory: /backend
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
