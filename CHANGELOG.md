@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/dwest1507/portfolio/compare/portfolio-v1.0.0...portfolio-v1.1.0) (2026-09-12)
+
+
+### Features
+
+* bump backend version to 1.0.0, update chatbot documentation, an… ([4f2e3f9](https://github.com/dwest1507/portfolio/commit/4f2e3f9c870c3d121d4f02a5cf3e4703f7bbbd4e))
+* bump backend version to 1.0.0, update chatbot documentation, and regenerate search indexes ([127f343](https://github.com/dwest1507/portfolio/commit/127f343065d13c36061080c3575a86798bb3df2c))
+
 ## [1.0.0](https://github.com/dwest1507/portfolio/compare/portfolio-v0.4.1...portfolio-v1.0.0) (2026-09-05)
 
 
