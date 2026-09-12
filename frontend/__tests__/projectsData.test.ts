@@ -30,4 +30,15 @@ describe('projects data', () => {
       }
     }
   })
+
+  it('orders projects as expected', () => {
+    const titles = projects.map((p) => p.title)
+    expect(titles).toEqual([
+      'This Portfolio',
+      'Baby Names Explorer',
+      'Chat with Nietzsche',
+      'Generate Music with AI',
+      'Diamonds: Predicting Price',
+    ])
+  })
 })
