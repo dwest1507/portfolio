@@ -102,8 +102,10 @@ At work I use a Government-Approved version of Windsurf as my IDE. I use Git/Git
 ## AI & Machine Learning
 
 **What is David's experience with machine learning?**
+During my time at Booz Allen, I frequently used different Optical Character Recognition (OCR) models to extract text from documents and images, including AWS Textract and Tesseract. Recently, I have been using a LLM approach to OCR to extract the relevant text, which has been more effective and accurate than traditional OCR methods, however it's confidence scores are not reliable compared to traditional models. So, I developed three classification models (logistic regression, random forest, and histogram gradient boosting machine) to predict the accuracy of the LLM approach using a human-validated dataset. I also developed a prototype isolation forest model to detect potential fraudulent financial activity. This was a prototype that wasn't pursed since there were common rule-based detection methods that sufficed. The simpler solution, is often the better one. 
 
 **What types of ML models has David built or worked with?**
+I have worked with a few different ML models including logistic and linear regression, decision trees, random forests, gradient boosting machines, histogram gradient boosting machines, isolation forests, and optical character recognition.
 
 **Has David worked with large language models (LLMs)?**
 I have worked with LLMs since 2025. I've built a few applications using LLMs for both my personal and professional life. I also use LLMs frequently to help me with my day to day work. 
@@ -136,49 +138,54 @@ I've worked with Amazon's Titan embedding models for work and I've used all-mpne
 I've used LangChain for personal projects and I've found it to be a great framework for building LLM applications.
 
 **Does David have experience with NLP beyond LLMs?**
+Yes. Beyond LLMs, I have extensive experience with classical and rule-based NLP. I've built information extraction pipelines using custom regular expressions to parse noisy OCR outputs (AWS Textract) to extract part numbers, BOM hierarchies, and hazardous materials from technical engineering drawings. I've also utilized statistical NLP techniques like TF-IDF vectorization and cosine similarity to quantify phrase similarity and benchmark LLM extraction accuracy against human-validated ground truth datasets.
 
 **Has David worked on computer vision projects?**
-My work projects 
+Yes, primarily in the domain of Document Computer Vision and Document AI. In my work leading Data ReconnAIssance™, I built pipelines to visually process complex technical documents and engineering drawings. This involved using AWS Textract for optical character recognition (OCR), spatial bounding-box mapping, and document layout analysis, as well as multimodal vision models to visually analyze unstructured diagrams, title blocks, and schematics to extract Bill of Materials (BOM) data and other government records.
 
 **What is David's experience with data science and analytics?**
+I have over 7 years of data science and analytics experience, progressing from an Operations Research Analyst with the US Army to Lead Data Scientist at Booz Allen Hamilton. My work spans the full analytics lifecycle from exploratory data analysis and ETL using Python, R, and SQL, to building predictive models for classifying text extraction accuracy, anomaly detection for military financial data, and supply chain risk modeling. Beyond modeling, I have extensive experience translating complex findings into interactive dashboards (Streamlit, Shiny, Quarto) and presenting data-driven recommendations to senior leaders and non-technical stakeholders.
 
 **Has David worked with time series data?**
+Primarily through personal projects rather than my professional roles. In my Baby Names Explorer project, I worked extensively with over 140 years of longitudinal SSA annual time series data. I initially experimented with classical per-series models like ARIMA before implementing a multi-horizon pooled forecasting model using LightGBM. The pipeline engineers lag and rolling features across thousands of names, backtests 5-year forecasts against historical baselines, and generates conformal prediction intervals to capture forecast uncertainty.
 
 **What ML tools has David used for experiment tracking or model management?**
+Rather than using third-party tracking platforms like MLflow or Weights & Biases, I rely on automated CI/CD evaluation harnesses and Git-based versioning. For instance, in my portfolio's RAG system, I built a custom retrieval evaluation pipeline in GitHub Actions that benchmarks different embedding and re-ranking arms on pull requests, enforces quality gates, and publishes versioned evaluation results.
 
 ---
 
 ## Projects
 
 **What projects has David built?**
-
-**Tell me about David's AI music generation project.**
-
-**Tell me about the Nietzsche chatbot project.**
-
-**Tell me about the baby names project.**
-
-**Tell me about the diamonds price prediction project.**
+My featured projects span generative AI, time-series forecasting, RAG, and end-to-end machine learning. Key projects include the Baby Names Explorer with pooled LightGBM time-series forecasting and a text-to-SQL chatbot, a Nietzsche Persona Chatbot built on RAG over philosophical texts, an AI Music Generator running ACE-Step on serverless Modal GPUs, a supervised Diamond Price Prediction model, and this portfolio itself, which features an evaluated RAG retrieval pipeline in CI/CD. Professionally, I also lead Data ReconnAIssance™ at Booz Allen, a production-deployed, IL5-compliant Document AI extraction system for governement data like engineering drawings.
 
 **Which of David's projects best demonstrates his AI engineering skills?**
+My most recent project for Arlington National Cemetery required the extraction of text from old paper records of interment to provide an automated quality check of their existing database of records. Over 260k records were processed with LLMs in progressively bigger batches, with iterative improvements in between batches. Scalability was obtained by creating a parallelized, serverless AWS architecture composed of Bedrock Data Automation (BDA), DynamoDB, Lambda, SQS, SNS, CloudWatch, and more. Accuracy of extractions was determined with human-in-the-loop verification which created a dataset to develop an accuracy prediction model to identify likely errors in future extractions and prioritize human review accordingly. An internal app was developed to run these batch jobs, monitor the success rate, and have human-in-the-loop review of the records. The internal app's framework was built using React, FastAPI, and Chainguard Docker images and was deployed to an EKS cluster I created for the project. All this architecture was built in accordance with CMMC Level 2 compliance. Finally, an open-source LLM approach using Ollama and Gemma4 is currently being evaluated for this project to normalize some of the LLM extractions. Specifically, determining what is the first, middle, and last name for a name that is extracted in various formats (e.g., "John Jacob Smith" vs "Smith, John Jacob" vs "Smith, J. Jacob" vs "Smith, Jacob J.").  
 
 **Has David deployed any AI applications to production?**
+Yes, both in enterprise defense environments and in public web applications. For the Air Force Nuclear Weapons Center (AFNWC), I deployed an enterprise Document AI pipeline into an Impact Level 5 (IL5) AWS GovCloud environment. The system processes complex engineering drawings using Bedrock and a serverless AWS backend (Lambda, SQS, SNS, DynamoDB, CloudWatch) to automatically build Bills of Materials (BOMs) and detect hazardous materials. I collaborated with a Cloud Ops team to deploy the containerized web services (React, FastAPI, Chainguard Docker images) onto their managed EKS cluster using Azure DevOps pipelines. As part of rigorous DevSecOps compliance, I mitigated security findings from static code analysis (SonarQube) and container vulnerability scanning (Grype and Syft). In addition to defense systems, I have deployed several public-facing AI apps to production—including a text-to-music generation platform running serverless GPU inference on Modal with a FastAPI backend on Railway and Next.js on Vercel, as well as this portfolio's evaluated RAG chatbot.
 
 **What is the most technically complex thing David has built?**
+The most technically complex systems I've built are my enterprise Document AI pipelines for high-stakes unstructured documents, such as military engineering drawings and historical records. Engineering drawings in particular present extreme complexity: standard models struggle with mixed visual schematics, rotated text, and nested tabular callouts. I solved this by building hybrid architectures that fuse computer vision (AWS Textract), deterministic rule-based NLP (regex for hierarchical Bill of Materials and hazardous material extraction), and multimodal LLMs. I coupled this algorithmic pipeline with event-driven serverless cloud backends (Lambda, SQS, DynamoDB, Bedrock) capable of processing hundreds of thousands of records, integrated active-learning error prediction models to prioritize human review, and deployed full-stack review tools to Kubernetes under strict DoD compliance.
 
 **Has David built any full-stack AI applications?**
+Yes, I have built and deployed multiple full-stack AI applications across both enterprise defense and public projects. My full-stack AI projects feature modern TypeScript/React and Next.js frontends paired with containerized FastAPI backends and dedicated AI inference layers. For example, my AI Music Generator uses Next.js with WaveSurfer.js on the frontend, a stateless FastAPI proxy on Railway handling rate limiting and validation, and serverless GPU workers on Modal executing ACE-Step diffusion inference with async job polling. In my enterprise work, I designed and containerized a full-stack internal review platform using React and FastAPI, deploying it to AWS EKS with event-driven Bedrock processing for human-in-the-loop document validation. I also built the Baby Names Explorer, which connects a Next.js UI to a FastAPI service running pooled LightGBM time-series forecasting and Groq text-to-SQL generation.
 
 **Does David have any open source contributions or public projects?**
+Yes. On the open-source front, I contributed serverless GPU deployment support on Modal to ACE-Step 1.5, a leading open-source music foundation model, allowing developers to run on-demand, cold-start optimized diffusion inference without paying for idle GPU instances. Furthermore, all of my personal projects—including the AI Music Generator, Baby Names Explorer, Nietzsche Chatbot, and this Portfolio—are publicly open-sourced on my GitHub (github.com/dwest1507). Rather than treating personal work as quick prototypes, I build my public repositories with production-grade software engineering practices, including comprehensive automated test suites, GitHub Actions CI/CD gates, Architectural Decision Records (ADRs), and containerized deployments.
 
 ---
 
 ## This Portfolio Chatbot
 
 **How does this chatbot work?**
+This chatbot is a full-stack Retrieval-Augmented Generation (RAG) system built to answer questions accurately and honestly about my background. When you submit a question in the Next.js chat widget, the request proxies to a Python FastAPI backend. The backend queries a pre-indexed corpus of my resume, project write-ups, and background documents using an evaluation-selected retrieval pipeline. Rather than guessing retrieval parameters, I built an automated evaluation harness that benchmarks multiple retrieval configurations—including dense semantic search (FAISS with all-mpnet-base-v2), lexical keyword search (BM25), and cross-encoder re-ranking—against a labeled golden dataset in CI/CD, automatically shipping whichever configuration performs best. The top-scoring passages are then injected into a strictly grounded system prompt and sent to an LLM hosted on Groq for low-latency streaming inference directly back to your browser.
 
 **What technology powers this chatbot?**
+The chatbot is built on a modern, decoupled full-stack architecture. The frontend is built with Next.js, React, TypeScript, and Tailwind CSS, providing an interactive interface that consumes streaming responses via Server-Sent Events (SSE). The backend is a Python FastAPI service using Pydantic for validation, SlowAPI for rate limiting, and Uvicorn for asynchronous serving. For retrieval, the production runtime uses a fast, lightweight BM25 keyword index (rank-bm25), while the development and evaluation pipeline leverages sentence-transformers (all-mpnet-base-v2, ms-marco-MiniLM-L-6-v2) and faiss-cpu. LLM inference is handled via Groq's high-speed API for ultra-low latency. The application is containerized with Docker—engineered to separate heavy ML dependencies so the production image remains under 550MB—and continuously validated via GitHub Actions CI/CD before deploying to Vercel and Railway.
 
 **Why did David build a chatbot into his portfolio?**
+I built this chatbot to demonstrate my AI engineering skills in a functional, practical way that directly benefits visitors to my site. Rather than just listing my skills on a static page, I wanted to "show, don't just tell" by deploying a production-ready AI application. Recruiters, hiring managers, and engineers often visit a portfolio looking for very specific answers—such as my experience with particular cloud tools, security clearances, or machine learning architectures. The chatbot allows visitors to get immediate, grounded answers to those targeted questions in seconds. At the same time, it serves as a live showcase of real-world AI engineering best practices: low-latency streaming, strict prompt grounding to avoid hallucinations, clean full-stack architecture, and automated retrieval evaluation in CI/CD.
 
 ### Evaluation
 
@@ -258,8 +265,6 @@ David is looking for a challenging and rewarding opportunity to work on interest
 
 **What kinds of AI problems is David most excited to work on?**
 
-**What are David's salary expectations?**
-
 **Is David authorized to work in the US?**
 Yes. I am a US citizen.
 
@@ -267,7 +272,10 @@ Yes. I am a US citizen.
 David has a Secret security clearance. It was sponsored by the US Army.
 
 **How can I contact David?**
+Via email at david.p.west2@gmail.com
 
 **Where can I find David's resume?**
+My resume can be provided upon request. Please email david.p.west2@gmail.com and I'll send it over. Alternatively, I try to keep my experience up-to-date on LinkedIn at https://www.linkedin.com/in/david-west-277509b1/.
 
 **Where can I find David's GitHub or LinkedIn?**
+Github is https://github.com/dwest1507. LinkedIn is https://www.linkedin.com/in/david-west-277509b1/
