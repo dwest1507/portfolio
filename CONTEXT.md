@@ -61,3 +61,7 @@ _Avoid_: Threshold, target, baseline, SLA
 **Corpus**:
 The chunked text the pipeline retrieves over, assembled from the resume, the question document, and the project write-ups. Metrics from different Corpora are not comparable.
 _Avoid_: Index, knowledge base, dataset
+
+**Query Category**:
+The semantic classification of a case in the Golden Set (`direct`, `paraphrase`, or `conceptual`), describing how closely its question matches the phrasing of the Corpus. Used to diagnose how well an Arm generalizes beyond literal in-vocabulary queries without conflating distinct failure modes.
+_Avoid_: Query type, bucket, tag, difficulty tier
