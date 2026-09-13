@@ -1,13 +1,16 @@
 {
-  "schemaVersion": 2,
-  "generatedAt": "2026-09-13T14:28:11+00:00",
-  "commit": "4b822bb",
+  "schemaVersion": 3,
+  "generatedAt": "2026-09-13T15:01:42+00:00",
+  "commit": "5a2aa28",
   "runUrl": null,
   "corpusChunks": 100,
   "goldenQuestions": 22,
   "split": "holdout",
   "topK": 5,
   "gatingMetric": "hit@5",
+  "categories": [
+    "direct"
+  ],
   "metricNames": [
     "recall@5",
     "hit@5",
@@ -26,6 +29,14 @@
         "hit@5": 1.0,
         "mrr": 0.9182,
         "ndcg@5": 0.8336
+      },
+      "byCategory": {
+        "direct": {
+          "recall@5": 0.7212,
+          "hit@5": 1.0,
+          "mrr": 0.9182,
+          "ndcg@5": 0.8336
+        }
       }
     },
     {
@@ -39,6 +50,14 @@
         "hit@5": 0.8636,
         "mrr": 0.7061,
         "ndcg@5": 0.6062
+      },
+      "byCategory": {
+        "direct": {
+          "recall@5": 0.5686,
+          "hit@5": 0.8636,
+          "mrr": 0.7061,
+          "ndcg@5": 0.6062
+        }
       }
     },
     {
@@ -52,6 +71,14 @@
         "hit@5": 0.9545,
         "mrr": 0.7879,
         "ndcg@5": 0.6724
+      },
+      "byCategory": {
+        "direct": {
+          "recall@5": 0.5972,
+          "hit@5": 0.9545,
+          "mrr": 0.7879,
+          "ndcg@5": 0.6724
+        }
       }
     },
     {
@@ -65,6 +92,14 @@
         "hit@5": 0.9545,
         "mrr": 0.9091,
         "ndcg@5": 0.7327
+      },
+      "byCategory": {
+        "direct": {
+          "recall@5": 0.6037,
+          "hit@5": 0.9545,
+          "mrr": 0.9091,
+          "ndcg@5": 0.7327
+        }
       }
     },
     {
@@ -78,6 +113,14 @@
         "hit@5": 0.9545,
         "mrr": 0.9091,
         "ndcg@5": 0.7648
+      },
+      "byCategory": {
+        "direct": {
+          "recall@5": 0.6436,
+          "hit@5": 0.9545,
+          "mrr": 0.9091,
+          "ndcg@5": 0.7648
+        }
       }
     }
   ]

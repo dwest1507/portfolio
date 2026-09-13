@@ -12,6 +12,8 @@
  */
 import run from './evalResults.json'
 
+export type QueryCategory = 'direct' | 'paraphrase' | 'conceptual'
+
 export interface EvalArm {
   /** Harness arm name, matching `--arms` in eval/run_eval.py. */
   id: string
@@ -24,6 +26,8 @@ export interface EvalArm {
   shipped: boolean
   /** Keyed by metric name, e.g. `hit@5`. Names come from `metricNames`. */
   metrics: Record<string, number>
+  /** Per-category metrics, keyed by category (e.g. `direct`). */
+  byCategory: Record<string, Record<string, number>>
 }
 
 export interface EvalRun {
@@ -45,6 +49,8 @@ export interface EvalRun {
   topK: number
   /** The metric the verdict is decided on. */
   gatingMetric: string
+  /** Query categories evaluated in this run, e.g. `['direct']`. */
+  categories: string[]
   /** Metric column order, following the run's cutoff. */
   metricNames: string[]
   arms: EvalArm[]

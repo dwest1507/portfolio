@@ -85,6 +85,9 @@ GATING_METRIC = f"hit@{DEFAULT_TOP_K}"
 # Golden-set portions. "all" is not a third portion, it is both of them together.
 SPLITS = ("all", "dev", "holdout")
 
+# Query Categories: lexical and conceptual relationship of questions to the Corpus.
+VALID_CATEGORIES = ("direct", "paraphrase", "conceptual")
+
 # The two splits that are not interchangeable, and why each is what it is.
 #
 # `--publish` reports the HELD-OUT portion. Nothing is ever chosen against those
@@ -157,6 +160,13 @@ def select_cases(cases: list[dict], split: str) -> list[dict]:
         raise ValueError(
             "Golden cases carry no valid split: "
             f"{', '.join(unlabelled)}. Every case belongs to exactly one of dev/holdout."
+        )
+
+    unlabelled_category = [c["id"] for c in cases if c.get("category") not in VALID_CATEGORIES]
+    if unlabelled_category:
+        raise ValueError(
+            "Golden cases carry no valid category: "
+            f"{', '.join(unlabelled_category)}. Every case belongs to one of {', '.join(VALID_CATEGORIES)}."
         )
 
     if split == "all":
@@ -282,6 +292,7 @@ def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
         per_case.append(
             {
                 "id": case["id"],
+                "category": case["category"],
                 "question": case["question"],
                 "n_relevant": len(relevant),
                 f"recall@{top_k}": recall_at_k(retrieved, relevant, top_k),
@@ -293,7 +304,19 @@ def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
 
     metric_names = metric_names_for(top_k)
     summary = {m: sum(c[m] for c in per_case) / len(per_case) for m in metric_names}
-    return {"arm": arm, "top_k": top_k, "summary": summary, "cases": per_case}
+    by_category = {}
+    categories = sorted({c["category"] for c in per_case})
+    for cat in categories:
+        cat_cases = [c for c in per_case if c["category"] == cat]
+        by_category[cat] = {m: sum(c[m] for c in cat_cases) / len(cat_cases) for m in metric_names}
+
+    return {
+        "arm": arm,
+        "top_k": top_k,
+        "summary": summary,
+        "by_category": by_category,
+        "cases": per_case,
+    }
 
 
 def build_pipeline():
@@ -441,6 +464,17 @@ def main() -> int:
 
     results = [evaluate_arm(pipeline, arm, cases, args.top_k) for arm in args.arms]
     print(format_table(results, args.top_k))
+
+    all_categories = sorted({cat for r in results for cat in r.get("by_category", {})})
+    for cat in all_categories:
+        cat_results = [
+            {"arm": r["arm"], "summary": r["by_category"][cat]}
+            for r in results
+            if cat in r.get("by_category", {})
+        ]
+        cat_cases_count = len([c for c in cases if c.get("category") == cat])
+        print(f"\nCategory: {cat} ({cat_cases_count} questions)")
+        print(format_table(cat_results, args.top_k))
 
     if args.failures:
         for r in results:

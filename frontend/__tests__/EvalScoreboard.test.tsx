@@ -14,7 +14,7 @@ import {
 /** A run with two arms, shaped exactly like the generated file. */
 function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: '2026-09-04T00:00:00+00:00',
     commit: 'abc1234',
     runUrl: 'https://example.test/run/1',
@@ -23,6 +23,7 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
     split: 'holdout',
     topK: 5,
     gatingMetric: 'hit@5',
+    categories: ['direct'],
     metricNames: ['hit@5', 'mrr'],
     arms: [
       {
@@ -32,6 +33,7 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
         technical: 'BM25.',
         shipped: false,
         metrics: { 'hit@5': 1.0, mrr: 0.5 },
+        byCategory: { direct: { 'hit@5': 1.0, mrr: 0.5 } },
       },
       {
         id: 'rerank',
@@ -40,6 +42,7 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
         technical: 'Cross-encoder.',
         shipped: true,
         metrics: { 'hit@5': 0.9, mrr: 0.8 },
+        byCategory: { direct: { 'hit@5': 0.9, mrr: 0.8 } },
       },
     ],
     ...overrides,
@@ -199,8 +202,16 @@ describe('sampleLabel', () => {
 })
 
 describe('the generated results file', () => {
+  it('is schemaVersion 3', () => {
+    expect(evalRun.schemaVersion).toBe(3)
+  })
+
   it('publishes the portion no configuration was chosen against', () => {
     expect(evalRun.split).toBe('holdout')
+  })
+
+  it('publishes categories including direct', () => {
+    expect(evalRun.categories).toEqual(['direct'])
   })
 
   it('flags exactly one arm as shipped', () => {
@@ -211,6 +222,18 @@ describe('the generated results file', () => {
     for (const arm of evalRun.arms) {
       for (const metric of evalRun.metricNames) {
         expect(typeof arm.metrics[metric]).toBe('number')
+      }
+    }
+  })
+
+  it('carries per-category metrics for every arm', () => {
+    for (const arm of evalRun.arms) {
+      expect(arm.byCategory).toBeDefined()
+      for (const category of evalRun.categories) {
+        expect(arm.byCategory[category]).toBeDefined()
+        for (const metric of evalRun.metricNames) {
+          expect(typeof arm.byCategory[category][metric]).toBe('number')
+        }
       }
     }
   })
