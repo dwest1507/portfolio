@@ -40,7 +40,7 @@ make build-index
    not silently redacted, it fails the test, and the source gets fixed. That is
    the stated order of operations — the sources should be clean to begin with,
    and redaction is only the backstop.
-2. **Chunk** — ~200–300 token chunks with overlap; paragraph-based splitting to preserve complete thoughts
+2. **Chunk** — ~200–300 token chunks with overlap snapped outward to word boundaries; paragraph-based splitting to preserve complete thoughts without mid-word word truncation
 3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk
 4. **Index** — Builds a FAISS index (vector search) and a BM25 index (keyword search).
    BM25 terms are lowercased, stopword-filtered, and Snowball-stemmed by
