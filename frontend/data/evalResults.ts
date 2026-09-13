@@ -51,6 +51,8 @@ export interface EvalRun {
   gatingMetric: string
   /** Query categories evaluated in this run, e.g. `['direct']`. */
   categories: string[]
+  /** Number of cases per category evaluated in this run. */
+  categoryCounts?: Record<string, number>
   /** Metric column order, following the run's cutoff. */
   metricNames: string[]
   arms: EvalArm[]
@@ -154,9 +156,14 @@ export function metricLabel(metric: string): string {
  * that hardcoded "held-out" would keep saying it after that decision changed.
  */
 export function sampleLabel(run: EvalRun = evalRun, category?: string): string {
-  const noun = run.goldenQuestions === 1 ? 'question' : 'questions'
-  const categoryPrefix = category && category !== 'all' ? `${category} ` : ''
+  const isCategory = Boolean(category && category !== 'all')
+  const count =
+    isCategory && category && run.categoryCounts?.[category] !== undefined
+      ? run.categoryCounts[category]
+      : run.goldenQuestions
+  const noun = count === 1 ? 'question' : 'questions'
+  const categoryPrefix = isCategory ? `${category} ` : ''
   return run.split === 'holdout'
-    ? `${run.goldenQuestions} held-out ${categoryPrefix}${noun}`
-    : `${run.goldenQuestions} ${categoryPrefix}${noun}`
+    ? `${count} held-out ${categoryPrefix}${noun}`
+    : `${count} ${categoryPrefix}${noun}`
 }

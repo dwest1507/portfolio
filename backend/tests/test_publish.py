@@ -130,6 +130,17 @@ class TestResultsDocument:
         assert bm25["byCategory"]["direct"]["hit@5"] == 1.0
         assert bm25["byCategory"]["paraphrase"]["hit@5"] == 0.6
 
+    def test_carries_category_counts(self):
+        cases = [
+            {"id": "c1", "category": "direct"},
+            {"id": "c2", "category": "direct"},
+            {"id": "c3", "category": "paraphrase"},
+        ]
+        results = [_raw("bm25", 1.0, 0.9)]
+        results[0]["cases"] = cases
+        doc = _document(results=results)
+        assert doc["categoryCounts"] == {"direct": 2, "paraphrase": 1}
+
     def test_metric_names_follow_the_cutoff(self):
         """--top-k 10 publishes hit@10, so nothing downstream may assume @5."""
         doc = _document(

@@ -24,6 +24,7 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
     topK: 5,
     gatingMetric: 'hit@5',
     categories: ['direct', 'paraphrase'],
+    categoryCounts: { direct: 15, paraphrase: 5 },
     metricNames: ['hit@5', 'mrr'],
     arms: [
       {
@@ -262,6 +263,17 @@ describe('sampleLabel', () => {
     // rather than assert "held-out" forever.
     expect(sampleLabel(makeRun({ split: 'all' }))).toBe('20 questions')
   })
+
+  it('reports category-specific count when filtering by category', () => {
+    expect(sampleLabel(makeRun(), 'paraphrase')).toBe('5 held-out paraphrase questions')
+    expect(sampleLabel(makeRun(), 'direct')).toBe('15 held-out direct questions')
+  })
+
+  it('singularizes question when category count is 1', () => {
+    expect(
+      sampleLabel(makeRun({ categoryCounts: { direct: 19, paraphrase: 1 } }), 'paraphrase')
+    ).toBe('1 held-out paraphrase question')
+  })
 })
 
 describe('the generated results file', () => {
@@ -277,6 +289,13 @@ describe('the generated results file', () => {
     expect(evalRun.categories).toContain('direct')
     expect(evalRun.categories).toContain('paraphrase')
     expect(evalRun.categories).toContain('conceptual')
+  })
+
+  it('publishes categoryCounts matching the holdout split', () => {
+    expect(evalRun.categoryCounts).toBeDefined()
+    expect(evalRun.categoryCounts?.direct).toBe(22)
+    expect(evalRun.categoryCounts?.paraphrase).toBe(5)
+    expect(evalRun.categoryCounts?.conceptual).toBe(6)
   })
 
   it('flags exactly one arm as shipped', () => {
