@@ -181,6 +181,20 @@ class TestCategories:
         paraphrase_cases = [c for c in CASES if c.get("category") == "paraphrase"]
         assert 15 <= len(paraphrase_cases) <= 20
 
+    def test_conceptual_batch_is_present(self):
+        conceptual_cases = [c for c in CASES if c.get("category") == "conceptual"]
+        assert 15 <= len(conceptual_cases) <= 20
+
+    def test_categories_have_balanced_representation(self):
+        direct = [c for c in CASES if c.get("category") == "direct"]
+        paraphrase = [c for c in CASES if c.get("category") == "paraphrase"]
+        conceptual = [c for c in CASES if c.get("category") == "conceptual"]
+
+        assert len(direct) == 55
+        assert 15 <= len(paraphrase) <= 20
+        assert 15 <= len(conceptual) <= 20
+        assert len(CASES) == len(direct) + len(paraphrase) + len(conceptual)
+
     def test_every_case_has_a_valid_category(self):
         for case in CASES:
             assert case.get("category") in VALID_CATEGORIES

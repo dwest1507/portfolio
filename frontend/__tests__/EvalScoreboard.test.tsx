@@ -273,9 +273,10 @@ describe('the generated results file', () => {
     expect(evalRun.split).toBe('holdout')
   })
 
-  it('publishes categories including direct and paraphrase', () => {
+  it('publishes categories including direct, paraphrase, and conceptual', () => {
     expect(evalRun.categories).toContain('direct')
     expect(evalRun.categories).toContain('paraphrase')
+    expect(evalRun.categories).toContain('conceptual')
   })
 
   it('flags exactly one arm as shipped', () => {

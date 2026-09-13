@@ -1,14 +1,15 @@
 {
   "schemaVersion": 3,
-  "generatedAt": "2026-09-13T15:09:58+00:00",
-  "commit": "578d22c",
+  "generatedAt": "2026-09-13T15:21:15+00:00",
+  "commit": "2daa074",
   "runUrl": null,
   "corpusChunks": 100,
-  "goldenQuestions": 27,
+  "goldenQuestions": 33,
   "split": "holdout",
   "topK": 5,
   "gatingMetric": "hit@5",
   "categories": [
+    "conceptual",
     "direct",
     "paraphrase"
   ],
@@ -26,12 +27,18 @@
       "technical": "BM25 over stemmed, stopword-filtered terms. Needs no embedding model, which is why the production image ships none. Matches RAGPipeline.retrieve.",
       "shipped": true,
       "metrics": {
-        "recall@5": 0.7235,
-        "hit@5": 1.0,
-        "mrr": 0.8963,
-        "ndcg@5": 0.8187
+        "recall@5": 0.6394,
+        "hit@5": 0.9697,
+        "mrr": 0.8217,
+        "ndcg@5": 0.7265
       },
       "byCategory": {
+        "conceptual": {
+          "recall@5": 0.2611,
+          "hit@5": 0.8333,
+          "mrr": 0.4861,
+          "ndcg@5": 0.3115
+        },
         "direct": {
           "recall@5": 0.7212,
           "hit@5": 1.0,
@@ -53,12 +60,18 @@
       "technical": "FAISS inner-product search over normalized all-mpnet-base-v2 embeddings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.5621,
-        "hit@5": 0.8889,
-        "mrr": 0.708,
-        "ndcg@5": 0.5867
+        "recall@5": 0.4983,
+        "hit@5": 0.8485,
+        "mrr": 0.6854,
+        "ndcg@5": 0.5393
       },
       "byCategory": {
+        "conceptual": {
+          "recall@5": 0.2111,
+          "hit@5": 0.6667,
+          "mrr": 0.5833,
+          "ndcg@5": 0.3258
+        },
         "direct": {
           "recall@5": 0.5686,
           "hit@5": 0.8636,
@@ -80,12 +93,18 @@
       "technical": "Weighted reciprocal-rank fusion of the sparse and dense rankings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.5977,
-        "hit@5": 0.963,
-        "mrr": 0.7901,
-        "ndcg@5": 0.6556
+        "recall@5": 0.5274,
+        "hit@5": 0.9091,
+        "mrr": 0.7525,
+        "ndcg@5": 0.5956
       },
       "byCategory": {
+        "conceptual": {
+          "recall@5": 0.2111,
+          "hit@5": 0.6667,
+          "mrr": 0.5833,
+          "ndcg@5": 0.3258
+        },
         "direct": {
           "recall@5": 0.5972,
           "hit@5": 0.9545,
@@ -107,12 +126,18 @@
       "technical": "Cross-encoder re-ranking of the fused candidates: hybrid_search over 2×k candidates → cross-encoder narrows to k. Shipped until the harness measured it against the keyword arm.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.6246,
-        "hit@5": 0.963,
-        "mrr": 0.9074,
-        "ndcg@5": 0.7407
+        "recall@5": 0.5737,
+        "hit@5": 0.9394,
+        "mrr": 0.8343,
+        "ndcg@5": 0.6758
       },
       "byCategory": {
+        "conceptual": {
+          "recall@5": 0.3444,
+          "hit@5": 0.8333,
+          "mrr": 0.5056,
+          "ndcg@5": 0.3836
+        },
         "direct": {
           "recall@5": 0.6037,
           "hit@5": 0.9545,
@@ -134,12 +159,18 @@
       "technical": "Cross-encoder re-ranking of BM25 candidates. The arm that answers whether the dense stage contributes anything the re-ranker cannot recover on its own.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.6602,
-        "hit@5": 0.963,
-        "mrr": 0.9074,
-        "ndcg@5": 0.7693
+        "recall@5": 0.5962,
+        "hit@5": 0.9091,
+        "mrr": 0.8333,
+        "ndcg@5": 0.6944
       },
       "byCategory": {
+        "conceptual": {
+          "recall@5": 0.3083,
+          "hit@5": 0.6667,
+          "mrr": 0.5,
+          "ndcg@5": 0.3573
+        },
         "direct": {
           "recall@5": 0.6436,
           "hit@5": 0.9545,

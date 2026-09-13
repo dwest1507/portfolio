@@ -723,6 +723,169 @@
       "relevant_phrases": [
         "Arlington National Cemetery"
       ]
+    },
+    {
+      "id": "conceptual-model-complexity-tradeoff",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does David evaluate the trade-off between algorithmic complexity and interpretability across predictive projects?",
+      "relevant_phrases": [
+        "cost of interpretability",
+        "between a linear model and a random forest"
+      ]
+    },
+    {
+      "id": "conceptual-pipeline-simplification",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What architectural philosophy guides his decision to discard complex machine learning stages in favor of simpler baselines?",
+      "relevant_phrases": [
+        "lost to plain keyword search on every metric",
+        "cheaper and better is a stronger outcome than a tuned constant"
+      ]
+    },
+    {
+      "id": "conceptual-production-regression-defense",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he protect production conversational and retrieval pipelines from silent performance regressions?",
+      "relevant_phrases": [
+        "running regression harnesses on pull requests to benchmark retrieval accuracy",
+        "gate that fails the build when it stops working"
+      ]
+    },
+    {
+      "id": "conceptual-serverless-scaling-patterns",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "What strategies does he utilize across web services to minimize idle server costs and optimize container scaling?",
+      "relevant_phrases": [
+        "Next.js on Vercel",
+        "Modal",
+        "serverless reverse proxy"
+      ]
+    },
+    {
+      "id": "conceptual-forecast-uncertainty-modeling",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "How does he address uncertainty quantification and variance in quantitative time-series modeling?",
+      "relevant_phrases": [
+        "conformal prediction intervals",
+        "ADF and KPSS"
+      ]
+    },
+    {
+      "id": "conceptual-query-context-alignment",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he verify that conversational search systems retrieve genuinely grounding context rather than relying on LLM hallucination?",
+      "relevant_phrases": [
+        "relevant context rather than relying on",
+        "Phrases survive re-chunking"
+      ]
+    },
+    {
+      "id": "conceptual-human-in-the-loop-audit",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What approach does he take toward human-in-the-loop validation and auditing for high-stakes automated extraction systems?",
+      "relevant_phrases": [
+        "human-in-the-loop review",
+        "prioritize human review, and deployed full-stack review tools"
+      ]
+    },
+    {
+      "id": "conceptual-microservice-separation",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "How does he architect full-stack applications to separate user interaction layers from heavy machine learning workloads?",
+      "relevant_phrases": [
+        "Next.js frontend and submits",
+        "deliberately layered to separate concerns cleanly",
+        "FastAPI backend on Railway"
+      ]
+    },
+    {
+      "id": "conceptual-empirical-measurement-vs-hyperparams",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "Why does he prioritize empirical measurement over adjusting theoretical hyperparameters when tuning retrieval systems?",
+      "relevant_phrases": [
+        "weighted blend of semantic and keyword search",
+        "only measurement tells you the system does what you meant",
+        "deleted it rather than tuned it"
+      ]
+    },
+    {
+      "id": "conceptual-data-cleaning-geometry",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he ensure data processing pipelines handle missing values and impossible physical observations without silent corruption?",
+      "relevant_phrases": [
+        "physically impossible. Those were converted to NAs",
+        "correcting for population growth"
+      ]
+    },
+    {
+      "id": "conceptual-devsecops-defense-standards",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What DevSecOps practices does he adhere to when deploying services under strict enterprise and defense environments?",
+      "relevant_phrases": [
+        "meeting strict DevSecOps standards",
+        "container vulnerability scanning"
+      ]
+    },
+    {
+      "id": "conceptual-statistical-evaluation-rigor",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "How does he prevent benchmark contamination and data leakage between model development and published metrics?",
+      "relevant_phrases": [
+        "split into a development portion and a held-out portion",
+        "numbers i publish aren't the numbers something was tuned against"
+      ]
+    },
+    {
+      "id": "conceptual-agentic-developer-velocity",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What workflows and modern tooling does he leverage to maintain development velocity in AI-assisted coding environments?",
+      "relevant_phrases": [
+        "Antigravity and Claude Code",
+        "reproduces the PR gates exactly"
+      ]
+    },
+    {
+      "id": "conceptual-api-connection-latency",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he engineer network communication to minimize handshake overhead and latency across microservices?",
+      "relevant_phrases": [
+        "HTTP/2 with httpx",
+        "service-to-service communication routed entirely through private VPC"
+      ]
+    },
+    {
+      "id": "conceptual-sql-guardrail-architecture",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What security constraints and execution guardrails prevent runaway resource consumption in natural language database agents?",
+      "relevant_phrases": [
+        "against the names schema",
+        "rule-based detection methods"
+      ]
+    },
+    {
+      "id": "conceptual-technical-leadership-mentorship",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "What experience does he bring in technical leadership, mentoring junior engineers, and managing project delivery?",
+      "relevant_phrases": [
+        "Manage two full-time employees, help foster career growth",
+        "Lead a team of 4"
+      ]
     }
   ]
 }

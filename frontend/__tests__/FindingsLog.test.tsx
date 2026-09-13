@@ -40,4 +40,11 @@ describe('FindingsLog', () => {
   it('gives every finding a unique id', () => {
     expect(new Set(findings.map((f) => f.id)).size).toBe(findings.length)
   })
+
+  it('includes the query-categories-evaluated finding', () => {
+    const finding = findings.find((f) => f.id === 'query-categories-evaluated')
+    expect(finding).toBeDefined()
+    expect(finding?.date).toBe('2026-09-13')
+    expect(finding?.title).toContain('Query categories')
+  })
 })

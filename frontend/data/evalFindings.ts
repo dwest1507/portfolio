@@ -45,6 +45,32 @@ export interface Finding {
 /** Newest first. */
 export const findings: Finding[] = [
   {
+    id: 'query-categories-evaluated',
+    date: '2026-09-13',
+    title: 'Query categories revealed where dense and re-ranking models beat keyword search',
+    observed:
+      'Expanding the Golden Set to 87 cases across direct, paraphrase, and conceptual ' +
+      'queries exposed where keyword search succeeds and where semantic retrieval excels. ' +
+      'While BM25 dominated direct in-vocabulary questions (hit@5 0.964 vs dense’s 0.818), ' +
+      'out-of-vocabulary paraphrases reversed the ordering: hybrid and re-ranking arms ' +
+      'achieved hit@5 0.938 compared to BM25’s 0.875, and re-ranking lifted MRR from 0.617 to 0.828 ' +
+      'over the full set. Across all 87 questions, the shipped BM25 arm maintained hit@5 0.908 ' +
+      'and MRR 0.765, comfortably clearing production regression floors.',
+    changed:
+      'Categorized the benchmark into direct, paraphrase, and conceptual partitions and ' +
+      'shipped interactive Scoreboard filtering in Schema Version 3. Production remains ' +
+      'on BM25 for its low latency, light footprint, and strong overall hit rate, but the ' +
+      'diagnostic breakdown proves dense retrieval and cross-encoder re-ranking provide ' +
+      'measurable recall and reciprocal-rank gains on natural, out-of-vocabulary queries.',
+    move: {
+      metric: 'MRR',
+      before: 0.617,
+      after: 0.828,
+      arm: 'Both combined, then re-ranked (paraphrase queries, all 16)',
+    },
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#query-categories-expose-where-semantic-retrieval-excels',
+  },
+  {
     id: 'dense-stage-deleted',
     date: '2026-09-05',
     title: 'Plain keyword search beat the hybrid pipeline, so the architecture was deleted',

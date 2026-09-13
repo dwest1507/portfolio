@@ -31,7 +31,7 @@ and none of them won, so they were removed from production. They are still imple
 | Backend Framework | Python FastAPI |
 | RAG Pipeline (served) | BM25 over a stemmed, stopword-filtered index. No model weights. |
 | RAG Pipeline (measured) | Also FAISS + sentence-transformers, weighted reciprocal-rank fusion, and cross-encoder re-ranking — eval-only, `dev` dependency group |
-| Retrieval Eval | 71-question golden set split 44 dev / 27 held-out; hit@5 / recall@5 / MRR / nDCG@5, gated in CI on the shipped arm |
+| Retrieval Eval | 87-question golden set split 54 dev / 33 held-out across three query categories (`direct`, `paraphrase`, `conceptual`); hit@5 / recall@5 / MRR / nDCG@5, gated in CI on the shipped arm |
 | LLM API | Groq (`GROQ_MODEL`, default `openai/gpt-oss-120b`) |
 | Streaming | Vercel AI SDK (`useChat` hook) |
 | Frontend Deployment | Vercel (free tier) |
