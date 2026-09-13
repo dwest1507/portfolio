@@ -23,7 +23,9 @@ from run_eval import (
     GOLDEN_SET_PATH,
     PUBLISHED_SPLIT,
     THRESHOLDS,
+    VALID_CATEGORIES,
     check_thresholds,
+    evaluate_arm,
     retrievers_for_arms,
     select_cases,
 )
@@ -153,6 +155,137 @@ class TestSplits:
         with pytest.raises(ValueError, match="no valid split"):
             select_cases([{"id": "orphan", "question": "?", "relevant_phrases": []}], "all")
 
-    def test_an_unknown_split_is_rejected(self):
+    def test_unknown_split_is_rejected(self):
         with pytest.raises(ValueError, match="Unknown split"):
             select_cases(CASES, "test")
+
+    def test_founding_55_splits_remain_frozen(self):
+        direct_cases = [c for c in CASES if c.get("category") == "direct"]
+        dev_count = len([c for c in direct_cases if c["split"] == "dev"])
+        holdout_count = len([c for c in direct_cases if c["split"] == "holdout"])
+        assert dev_count == 33
+        assert holdout_count == 22
+
+
+# ---------------------------------------------------------------------------
+# Query categories
+# ---------------------------------------------------------------------------
+
+
+class TestCategories:
+    def test_all_founding_cases_are_direct(self):
+        direct_cases = [c for c in CASES if c.get("category") == "direct"]
+        assert len(direct_cases) == 55
+
+    def test_paraphrase_batch_is_present(self):
+        paraphrase_cases = [c for c in CASES if c.get("category") == "paraphrase"]
+        assert 15 <= len(paraphrase_cases) <= 20
+
+    def test_conceptual_batch_is_present(self):
+        conceptual_cases = [c for c in CASES if c.get("category") == "conceptual"]
+        assert 15 <= len(conceptual_cases) <= 20
+
+    def test_categories_have_balanced_representation(self):
+        direct = [c for c in CASES if c.get("category") == "direct"]
+        paraphrase = [c for c in CASES if c.get("category") == "paraphrase"]
+        conceptual = [c for c in CASES if c.get("category") == "conceptual"]
+
+        assert len(direct) == 55
+        assert 15 <= len(paraphrase) <= 20
+        assert 15 <= len(conceptual) <= 20
+        assert len(CASES) == len(direct) + len(paraphrase) + len(conceptual)
+
+    def test_every_case_has_a_valid_category(self):
+        for case in CASES:
+            assert case.get("category") in VALID_CATEGORIES
+
+    def test_every_case_relevant_phrases_match_at_least_one_chunk(self):
+        from run_eval import relevant_ids
+
+        from app.rag.pipeline import RAGPipeline
+
+        pipeline = RAGPipeline()
+        for case in CASES:
+            matched = relevant_ids(pipeline.chunks, case["relevant_phrases"])
+            assert len(matched) > 0, f"Case {case['id']} matches no chunks in corpus"
+
+    def test_an_unlabelled_case_category_is_an_error(self):
+        with pytest.raises(ValueError, match="no valid category"):
+            select_cases(
+                [{"id": "orphan", "split": "dev", "question": "?", "relevant_phrases": []}],
+                "all",
+            )
+
+    def test_an_invalid_category_is_rejected(self):
+        with pytest.raises(ValueError, match="no valid category"):
+            select_cases(
+                [
+                    {
+                        "id": "bad",
+                        "split": "dev",
+                        "category": "unknown",
+                        "question": "?",
+                        "relevant_phrases": [],
+                    }
+                ],
+                "all",
+            )
+
+
+# ---------------------------------------------------------------------------
+# Evaluation per-category
+# ---------------------------------------------------------------------------
+
+
+class TestEvaluateArm:
+    def test_evaluate_arm_calculates_per_category_metrics(self):
+        pipeline = MagicMock()
+        pipeline.chunks = [
+            {"text": "direct hit"},
+            {"text": "paraphrase target"},
+        ]
+
+        # retriever returns chunk 0 for question "q1" (hit for direct),
+        # chunk 0 for question "q2" (miss for paraphrase where relevant is chunk 1)
+        def mock_sparse(query, top_k=5):
+            return [0]
+
+        pipeline.sparse_search.side_effect = mock_sparse
+
+        test_cases = [
+            {
+                "id": "c1",
+                "split": "dev",
+                "category": "direct",
+                "question": "q1",
+                "relevant_phrases": ["direct hit"],
+            },
+            {
+                "id": "c2",
+                "split": "dev",
+                "category": "paraphrase",
+                "question": "q2",
+                "relevant_phrases": ["paraphrase target"],
+            },
+        ]
+
+        result = evaluate_arm(pipeline, "bm25", test_cases, top_k=5)
+
+        assert "by_category" in result
+        assert "direct" in result["by_category"]
+        assert "paraphrase" in result["by_category"]
+
+        # direct: hit@5 = 1.0, mrr = 1.0
+        assert result["by_category"]["direct"]["hit@5"] == 1.0
+        assert result["by_category"]["direct"]["mrr"] == 1.0
+
+        # paraphrase: hit@5 = 0.0, mrr = 0.0
+        assert result["by_category"]["paraphrase"]["hit@5"] == 0.0
+        assert result["by_category"]["paraphrase"]["mrr"] == 0.0
+
+        # aggregate summary: hit@5 = 0.5, mrr = 0.5
+        assert result["summary"]["hit@5"] == 0.5
+        assert result["summary"]["mrr"] == 0.5
+
+        # individual case records preserve category
+        assert [c["category"] for c in result["cases"]] == ["direct", "paraphrase"]

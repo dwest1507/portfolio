@@ -9,6 +9,7 @@
   "cases": [
     {
       "id": "employer-current",
+      "category": "direct",
       "split": "dev",
       "question": "Where does David currently work?",
       "relevant_phrases": [
@@ -17,6 +18,7 @@
     },
     {
       "id": "current-title",
+      "category": "direct",
       "split": "dev",
       "question": "What is David's current job title?",
       "relevant_phrases": [
@@ -25,6 +27,7 @@
     },
     {
       "id": "tacom-history",
+      "category": "direct",
       "split": "holdout",
       "question": "Did David ever work for the government directly?",
       "relevant_phrases": [
@@ -35,6 +38,7 @@
     },
     {
       "id": "promotions",
+      "category": "direct",
       "split": "dev",
       "question": "Has David been promoted?",
       "relevant_phrases": [
@@ -45,6 +49,7 @@
     },
     {
       "id": "years-experience",
+      "category": "direct",
       "split": "holdout",
       "question": "How many years of AI and machine learning experience does David have?",
       "relevant_phrases": [
@@ -54,6 +59,7 @@
     },
     {
       "id": "career-start",
+      "category": "direct",
       "split": "dev",
       "question": "When did David start his professional career?",
       "relevant_phrases": [
@@ -63,6 +69,7 @@
     },
     {
       "id": "education",
+      "category": "direct",
       "split": "dev",
       "question": "What did David study in college?",
       "relevant_phrases": [
@@ -72,6 +79,7 @@
     },
     {
       "id": "degree-cs",
+      "category": "direct",
       "split": "dev",
       "question": "Does David have a computer science degree?",
       "relevant_phrases": [
@@ -81,6 +89,7 @@
     },
     {
       "id": "certifications",
+      "category": "direct",
       "split": "dev",
       "question": "What certifications does David hold?",
       "relevant_phrases": [
@@ -90,6 +99,7 @@
     },
     {
       "id": "clearance",
+      "category": "direct",
       "split": "dev",
       "question": "Does David have a security clearance?",
       "relevant_phrases": [
@@ -99,6 +109,7 @@
     },
     {
       "id": "languages",
+      "category": "direct",
       "split": "dev",
       "question": "What programming languages does David know?",
       "relevant_phrases": [
@@ -108,6 +119,7 @@
     },
     {
       "id": "python-proficiency",
+      "category": "direct",
       "split": "dev",
       "question": "How good is David at Python?",
       "relevant_phrases": [
@@ -117,6 +129,7 @@
     },
     {
       "id": "cloud-platforms",
+      "category": "direct",
       "split": "dev",
       "question": "What cloud providers has David used?",
       "relevant_phrases": [
@@ -129,6 +142,7 @@
     },
     {
       "id": "aws-services",
+      "category": "direct",
       "split": "dev",
       "question": "Which AWS services has David worked with?",
       "relevant_phrases": [
@@ -139,6 +153,7 @@
     },
     {
       "id": "govcloud",
+      "category": "direct",
       "split": "dev",
       "question": "Does David have experience with classified or restricted cloud environments?",
       "relevant_phrases": [
@@ -148,6 +163,7 @@
     },
     {
       "id": "databases",
+      "category": "direct",
       "split": "dev",
       "question": "What databases has David used?",
       "relevant_phrases": [
@@ -157,6 +173,7 @@
     },
     {
       "id": "api-experience",
+      "category": "direct",
       "split": "holdout",
       "question": "Has David built APIs?",
       "relevant_phrases": [
@@ -167,6 +184,7 @@
     },
     {
       "id": "frontend",
+      "category": "direct",
       "split": "holdout",
       "question": "Can David do frontend work?",
       "relevant_phrases": [
@@ -176,6 +194,7 @@
     },
     {
       "id": "llm-experience",
+      "category": "direct",
       "split": "holdout",
       "question": "Has David worked with large language models?",
       "relevant_phrases": [
@@ -185,6 +204,7 @@
     },
     {
       "id": "llm-providers",
+      "category": "direct",
       "split": "holdout",
       "question": "Which LLM providers has David used?",
       "relevant_phrases": [
@@ -195,6 +215,7 @@
     },
     {
       "id": "rag-experience",
+      "category": "direct",
       "split": "dev",
       "question": "Has David built retrieval augmented generation systems?",
       "relevant_phrases": [
@@ -204,6 +225,7 @@
     },
     {
       "id": "vector-search",
+      "category": "direct",
       "split": "dev",
       "question": "What is David's experience with vector databases and semantic search?",
       "relevant_phrases": [
@@ -213,6 +235,7 @@
     },
     {
       "id": "embedding-models",
+      "category": "direct",
       "split": "dev",
       "question": "What embedding models has David used?",
       "relevant_phrases": [
@@ -222,6 +245,7 @@
     },
     {
       "id": "fine-tuning",
+      "category": "direct",
       "split": "holdout",
       "question": "Has David fine-tuned a model?",
       "relevant_phrases": [
@@ -231,6 +255,7 @@
     },
     {
       "id": "prompt-engineering",
+      "category": "direct",
       "split": "dev",
       "question": "What does David know about prompt engineering?",
       "relevant_phrases": [
@@ -240,6 +265,7 @@
     },
     {
       "id": "groq",
+      "category": "direct",
       "split": "holdout",
       "question": "Has David used Groq?",
       "relevant_phrases": [
@@ -249,6 +275,7 @@
     },
     {
       "id": "langchain",
+      "category": "direct",
       "split": "holdout",
       "question": "Does David know LangChain?",
       "relevant_phrases": [
@@ -257,6 +284,7 @@
     },
     {
       "id": "devtools",
+      "category": "direct",
       "split": "holdout",
       "question": "What tools does David use day to day?",
       "relevant_phrases": [
@@ -267,6 +295,7 @@
     },
     {
       "id": "iac-devops",
+      "category": "direct",
       "split": "holdout",
       "question": "Does David have DevOps or infrastructure as code experience?",
       "relevant_phrases": [
@@ -277,6 +306,7 @@
     },
     {
       "id": "leadership",
+      "category": "direct",
       "split": "holdout",
       "question": "Has David managed or led anyone?",
       "relevant_phrases": [
@@ -287,6 +317,7 @@
     },
     {
       "id": "mentoring",
+      "category": "direct",
       "split": "holdout",
       "question": "Does David mentor junior engineers?",
       "relevant_phrases": [
@@ -297,6 +328,7 @@
     },
     {
       "id": "cross-functional",
+      "category": "direct",
       "split": "dev",
       "question": "Has David worked on cross functional teams?",
       "relevant_phrases": [
@@ -306,6 +338,7 @@
     },
     {
       "id": "business-development",
+      "category": "direct",
       "split": "dev",
       "question": "Has David helped win new business?",
       "relevant_phrases": [
@@ -315,6 +348,7 @@
     },
     {
       "id": "stakeholder-comms",
+      "category": "direct",
       "split": "dev",
       "question": "How does David present to non-technical audiences?",
       "relevant_phrases": [
@@ -324,6 +358,7 @@
     },
     {
       "id": "additive-manufacturing",
+      "category": "direct",
       "split": "dev",
       "question": "Tell me about the additive manufacturing project.",
       "relevant_phrases": [
@@ -333,6 +368,7 @@
     },
     {
       "id": "hazmat-bom",
+      "category": "direct",
       "split": "holdout",
       "question": "Has David worked on bill of materials analysis?",
       "relevant_phrases": [
@@ -343,6 +379,7 @@
     },
     {
       "id": "anomaly-detection",
+      "category": "direct",
       "split": "holdout",
       "question": "Has David done anomaly detection?",
       "relevant_phrases": [
@@ -352,6 +389,7 @@
     },
     {
       "id": "web-scraping",
+      "category": "direct",
       "split": "dev",
       "question": "Has David built a web scraper?",
       "relevant_phrases": [
@@ -361,6 +399,7 @@
     },
     {
       "id": "predictive-maintenance",
+      "category": "direct",
       "split": "dev",
       "question": "Has David built models that predict equipment failure?",
       "relevant_phrases": [
@@ -370,6 +409,7 @@
     },
     {
       "id": "nietzsche-project",
+      "category": "direct",
       "split": "dev",
       "question": "Tell me about the Nietzsche chatbot.",
       "relevant_phrases": [
@@ -379,6 +419,7 @@
     },
     {
       "id": "nietzsche-reranking",
+      "category": "direct",
       "split": "dev",
       "question": "How does the Nietzsche chatbot rank its search results?",
       "relevant_phrases": [
@@ -389,6 +430,7 @@
     },
     {
       "id": "music-project",
+      "category": "direct",
       "split": "holdout",
       "question": "Tell me about the AI music generation project.",
       "relevant_phrases": [
@@ -398,6 +440,7 @@
     },
     {
       "id": "music-gpu",
+      "category": "direct",
       "split": "holdout",
       "question": "How does the music app run its model on a GPU?",
       "relevant_phrases": [
@@ -407,6 +450,7 @@
     },
     {
       "id": "rate-limiting",
+      "category": "direct",
       "split": "holdout",
       "question": "How does David handle rate limiting?",
       "relevant_phrases": [
@@ -416,6 +460,7 @@
     },
     {
       "id": "baby-names-project",
+      "category": "direct",
       "split": "dev",
       "question": "Tell me about the baby names project.",
       "relevant_phrases": [
@@ -425,6 +470,7 @@
     },
     {
       "id": "time-series",
+      "category": "direct",
       "split": "holdout",
       "question": "Has David worked with time series forecasting?",
       "relevant_phrases": [
@@ -434,6 +480,7 @@
     },
     {
       "id": "diamonds-project",
+      "category": "direct",
       "split": "dev",
       "question": "Tell me about the diamonds price prediction project.",
       "relevant_phrases": [
@@ -443,6 +490,7 @@
     },
     {
       "id": "r-language",
+      "category": "direct",
       "split": "holdout",
       "question": "Does David know R?",
       "relevant_phrases": [
@@ -453,6 +501,7 @@
     },
     {
       "id": "remote-work",
+      "category": "direct",
       "split": "holdout",
       "question": "Is David open to remote work?",
       "relevant_phrases": [
@@ -462,6 +511,7 @@
     },
     {
       "id": "relocation",
+      "category": "direct",
       "split": "holdout",
       "question": "Would David relocate?",
       "relevant_phrases": [
@@ -471,6 +521,7 @@
     },
     {
       "id": "location",
+      "category": "direct",
       "split": "dev",
       "question": "Where is David based?",
       "relevant_phrases": [
@@ -480,6 +531,7 @@
     },
     {
       "id": "role-sought",
+      "category": "direct",
       "split": "dev",
       "question": "What kind of job is David looking for?",
       "relevant_phrases": [
@@ -489,6 +541,7 @@
     },
     {
       "id": "defense-industry",
+      "category": "direct",
       "split": "dev",
       "question": "What industries has David worked in?",
       "relevant_phrases": [
@@ -498,6 +551,7 @@
     },
     {
       "id": "differentiator",
+      "category": "direct",
       "split": "dev",
       "question": "What makes David stand out from other candidates?",
       "relevant_phrases": [
@@ -508,11 +562,329 @@
     },
     {
       "id": "contact",
+      "category": "direct",
       "split": "dev",
       "question": "How can I contact David?",
       "relevant_phrases": [
         "david.p.west2@gmail.com",
         "LinkedIn"
+      ]
+    },
+    {
+      "id": "paraphrase-current-firm",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Which consulting enterprise presently employs him?",
+      "relevant_phrases": [
+        "Booz Allen Hamilton"
+      ]
+    },
+    {
+      "id": "paraphrase-undergrad-institution",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "Which higher education institution conferred his bachelor's diploma?",
+      "relevant_phrases": [
+        "Western Michigan University"
+      ]
+    },
+    {
+      "id": "paraphrase-undergrad-field",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What scientific discipline did he specialize in during his undergraduate program?",
+      "relevant_phrases": [
+        "Biochemistry"
+      ]
+    },
+    {
+      "id": "paraphrase-security-clearance",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What level of national defense vetting has been granted to him?",
+      "relevant_phrases": [
+        "Security clearance: Secret",
+        "Security clearance"
+      ]
+    },
+    {
+      "id": "paraphrase-tacom-service",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Did he serve as a federal civil servant for the Department of Defense?",
+      "relevant_phrases": [
+        "Operations Research Analyst",
+        "TACOM",
+        "Army civilian"
+      ]
+    },
+    {
+      "id": "paraphrase-security-plus",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "Which baseline defense cybersecurity credential does he hold?",
+      "relevant_phrases": [
+        "CompTIA Security+",
+        "Security+"
+      ]
+    },
+    {
+      "id": "paraphrase-backend-framework",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Which asynchronous Python framework handles endpoints and routing for his web services?",
+      "relevant_phrases": [
+        "FastAPI"
+      ]
+    },
+    {
+      "id": "paraphrase-frontend-libraries",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "What user interface library and styling utility powers his web applications?",
+      "relevant_phrases": [
+        "Next.js",
+        "Tailwind CSS"
+      ]
+    },
+    {
+      "id": "paraphrase-vector-indexing",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What indexing library calculates similarity over dense mathematical representations?",
+      "relevant_phrases": [
+        "faiss",
+        "faiss-cpu"
+      ]
+    },
+    {
+      "id": "paraphrase-cross-encoder-stage",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Which secondary transformer model re-scores candidate search passages?",
+      "relevant_phrases": [
+        "ms-marco-MiniLM-L-6-v2",
+        "cross-encoder"
+      ]
+    },
+    {
+      "id": "paraphrase-music-gpu-infra",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What cloud provider manages remote GPU containers for his audio synthesis app?",
+      "relevant_phrases": [
+        "Modal"
+      ]
+    },
+    {
+      "id": "paraphrase-music-client",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "How does the sound generation backend eliminate repeated TCP handshake overhead?",
+      "relevant_phrases": [
+        "HTTP/2 with httpx",
+        "httpx"
+      ]
+    },
+    {
+      "id": "paraphrase-series-stationarity",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What statistical hypothesis procedures verify constant mean and variance across historical sequences?",
+      "relevant_phrases": [
+        "ADF and KPSS",
+        "KPSS"
+      ]
+    },
+    {
+      "id": "paraphrase-diamonds-families",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Which four algorithmic model families were benchmarked against held-out gem records?",
+      "relevant_phrases": [
+        "four families on an 80/20",
+        "regression decision trees"
+      ]
+    },
+    {
+      "id": "paraphrase-philosophical-corpus",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Whose historical writings and aphorisms are indexed for interactive dialogue?",
+      "relevant_phrases": [
+        "Nietzsche"
+      ]
+    },
+    {
+      "id": "paraphrase-cemetery-project",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "Which historic military cemetery required automated auditing of over a quarter million burial archives?",
+      "relevant_phrases": [
+        "Arlington National Cemetery"
+      ]
+    },
+    {
+      "id": "conceptual-model-complexity-tradeoff",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does David evaluate the trade-off between algorithmic complexity and interpretability across predictive projects?",
+      "relevant_phrases": [
+        "cost of interpretability",
+        "between a linear model and a random forest"
+      ]
+    },
+    {
+      "id": "conceptual-pipeline-simplification",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What architectural philosophy guides his decision to discard complex machine learning stages in favor of simpler baselines?",
+      "relevant_phrases": [
+        "lost to plain keyword search on every metric",
+        "cheaper and better is a stronger outcome than a tuned constant"
+      ]
+    },
+    {
+      "id": "conceptual-production-regression-defense",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he protect production conversational and retrieval pipelines from silent performance regressions?",
+      "relevant_phrases": [
+        "running regression harnesses on pull requests to benchmark retrieval accuracy",
+        "gate that fails the build when it stops working"
+      ]
+    },
+    {
+      "id": "conceptual-serverless-scaling-patterns",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "What strategies does he utilize across web services to minimize idle server costs and optimize container scaling?",
+      "relevant_phrases": [
+        "Next.js on Vercel",
+        "Modal",
+        "serverless reverse proxy"
+      ]
+    },
+    {
+      "id": "conceptual-forecast-uncertainty-modeling",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "How does he address uncertainty quantification and variance in quantitative time-series modeling?",
+      "relevant_phrases": [
+        "conformal prediction intervals",
+        "ADF and KPSS"
+      ]
+    },
+    {
+      "id": "conceptual-query-context-alignment",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he verify that conversational search systems retrieve genuinely grounding context rather than relying on LLM hallucination?",
+      "relevant_phrases": [
+        "relevant context rather than relying on",
+        "Phrases survive re-chunking"
+      ]
+    },
+    {
+      "id": "conceptual-human-in-the-loop-audit",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What approach does he take toward human-in-the-loop validation and auditing for high-stakes automated extraction systems?",
+      "relevant_phrases": [
+        "human-in-the-loop review",
+        "prioritize human review, and deployed full-stack review tools"
+      ]
+    },
+    {
+      "id": "conceptual-microservice-separation",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "How does he architect full-stack applications to separate user interaction layers from heavy machine learning workloads?",
+      "relevant_phrases": [
+        "Next.js frontend and submits",
+        "deliberately layered to separate concerns cleanly",
+        "FastAPI backend on Railway"
+      ]
+    },
+    {
+      "id": "conceptual-empirical-measurement-vs-hyperparams",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "Why does he prioritize empirical measurement over adjusting theoretical hyperparameters when tuning retrieval systems?",
+      "relevant_phrases": [
+        "weighted blend of semantic and keyword search",
+        "only measurement tells you the system does what you meant",
+        "deleted it rather than tuned it"
+      ]
+    },
+    {
+      "id": "conceptual-data-cleaning-geometry",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he ensure data processing pipelines handle missing values and impossible physical observations without silent corruption?",
+      "relevant_phrases": [
+        "physically impossible. Those were converted to NAs",
+        "correcting for population growth"
+      ]
+    },
+    {
+      "id": "conceptual-devsecops-defense-standards",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What DevSecOps practices does he adhere to when deploying services under strict enterprise and defense environments?",
+      "relevant_phrases": [
+        "meeting strict DevSecOps standards",
+        "container vulnerability scanning"
+      ]
+    },
+    {
+      "id": "conceptual-statistical-evaluation-rigor",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "How does he prevent benchmark contamination and data leakage between model development and published metrics?",
+      "relevant_phrases": [
+        "split into a development portion and a held-out portion",
+        "numbers i publish aren't the numbers something was tuned against"
+      ]
+    },
+    {
+      "id": "conceptual-agentic-developer-velocity",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What workflows and modern tooling does he leverage to maintain development velocity in AI-assisted coding environments?",
+      "relevant_phrases": [
+        "Antigravity and Claude Code",
+        "reproduces the PR gates exactly"
+      ]
+    },
+    {
+      "id": "conceptual-api-connection-latency",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he engineer network communication to minimize handshake overhead and latency across microservices?",
+      "relevant_phrases": [
+        "HTTP/2 with httpx",
+        "service-to-service communication routed entirely through private VPC"
+      ]
+    },
+    {
+      "id": "conceptual-sql-guardrail-architecture",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "What security constraints and execution guardrails prevent runaway resource consumption in natural language database agents?",
+      "relevant_phrases": [
+        "against the names schema",
+        "rule-based detection methods"
+      ]
+    },
+    {
+      "id": "conceptual-technical-leadership-mentorship",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "What experience does he bring in technical leadership, mentoring junior engineers, and managing project delivery?",
+      "relevant_phrases": [
+        "Manage two full-time employees, help foster career growth",
+        "Lead a team of 4"
       ]
     }
   ]

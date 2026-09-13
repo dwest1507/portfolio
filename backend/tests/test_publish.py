@@ -29,11 +29,13 @@ from eval.publish import (
 )
 
 
-def _raw(arm: str, hit: float, mrr: float) -> dict:
+def _raw(arm: str, hit: float, mrr: float, by_category: dict | None = None) -> dict:
+    summary = {"recall@5": 0.5, "hit@5": hit, "mrr": mrr, "ndcg@5": 0.6}
     return {
         "arm": arm,
         "top_k": 5,
-        "summary": {"recall@5": 0.5, "hit@5": hit, "mrr": mrr, "ndcg@5": 0.6},
+        "summary": summary,
+        "by_category": by_category if by_category is not None else {"direct": dict(summary)},
         "cases": [],
     }
 
@@ -93,21 +95,51 @@ class TestArmSpecs:
 
 
 class TestResultsDocument:
+    def test_schema_version_is_3(self):
+        assert SCHEMA_VERSION == 3
+
     def test_carries_provenance_and_arm_metadata(self):
         doc = _document()
+        assert doc["schemaVersion"] == 3
         assert doc["corpusChunks"] == 49
         assert doc["goldenQuestions"] == 55
         assert doc["gatingMetric"] == "hit@5"
         assert doc["split"] == "all"
+        assert doc["categories"] == ["direct"]
         assert doc["metricNames"] == ["recall@5", "hit@5", "mrr", "ndcg@5"]
 
         bm25 = next(a for a in doc["arms"] if a["id"] == "bm25")
         assert bm25["label"] == ARM_SPEC_BY_ID["bm25"].label
         assert bm25["metrics"]["hit@5"] == 1.0
+        assert bm25["byCategory"]["direct"]["hit@5"] == 1.0
         assert bm25["shipped"] is True
 
         rerank = next(a for a in doc["arms"] if a["id"] == "rerank")
         assert rerank["shipped"] is False
+        assert rerank["byCategory"]["direct"]["hit@5"] == 0.909
+
+    def test_carries_per_category_metrics_for_each_arm(self):
+        bm25_cat = {
+            "direct": {"recall@5": 0.8, "hit@5": 1.0, "mrr": 0.9, "ndcg@5": 0.85},
+            "paraphrase": {"recall@5": 0.4, "hit@5": 0.6, "mrr": 0.5, "ndcg@5": 0.45},
+        }
+        doc = _document(results=[_raw("bm25", 0.9, 0.7, by_category=bm25_cat)])
+        assert doc["schemaVersion"] == 3
+        assert doc["categories"] == ["direct", "paraphrase"]
+        bm25 = next(a for a in doc["arms"] if a["id"] == "bm25")
+        assert bm25["byCategory"]["direct"]["hit@5"] == 1.0
+        assert bm25["byCategory"]["paraphrase"]["hit@5"] == 0.6
+
+    def test_carries_category_counts(self):
+        cases = [
+            {"id": "c1", "category": "direct"},
+            {"id": "c2", "category": "direct"},
+            {"id": "c3", "category": "paraphrase"},
+        ]
+        results = [_raw("bm25", 1.0, 0.9)]
+        results[0]["cases"] = cases
+        doc = _document(results=results)
+        assert doc["categoryCounts"] == {"direct": 2, "paraphrase": 1}
 
     def test_metric_names_follow_the_cutoff(self):
         """--top-k 10 publishes hit@10, so nothing downstream may assume @5."""

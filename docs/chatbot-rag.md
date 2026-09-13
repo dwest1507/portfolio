@@ -40,7 +40,7 @@ make build-index
    not silently redacted, it fails the test, and the source gets fixed. That is
    the stated order of operations — the sources should be clean to begin with,
    and redaction is only the backstop.
-2. **Chunk** — ~200–300 token chunks with overlap; paragraph-based splitting to preserve complete thoughts
+2. **Chunk** — ~200–300 token chunks with overlap snapped outward to word boundaries; paragraph-based splitting to preserve complete thoughts without mid-word word truncation
 3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk
 4. **Index** — Builds a FAISS index (vector search) and a BM25 index (keyword search).
    BM25 terms are lowercased, stopword-filtered, and Snowball-stemmed by
@@ -172,5 +172,7 @@ discarded at zero. Rank position is scale-free and has neither problem.
 
 ## Evaluation
 
-Retrieval quality is measured against a 55-question golden set and gated in CI.
-See [evaluation.md](evaluation.md).
+Retrieval quality is measured against an 87-question golden set across three query
+categories (`direct`, `paraphrase`, `conceptual`) and gated in CI.
+See [docs/evaluation.md](docs/evaluation.md) for how the harness works, the regression
+floors it enforces, and the findings that shaped the pipeline.

@@ -21,7 +21,9 @@ from pathlib import Path
 # Bumped to 2 when the document gained `split`: a v1 file records a run over the whole
 # golden set, which is not the same measurement as a v2 held-out run and must not be
 # compared with one.
-SCHEMA_VERSION = 2
+# Bumped to 3 when the document gained `categories` and per-arm `byCategory` breakdowns
+# to segment in-vocabulary direct queries from paraphrases and conceptual questions.
+SCHEMA_VERSION = 3
 
 BEGIN_MARKER = "<!-- eval:begin -->"
 END_MARKER = "<!-- eval:end -->"
@@ -158,12 +160,12 @@ def _run_url() -> str | None:
 
 def build_results_document(
     results: list[dict],
-    *,
     corpus_chunks: int,
     golden_questions: int,
     top_k: int,
     gating_metric: str,
     split: str = "all",
+    category_counts: dict[str, int] | None = None,
 ) -> dict:
     """Assemble the published measured run from raw per-arm harness output.
 
@@ -171,6 +173,15 @@ def build_results_document(
     run at a different cutoff publishes hit@10 without a frontend change.
     """
     metric_names = list(results[0]["summary"].keys()) if results else []
+    categories = sorted({cat for r in results for cat in r.get("by_category", {})})
+
+    if category_counts is None:
+        category_counts = {}
+        if results and "cases" in results[0]:
+            for c in results[0]["cases"]:
+                cat = c.get("category")
+                if cat:
+                    category_counts[cat] = category_counts.get(cat, 0) + 1
 
     arms = []
     for r in results:
@@ -180,6 +191,14 @@ def build_results_document(
                 f"Arm {r['arm']!r} has no entry in ARM_SPECS, so it cannot be published. "
                 "Add one alongside its implementation."
             )
+        by_category = {}
+        for cat in categories:
+            if cat in r.get("by_category", {}):
+                by_category[cat] = {
+                    m: round(r["by_category"][cat][m], 4)
+                    for m in metric_names
+                    if m in r["by_category"][cat]
+                }
         arms.append(
             {
                 "id": spec.id,
@@ -188,6 +207,7 @@ def build_results_document(
                 "technical": spec.technical,
                 "shipped": spec.shipped,
                 "metrics": {m: round(r["summary"][m], 4) for m in metric_names},
+                "byCategory": by_category,
             }
         )
 
@@ -201,6 +221,8 @@ def build_results_document(
         "split": split,
         "topK": top_k,
         "gatingMetric": gating_metric,
+        "categories": categories,
+        "categoryCounts": category_counts,
         "metricNames": metric_names,
         "arms": arms,
     }
@@ -215,6 +237,8 @@ MEASURED_KEYS = (
     "split",
     "topK",
     "gatingMetric",
+    "categories",
+    "categoryCounts",
     "metricNames",
     "arms",
 )

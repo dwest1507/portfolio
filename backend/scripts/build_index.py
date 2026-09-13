@@ -141,6 +141,40 @@ def _strip_mdx(text: str) -> str:
     return text.strip()
 
 
+def _snap_overlap_to_word_boundary(
+    prev_text: str, overlap_chars: int = CHUNK_OVERLAP, max_lookback: int = 40
+) -> str:
+    """Extract trailing overlap text from prev_text snapped to a word boundary.
+
+    Snaps backward to include the full word if the cut lands mid-word.
+    If no whitespace is found within max_lookback characters (e.g. unbroken URL),
+    falls back to snapping forward to the next whitespace boundary.
+    """
+    if len(prev_text) <= overlap_chars:
+        return prev_text
+
+    start = len(prev_text) - overlap_chars
+
+    # If already at a word boundary, return clean slice
+    if start == 0 or prev_text[start - 1].isspace() or prev_text[start].isspace():
+        return prev_text[start:].lstrip()
+
+    # Step backward up to max_lookback chars to find whitespace
+    bound = max(0, start - max_lookback)
+    curr = start - 1
+    while curr >= bound:
+        if prev_text[curr].isspace():
+            return prev_text[curr + 1 :].lstrip()
+        curr -= 1
+
+    # Fallback if unbroken string exceeds max_lookback: snap forward to next whitespace
+    for idx in range(start + 1, len(prev_text)):
+        if prev_text[idx].isspace():
+            return prev_text[idx + 1 :].lstrip()
+
+    return ""
+
+
 def _chunk_text(text: str, source: str) -> list[dict]:
     """Split text into overlapping chunks, preferring paragraph boundaries."""
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
@@ -177,19 +211,17 @@ def _chunk_text(text: str, source: str) -> list[dict]:
     if current:
         chunks.append({"text": current, "source": source})
 
-    # Add overlap: prepend tail of previous chunk to next chunk
+    # Add overlap: prepend tail of previous chunk to next chunk, snapped to word boundaries
     overlapped: list[dict] = []
     for i, chunk in enumerate(chunks):
         if i > 0:
             prev_text = chunks[i - 1]["text"]
-            overlap_text = (
-                prev_text[-CHUNK_OVERLAP:] if len(prev_text) > CHUNK_OVERLAP else prev_text
-            )
-            # Only add overlap if it doesn't push us way over the limit
-            merged = (overlap_text + " " + chunk["text"]).strip()
-            if len(merged) <= CHUNK_SIZE * 1.3:
-                overlapped.append({"text": merged, "source": chunk["source"]})
-                continue
+            overlap_text = _snap_overlap_to_word_boundary(prev_text)
+            if overlap_text:
+                merged = (overlap_text + " " + chunk["text"]).strip()
+                if len(merged) <= CHUNK_SIZE * 1.3:
+                    overlapped.append({"text": merged, "source": chunk["source"]})
+                    continue
         overlapped.append(chunk)
 
     return overlapped

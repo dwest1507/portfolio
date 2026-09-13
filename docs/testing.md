@@ -116,7 +116,7 @@ uv run pytest tests -q \
 ## Retrieval Evaluation
 
 Unit tests check that retrieval code behaves as written; they cannot tell you
-whether retrieval is any *good*. That is measured separately by a 55-question
+whether retrieval is any *good*. That is measured separately by an 87-question
 golden set scored on hit@5, recall@5, MRR, and nDCG@5, and gated in CI:
 
 ```bash
@@ -124,7 +124,8 @@ make eval        # all arms (downloads ~500MB of models on first run)
 make eval-fast   # BM25 arm only — no model download
 ```
 
-The golden set is split 33 dev / 22 held-out. Decisions are made against `dev`; the
+The golden set is split 54 dev / 33 held-out across three query categories (`direct`,
+`paraphrase`, `conceptual`). Decisions are made against `dev`; the
 published table reports `holdout`, so no number on the public page is the score of a
 configuration chosen using those same questions.
 

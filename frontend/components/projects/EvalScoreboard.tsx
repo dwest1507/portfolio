@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from 'react'
 import {
   evalRun,
   leadingArmIds,
@@ -11,6 +14,13 @@ function format(value: number | undefined): string {
   return value === undefined ? '—' : value.toFixed(3)
 }
 
+function categoryLabel(cat: string): string {
+  if (cat === 'all') return 'All queries'
+  if (cat === 'direct') return 'Direct'
+  if (cat === 'paraphrase') return 'Paraphrase'
+  return cat.charAt(0).toUpperCase() + cat.slice(1)
+}
+
 /**
  * The measured run, rendered.
  *
@@ -20,21 +30,59 @@ function format(value: number | undefined): string {
  * arm is added, or the shipped configuration changes.
  */
 export default function EvalScoreboard() {
+  const [activeCategory, setActiveCategory] = useState<string>('all')
   const metrics = evalRun.metricNames
+  const categories = ['all', ...(evalRun.categories ?? [])]
+
   // Sets, not single ids: every arm tied for a column's best is highlighted, so the
   // caption's "Best score per column in blue" stays true when two arms tie.
-  const winners = Object.fromEntries(metrics.map((m) => [m, new Set(leadingArmIds(m))]))
+  const winners = Object.fromEntries(
+    metrics.map((m) => [m, new Set(leadingArmIds(m, evalRun.arms, activeCategory))])
+  )
+
+  const getMetric = (arm: EvalArm, m: string) => {
+    if (activeCategory !== 'all' && arm.byCategory?.[activeCategory]) {
+      return arm.byCategory[activeCategory][m]
+    }
+    return arm.metrics[m]
+  }
 
   return (
     <figure className="my-8">
       <div className="overflow-hidden rounded-xl border border-white/[0.06] shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
         {/* Header strip */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
-          <span className="font-mono text-[8px] tracking-[0.3em] text-[#8a8f98]/40">
-            RETRIEVAL EVAL
-          </span>
-          <span className="ml-auto font-mono text-[9px] tracking-widest text-[#8a8f98]">
-            {sampleLabel()} · {evalRun.corpusChunks} chunks
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="font-mono text-[8px] tracking-[0.3em] text-[#8a8f98]/40">
+              RETRIEVAL EVAL
+            </span>
+            <div
+              role="tablist"
+              aria-label="Filter evaluation by query category"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              {categories.map((cat) => {
+                const isSelected = activeCategory === cat
+                return (
+                  <button
+                    key={cat}
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`rounded-full border px-3 py-1 font-mono text-[10px] tracking-wider transition-all duration-150 focus-visible:ring-1 focus-visible:ring-[#0ea5e9] focus-visible:outline-none ${
+                      isSelected
+                        ? 'border-[#0ea5e9]/50 bg-[#0ea5e9]/10 text-[#0ea5e9] shadow-[0_0_0_1px_rgba(14,165,233,0.3)]'
+                        : 'border-white/[0.08] bg-transparent text-[#8a8f98] hover:border-white/[0.14] hover:text-[#ededef]'
+                    }`}
+                  >
+                    {categoryLabel(cat)}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <span className="font-mono text-[9px] tracking-widest text-[#8a8f98]">
+            {sampleLabel(evalRun, activeCategory)} · {evalRun.corpusChunks} chunks
           </span>
         </div>
 
@@ -42,7 +90,8 @@ export default function EvalScoreboard() {
         <div className="overflow-x-auto bg-[#0a0a0c]">
           <table className="w-full min-w-[34rem] border-collapse text-left">
             <caption className="sr-only">
-              Retrieval quality by pipeline configuration, measured on {sampleLabel()}.
+              Retrieval quality by pipeline configuration, measured on{' '}
+              {sampleLabel(evalRun, activeCategory)}.
             </caption>
             <thead>
               <tr className="border-b border-white/[0.06]">
@@ -87,6 +136,7 @@ export default function EvalScoreboard() {
                   </th>
                   {metrics.map((m) => {
                     const isBest = winners[m].has(arm.id)
+                    const val = getMetric(arm, m)
                     return (
                       <td
                         key={m}
@@ -94,7 +144,7 @@ export default function EvalScoreboard() {
                           isBest ? 'text-[#0ea5e9]' : 'text-[#8a8f98]'
                         }`}
                       >
-                        {format(arm.metrics[m])}
+                        {format(val)}
                         {isBest && <span className="sr-only"> (best)</span>}
                       </td>
                     )
@@ -107,7 +157,9 @@ export default function EvalScoreboard() {
 
         {/* The verdict is computed from the table above it, never typed. */}
         <div className="border-t border-white/[0.06] bg-white/[0.03] px-4 py-3">
-          <p className="text-sm leading-relaxed text-[#ededef]">{verdictLine()}</p>
+          <p className="text-sm leading-relaxed text-[#ededef]">
+            {verdictLine(evalRun, activeCategory)}
+          </p>
         </div>
       </div>
 

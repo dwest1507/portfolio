@@ -15,7 +15,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from build_index import _chunk_text, _strip_mdx
+from build_index import _chunk_text, _snap_overlap_to_word_boundary, _strip_mdx
 
 
 def test_chunk_text_respects_max_size():
@@ -43,6 +43,77 @@ def test_chunk_text_produces_overlap():
     # Overlap: chunk[1] should start with tail of chunk[0] content
     first_end = chunks[0]["text"][-80:]
     assert first_end[:5] in chunks[1]["text"]
+
+
+def test_chunk_text_overlap_snaps_to_word_boundary():
+    """Overlap prefix must not begin with a mid-word fragment."""
+    text = (
+        ("David has extensive experience in software architecture. " * 20)
+        + "\n\n"
+        + ("Next section about artificial intelligence and computer vision projects. " * 10)
+    )
+    chunks = _chunk_text(text, source="test")
+    assert len(chunks) >= 2
+    for i in range(1, len(chunks)):
+        assert not chunks[i]["text"].startswith("ensive"), "Must not slice 'extensive' mid-word"
+        assert chunks[i]["text"].startswith("extensive"), "Must snap backward to word start"
+
+
+def test_snap_overlap_to_word_boundary_edge_cases():
+    """Test boundary snapping behavior across all edge cases."""
+    # 1. Short text (len <= overlap_chars)
+    assert _snap_overlap_to_word_boundary("short text", overlap_chars=20) == "short text"
+
+    # 2. Cut lands exactly on whitespace or preceded by whitespace
+    prev = "word1 word2 word3 word4"
+    # len = 23. If overlap = 11: start = 12. prev[11] is ' ', prev[12] is 'w' ('word3 word4')
+    assert _snap_overlap_to_word_boundary(prev, overlap_chars=11) == "word3 word4"
+
+    # 3. Cut lands mid-word (snaps backward to include full word)
+    prev = "David has extensive experience"
+    # len = 30. "experience" is 10 chars. If overlap = 6 ("rience"), start = 24.
+    # Snaps backward to start of "experience"
+    assert _snap_overlap_to_word_boundary(prev, overlap_chars=6) == "experience"
+
+    # 4. Unbroken string > max_lookback (40 chars) falls back to forward snap
+    long_unbroken = "a" * 50
+    prev = f"intro {long_unbroken} outro"
+    # overlap cuts inside long_unbroken, looking back 40 chars finds no space.
+    # Falls back to forward snap (next space is before 'outro')
+    overlap = _snap_overlap_to_word_boundary(prev, overlap_chars=len("outro") + 25, max_lookback=10)
+    assert overlap == "outro"
+
+    # 5. Unbroken string with no whitespace anywhere after start
+    prev = "start " + ("b" * 60)
+    overlap = _snap_overlap_to_word_boundary(prev, overlap_chars=30, max_lookback=10)
+    assert overlap == ""
+
+
+def test_committed_chunks_have_no_mid_word_overlap_cuts():
+    """Invariant: committed chunks.json must not have any overlap beginning mid-word."""
+    chunks_path = Path(__file__).resolve().parent.parent / "indexes" / "chunks.json"
+    if not chunks_path.exists():
+        pytest.skip("indexes/chunks.json does not exist")
+
+    with open(chunks_path) as f:
+        chunks = json.load(f)
+
+    corrupted = []
+    for i in range(1, len(chunks)):
+        prev = chunks[i - 1]["text"]
+        curr = chunks[i]["text"]
+        # Find overlap prefix in curr that matches a suffix of prev
+        for length in range(min(150, len(prev)), 10, -1):
+            tail = prev[-length:]
+            if curr.startswith(tail):
+                start_in_prev = len(prev) - length
+                if start_in_prev > 0 and not prev[start_in_prev - 1].isspace():
+                    corrupted.append((i, prev[start_in_prev - 5 : start_in_prev + 10]))
+                break
+
+    assert not corrupted, (
+        f"Found {len(corrupted)} chunks with mid-word overlap cuts in chunks.json: {corrupted[:5]}"
+    )
 
 
 def test_strip_mdx_removes_code_blocks():

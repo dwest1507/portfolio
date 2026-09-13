@@ -12,6 +12,8 @@
  */
 import run from './evalResults.json'
 
+export type QueryCategory = 'direct' | 'paraphrase' | 'conceptual'
+
 export interface EvalArm {
   /** Harness arm name, matching `--arms` in eval/run_eval.py. */
   id: string
@@ -24,6 +26,8 @@ export interface EvalArm {
   shipped: boolean
   /** Keyed by metric name, e.g. `hit@5`. Names come from `metricNames`. */
   metrics: Record<string, number>
+  /** Per-category metrics, keyed by category (e.g. `direct`). */
+  byCategory: Record<string, Record<string, number>>
 }
 
 export interface EvalRun {
@@ -45,12 +49,23 @@ export interface EvalRun {
   topK: number
   /** The metric the verdict is decided on. */
   gatingMetric: string
+  /** Query categories evaluated in this run, e.g. `['direct']`. */
+  categories: string[]
+  /** Number of cases per category evaluated in this run. */
+  categoryCounts?: Record<string, number>
   /** Metric column order, following the run's cutoff. */
   metricNames: string[]
   arms: EvalArm[]
 }
 
 export const evalRun: EvalRun = run as EvalRun
+
+function getArmMetric(arm: EvalArm, metric: string, category?: string): number {
+  if (category && category !== 'all' && arm.byCategory?.[category]) {
+    return arm.byCategory[category][metric] ?? -Infinity
+  }
+  return arm.metrics[metric] ?? -Infinity
+}
 
 /**
  * The arm scoring highest on a metric. Ties resolve to the earliest arm listed.
@@ -59,9 +74,13 @@ export const evalRun: EvalRun = run as EvalRun
  * so a positional tie-break resolves every tie in production's favour — the one direction
  * this page cannot afford to round.
  */
-export function leadingArm(metric: string, arms: EvalArm[] = evalRun.arms): EvalArm {
+export function leadingArm(
+  metric: string,
+  arms: EvalArm[] = evalRun.arms,
+  category?: string
+): EvalArm {
   return arms.reduce((best, arm) =>
-    (arm.metrics[metric] ?? -Infinity) > (best.metrics[metric] ?? -Infinity) ? arm : best
+    getArmMetric(arm, metric, category) > getArmMetric(best, metric, category) ? arm : best
   )
 }
 
@@ -72,9 +91,14 @@ export function leadingArm(metric: string, arms: EvalArm[] = evalRun.arms): Eval
  * and `bm25+rerank` currently both take hit@5, and highlighting only the first would show
  * the shipped arm beating one it merely matched.
  */
-export function leadingArmIds(metric: string, arms: EvalArm[] = evalRun.arms): string[] {
-  const best = leadingArm(metric, arms).metrics[metric] ?? -Infinity
-  return arms.filter((a) => a.metrics[metric] === best).map((a) => a.id)
+export function leadingArmIds(
+  metric: string,
+  arms: EvalArm[] = evalRun.arms,
+  category?: string
+): string[] {
+  const leader = leadingArm(metric, arms, category)
+  const best = getArmMetric(leader, metric, category)
+  return arms.filter((a) => getArmMetric(a, metric, category) === best).map((a) => a.id)
 }
 
 /** The arm mirroring production, if the run flagged one. */
@@ -89,12 +113,15 @@ export function shippedArm(arms: EvalArm[] = evalRun.arms): EvalArm | undefined 
  * changes on its own when the shipped configuration does. Mirrors `verdict_line()` in
  * backend/eval/publish.py.
  */
-export function verdictLine(run: EvalRun = evalRun): string {
+export function verdictLine(run: EvalRun = evalRun, category?: string): string {
   const metric = run.gatingMetric
-  const leader = leadingArm(metric, run.arms)
-  const leaders = leadingArmIds(metric, run.arms)
+  const leader = leadingArm(metric, run.arms, category)
+  const leaders = leadingArmIds(metric, run.arms, category)
   const shipped = shippedArm(run.arms)
-  const score = (arm: EvalArm) => (arm.metrics[metric] ?? 0).toFixed(3)
+  const score = (arm: EvalArm) => {
+    const val = getArmMetric(arm, metric, category)
+    return val === -Infinity ? '0.000' : val.toFixed(3)
+  }
 
   if (!shipped) {
     return `${leader.label} leads on ${metric} (${score(leader)}). No arm is flagged as shipped.`
@@ -128,9 +155,15 @@ export function metricLabel(metric: string): string {
  * published is the harness's decision (`PUBLISHED_SPLIT` in eval/run_eval.py). A page
  * that hardcoded "held-out" would keep saying it after that decision changed.
  */
-export function sampleLabel(run: EvalRun = evalRun): string {
-  const noun = run.goldenQuestions === 1 ? 'question' : 'questions'
+export function sampleLabel(run: EvalRun = evalRun, category?: string): string {
+  const isCategory = Boolean(category && category !== 'all')
+  const count =
+    isCategory && category && run.categoryCounts?.[category] !== undefined
+      ? run.categoryCounts[category]
+      : run.goldenQuestions
+  const noun = count === 1 ? 'question' : 'questions'
+  const categoryPrefix = isCategory ? `${category} ` : ''
   return run.split === 'holdout'
-    ? `${run.goldenQuestions} held-out ${noun}`
-    : `${run.goldenQuestions} ${noun}`
+    ? `${count} held-out ${categoryPrefix}${noun}`
+    : `${count} ${categoryPrefix}${noun}`
 }

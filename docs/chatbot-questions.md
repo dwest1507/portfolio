@@ -86,7 +86,7 @@ Primarily AWS, but I have some experience with Palantir's Foundry platform, Verc
 I have extensive experience with AWS GovCloud and Impact Level 5 authorized environments. I've used Bedrock, Lambda, EKS, S3, SQS, SNS, DynamoDB, CloudWatch, CloudTrail, Textract, IAM, KMS, and API Gateway.
 
 **What databases has David worked with?**
-David has worked with SQLite and DynamoDB. He starting to develop skills with graph databases as well, specifically AWS Neptune.
+I have worked with SQLite and DynamoDB. I'm starting to develop skills with graph databases as well, specifically Neo4j.
 
 **What is David's experience with APIs and backend development?**
 I have experience building APIs using FastAPI. I've also worked with AWS API Gateway and Lambda to create serverless APIs. I'm comfortable with backend development and have built RESTful APIs for various applications.
@@ -96,6 +96,15 @@ I have some frontend experience using React and Typescript. I've built a few web
 
 **What dev tools and workflow does David use day to day?**
 At work I use a Government-Approved version of Windsurf as my IDE. I use Git/GitHub for version control, AWS for cloud services, Docker for containerization, Kubernetes for orchestration, Terraform with Terragrunt for infrastructure as code, GitHub Actions for CI/CD, Jira for project management, Confluence for documentation, and Microsoft Teams for communication. For my personal projects, I use VS Code, Claude Code, Git/GitHub, GitHub Actions, Docker, Railway, Vercel, and Modal.
+
+**What is David's experience with Terraform and Infrastructure as Code (IaC)?**
+I have extensive experience managing infrastructure as code using Terraform combined with Terragrunt to enforce DRY principles, modularity, and repeatable deployments across multiple AWS GovCloud accounts. In my work at Booz Allen, I architected and automated the deployment of complete enterprise environments, including VPC endpoints, Application Load Balancers, SSM-managed EC2 bastions, KMS customer-managed keys, ECR repositories, EKS Kubernetes clusters, and event-driven serverless Document AI pipelines (Lambda, SQS, SNS, DynamoDB, Bedrock). I designed secure private networking where EKS cluster access is strictly restricted to authorized users on the corporate VPN, with all service-to-service communication routed entirely through private VPC endpoints rather than the public internet. All infrastructure is defined as code to meet strict DoD Impact Level 5 (IL5) and CMMC Level 2 compliance standards, with state managed via remote S3 backends. Beyond building the infrastructure, I also upskilled and mentored team members on IaC best practices so they could independently and reliably deploy these architectures for their own customer projects.
+
+**What is David's experience with CI/CD and GitHub Actions?**
+I have extensive experience designing and maintaining automated CI/CD pipelines using GitHub Actions, as well as integrating deployments with enterprise systems like Azure DevOps. Across my personal projects, I build production-grade workflows that automate code quality checks (Ruff, ESLint, Prettier, TypeScript verification), unit and integration testing (Pytest and Vitest with dependency caching via uv), security and dependency scanning, and automated semantic releases via Release Please. Uniquely, I also use GitHub Actions to enforce automated AI evaluation gates—such as running regression harnesses on pull requests to benchmark retrieval accuracy before code can merge. At Booz Allen, I implemented similar automated GitHub Actions workflows to maintain code quality and test coverage across multiple repositories, and I collaborated with a Cloud Ops team to integrate our containerized human-in-the-loop web applications into an enterprise Azure DevOps CI/CD pipeline meeting strict DevSecOps scanning standards.
+
+**What IDEs is David familiar with?**
+VS Code, Windsurf/Devin, Antigravity, RStudio.
 
 ---
 
@@ -152,6 +161,12 @@ Primarily through personal projects rather than my professional roles. In my Bab
 **What ML tools has David used for experiment tracking or model management?**
 Rather than using third-party tracking platforms like MLflow or Weights & Biases, I rely on automated CI/CD evaluation harnesses and Git-based versioning. For instance, in my portfolio's RAG system, I built a custom retrieval evaluation pipeline in GitHub Actions that benchmarks different embedding and re-ranking arms on pull requests, enforces quality gates, and publishes versioned evaluation results.
 
+**Does David use AI coding assistants?**
+Yes, I use AI coding assistants frequently to help me with my day to day work. At work, I utilize a government-approved version of Windsurf/Devin. At home, I use Antigravity and Claude Code. I also have experience using Cursor.
+
+**How does David use AI coding assistants?**
+I'm a fan of Matt Pocock's development workflow, ["AI Skills for Real Engineers"](https://github.com/mattpocock/skills). I'll start by defining the problem statement and the desired outcome and provide any relevant context. Then I invoke the skill "grill-with-docs" which prompts the AI to "grill the user relentlessly about a plan, decision, or idea" and "build and sharpen a project's domain model". This entails a prolonged session of Q&A with the AI and updating the project's documentation to continue to build the context needed for this AI agent and future AI agents. I go back and forth with the AI agent through multiple rounds of questioning until I'm satisfied with the technical direction and we're both confident in the architectural design. After the design is settled, I'll invoke the skill "to-spec" to "turn the current conversation into a spec and publish it to the project issue tracker." I've recently been using GitHub actions as the issue tracker. Then I invoke the skill "to-tickets" that breaks the spec into individual vertical slices of the problem and they get published to the issue tracker. After all the tickets are made, I create a new session and give the AI the spec and one vertical slice to complete and tell it use test driven development. If vertical slices are independent from each other, I can have the AI work on multiple vertical slices in parallel. I iterate until all vertical slices are complete and then have the AI create a pull request (PR). I then have an AI agent perform a review of the PR and mitigate any findings. Finally, I'll perform a manual review of the PR and perform any manual end-to-end testing that is needed. If everything is good, I merge to main. Using this workflow has been yielding high quality outputs and has allowed me to be more productive while still being in control of the overall direction of the project and understanding the technical architecture. This understanding is critical for me to be able to effectively debug and troubleshoot the project when issues arise.
+ 
 ---
 
 ## Projects
@@ -234,18 +249,19 @@ I build personal projects to stay current with the rapidly changing AI landscape
 ## Soft Skills & Working Style
 
 **How does David communicate with non-technical stakeholders?**
+I do this frequently at Booz Allen when communicating to customers and internal stakeholders. I often focus on defining a clear problem statement and what the solution does to solve that problem. I also typically focus on the "why" behind my work and the value it brings to the customer. If the stakeholders are interested, I can dive deeper into the technical details, but I'm comfortable tailoring my communication to the audience. If I have to describe a technical concept, I often find it helpful to use analogies or metaphors to explain it in a way that is easy to understand.
 
 **How does David approach ambiguous or open-ended problems?**
+I focus on refining a well-defined problem statement first. Then I define what success looks like and how success could be measured. After, I start with a minimal solution that I know how to build and iterate based on what I learn. Usually, the best path forward becomes clear once I get a basic version working.
 
 **How does David handle tight deadlines or competing priorities?**
+I assess the requirements and evaluate if I can realistically deliver what is being asked. If not, I'll communicate that and suggest a revised scope or timeline. I also try to identify what is the highest priority and what is most important to the customer. For example, if there are competing priorities, I'll try to get a sense of which one is most important to the customer and which one needs to be delivered first.
 
 **Is David comfortable working independently or does he prefer a team?**
+I am comfortable working independently and actually prefer it when I'm trying to solve a complex technical problem. However, I also enjoy collaborating with others and believe that diverse perspectives can lead to better solutions. So a good balance, is working independently and establishing a cadence to check in with the team and share progress and solicit feedback.
 
 **How does David approach learning a new technology or framework?**
-
-**Has David ever had a project fail? What did he learn?**
-
-**How does David approach code quality and documentation?**
+I learn by doing, so I typically start by experimenting with the new technology or framework and ask an AI assistant a lot of questions until I get a grasp of how it works. Then I'll try to implement a small project with it to solidify my understanding. I'll also read official documentation and blog posts from people who are experts in the technology or framework.
 
 ---
 
