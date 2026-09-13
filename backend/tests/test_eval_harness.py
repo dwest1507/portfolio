@@ -155,9 +155,16 @@ class TestSplits:
         with pytest.raises(ValueError, match="no valid split"):
             select_cases([{"id": "orphan", "question": "?", "relevant_phrases": []}], "all")
 
-    def test_an_unknown_split_is_rejected(self):
+    def test_unknown_split_is_rejected(self):
         with pytest.raises(ValueError, match="Unknown split"):
             select_cases(CASES, "test")
+
+    def test_founding_55_splits_remain_frozen(self):
+        direct_cases = [c for c in CASES if c.get("category") == "direct"]
+        dev_count = len([c for c in direct_cases if c["split"] == "dev"])
+        holdout_count = len([c for c in direct_cases if c["split"] == "holdout"])
+        assert dev_count == 33
+        assert holdout_count == 22
 
 
 # ---------------------------------------------------------------------------
@@ -167,12 +174,26 @@ class TestSplits:
 
 class TestCategories:
     def test_all_founding_cases_are_direct(self):
-        assert len(CASES) == 55
-        assert all(c.get("category") == "direct" for c in CASES)
+        direct_cases = [c for c in CASES if c.get("category") == "direct"]
+        assert len(direct_cases) == 55
+
+    def test_paraphrase_batch_is_present(self):
+        paraphrase_cases = [c for c in CASES if c.get("category") == "paraphrase"]
+        assert 15 <= len(paraphrase_cases) <= 20
 
     def test_every_case_has_a_valid_category(self):
         for case in CASES:
             assert case.get("category") in VALID_CATEGORIES
+
+    def test_every_case_relevant_phrases_match_at_least_one_chunk(self):
+        from run_eval import relevant_ids
+
+        from app.rag.pipeline import RAGPipeline
+
+        pipeline = RAGPipeline()
+        for case in CASES:
+            matched = relevant_ids(pipeline.chunks, case["relevant_phrases"])
+            assert len(matched) > 0, f"Case {case['id']} matches no chunks in corpus"
 
     def test_an_unlabelled_case_category_is_an_error(self):
         with pytest.raises(ValueError, match="no valid category"):

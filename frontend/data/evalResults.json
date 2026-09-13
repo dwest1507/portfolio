@@ -1,15 +1,16 @@
 {
   "schemaVersion": 3,
-  "generatedAt": "2026-09-13T15:01:42+00:00",
-  "commit": "5a2aa28",
+  "generatedAt": "2026-09-13T15:09:58+00:00",
+  "commit": "578d22c",
   "runUrl": null,
   "corpusChunks": 100,
-  "goldenQuestions": 22,
+  "goldenQuestions": 27,
   "split": "holdout",
   "topK": 5,
   "gatingMetric": "hit@5",
   "categories": [
-    "direct"
+    "direct",
+    "paraphrase"
   ],
   "metricNames": [
     "recall@5",
@@ -25,10 +26,10 @@
       "technical": "BM25 over stemmed, stopword-filtered terms. Needs no embedding model, which is why the production image ships none. Matches RAGPipeline.retrieve.",
       "shipped": true,
       "metrics": {
-        "recall@5": 0.7212,
+        "recall@5": 0.7235,
         "hit@5": 1.0,
-        "mrr": 0.9182,
-        "ndcg@5": 0.8336
+        "mrr": 0.8963,
+        "ndcg@5": 0.8187
       },
       "byCategory": {
         "direct": {
@@ -36,6 +37,12 @@
           "hit@5": 1.0,
           "mrr": 0.9182,
           "ndcg@5": 0.8336
+        },
+        "paraphrase": {
+          "recall@5": 0.7333,
+          "hit@5": 1.0,
+          "mrr": 0.8,
+          "ndcg@5": 0.7531
         }
       }
     },
@@ -46,10 +53,10 @@
       "technical": "FAISS inner-product search over normalized all-mpnet-base-v2 embeddings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.5686,
-        "hit@5": 0.8636,
-        "mrr": 0.7061,
-        "ndcg@5": 0.6062
+        "recall@5": 0.5621,
+        "hit@5": 0.8889,
+        "mrr": 0.708,
+        "ndcg@5": 0.5867
       },
       "byCategory": {
         "direct": {
@@ -57,6 +64,12 @@
           "hit@5": 0.8636,
           "mrr": 0.7061,
           "ndcg@5": 0.6062
+        },
+        "paraphrase": {
+          "recall@5": 0.5333,
+          "hit@5": 1.0,
+          "mrr": 0.7167,
+          "ndcg@5": 0.5011
         }
       }
     },
@@ -67,10 +80,10 @@
       "technical": "Weighted reciprocal-rank fusion of the sparse and dense rankings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.5972,
-        "hit@5": 0.9545,
-        "mrr": 0.7879,
-        "ndcg@5": 0.6724
+        "recall@5": 0.5977,
+        "hit@5": 0.963,
+        "mrr": 0.7901,
+        "ndcg@5": 0.6556
       },
       "byCategory": {
         "direct": {
@@ -78,6 +91,12 @@
           "hit@5": 0.9545,
           "mrr": 0.7879,
           "ndcg@5": 0.6724
+        },
+        "paraphrase": {
+          "recall@5": 0.6,
+          "hit@5": 1.0,
+          "mrr": 0.8,
+          "ndcg@5": 0.5813
         }
       }
     },
@@ -88,10 +107,10 @@
       "technical": "Cross-encoder re-ranking of the fused candidates: hybrid_search over 2×k candidates → cross-encoder narrows to k. Shipped until the harness measured it against the keyword arm.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.6037,
-        "hit@5": 0.9545,
-        "mrr": 0.9091,
-        "ndcg@5": 0.7327
+        "recall@5": 0.6246,
+        "hit@5": 0.963,
+        "mrr": 0.9074,
+        "ndcg@5": 0.7407
       },
       "byCategory": {
         "direct": {
@@ -99,6 +118,12 @@
           "hit@5": 0.9545,
           "mrr": 0.9091,
           "ndcg@5": 0.7327
+        },
+        "paraphrase": {
+          "recall@5": 0.7167,
+          "hit@5": 1.0,
+          "mrr": 0.9,
+          "ndcg@5": 0.7758
         }
       }
     },
@@ -109,10 +134,10 @@
       "technical": "Cross-encoder re-ranking of BM25 candidates. The arm that answers whether the dense stage contributes anything the re-ranker cannot recover on its own.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.6436,
-        "hit@5": 0.9545,
-        "mrr": 0.9091,
-        "ndcg@5": 0.7648
+        "recall@5": 0.6602,
+        "hit@5": 0.963,
+        "mrr": 0.9074,
+        "ndcg@5": 0.7693
       },
       "byCategory": {
         "direct": {
@@ -120,6 +145,12 @@
           "hit@5": 0.9545,
           "mrr": 0.9091,
           "ndcg@5": 0.7648
+        },
+        "paraphrase": {
+          "recall@5": 0.7333,
+          "hit@5": 1.0,
+          "mrr": 0.9,
+          "ndcg@5": 0.7891
         }
       }
     }

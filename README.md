@@ -64,7 +64,7 @@ See [docs/architecture.md](docs/architecture.md) for the full system design and
 
 - **5 project showcases** with filterable cards and MDX detail pages — including a write-up of this site's own retrieval pipeline and eval results
 - **AI chatbot** — floating widget with streaming responses, powered by a RAG pipeline (BM25 retrieval, chosen over hybrid search and cross-encoder re-ranking by [measurement](docs/evaluation.md)) and Groq LLM
-- **Measured retrieval** — a 55-question golden set scores the pipeline on hit@5, recall@5, MRR, and nDCG@5, gated in CI so retrieval quality cannot regress silently ([docs/evaluation.md](docs/evaluation.md))
+- **Measured retrieval** — a 71-question golden set scores the pipeline on hit@5, recall@5, MRR, and nDCG@5, gated in CI so retrieval quality cannot regress silently ([docs/evaluation.md](docs/evaluation.md))
 - **Dark design system** — near-black surfaces, a single sky-blue accent (`#0ea5e9`), Inter for text with monospace micro-labels
 
 ---

@@ -569,6 +569,160 @@
         "david.p.west2@gmail.com",
         "LinkedIn"
       ]
+    },
+    {
+      "id": "paraphrase-current-firm",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Which consulting enterprise presently employs him?",
+      "relevant_phrases": [
+        "Booz Allen Hamilton"
+      ]
+    },
+    {
+      "id": "paraphrase-undergrad-institution",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "Which higher education institution conferred his bachelor's diploma?",
+      "relevant_phrases": [
+        "Western Michigan University"
+      ]
+    },
+    {
+      "id": "paraphrase-undergrad-field",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What scientific discipline did he specialize in during his undergraduate program?",
+      "relevant_phrases": [
+        "Biochemistry"
+      ]
+    },
+    {
+      "id": "paraphrase-security-clearance",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What level of national defense vetting has been granted to him?",
+      "relevant_phrases": [
+        "Security clearance: Secret",
+        "Security clearance"
+      ]
+    },
+    {
+      "id": "paraphrase-tacom-service",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Did he serve as a federal civil servant for the Department of Defense?",
+      "relevant_phrases": [
+        "Operations Research Analyst",
+        "TACOM",
+        "Army civilian"
+      ]
+    },
+    {
+      "id": "paraphrase-security-plus",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "Which baseline defense cybersecurity credential does he hold?",
+      "relevant_phrases": [
+        "CompTIA Security+",
+        "Security+"
+      ]
+    },
+    {
+      "id": "paraphrase-backend-framework",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Which asynchronous Python framework handles endpoints and routing for his web services?",
+      "relevant_phrases": [
+        "FastAPI"
+      ]
+    },
+    {
+      "id": "paraphrase-frontend-libraries",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "What user interface library and styling utility powers his web applications?",
+      "relevant_phrases": [
+        "Next.js",
+        "Tailwind CSS"
+      ]
+    },
+    {
+      "id": "paraphrase-vector-indexing",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What indexing library calculates similarity over dense mathematical representations?",
+      "relevant_phrases": [
+        "faiss",
+        "faiss-cpu"
+      ]
+    },
+    {
+      "id": "paraphrase-cross-encoder-stage",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Which secondary transformer model re-scores candidate search passages?",
+      "relevant_phrases": [
+        "ms-marco-MiniLM-L-6-v2",
+        "cross-encoder"
+      ]
+    },
+    {
+      "id": "paraphrase-music-gpu-infra",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What cloud provider manages remote GPU containers for his audio synthesis app?",
+      "relevant_phrases": [
+        "Modal"
+      ]
+    },
+    {
+      "id": "paraphrase-music-client",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "How does the sound generation backend eliminate repeated TCP handshake overhead?",
+      "relevant_phrases": [
+        "HTTP/2 with httpx",
+        "httpx"
+      ]
+    },
+    {
+      "id": "paraphrase-series-stationarity",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What statistical hypothesis procedures verify constant mean and variance across historical sequences?",
+      "relevant_phrases": [
+        "ADF and KPSS",
+        "KPSS"
+      ]
+    },
+    {
+      "id": "paraphrase-diamonds-families",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Which four algorithmic model families were benchmarked against held-out gem records?",
+      "relevant_phrases": [
+        "four families on an 80/20",
+        "regression decision trees"
+      ]
+    },
+    {
+      "id": "paraphrase-philosophical-corpus",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Whose historical writings and aphorisms are indexed for interactive dialogue?",
+      "relevant_phrases": [
+        "Nietzsche"
+      ]
+    },
+    {
+      "id": "paraphrase-cemetery-project",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "Which historic military cemetery required automated auditing of over a quarter million burial archives?",
+      "relevant_phrases": [
+        "Arlington National Cemetery"
+      ]
     }
   ]
 }

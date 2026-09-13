@@ -116,7 +116,7 @@ uv run pytest tests -q \
 ## Retrieval Evaluation
 
 Unit tests check that retrieval code behaves as written; they cannot tell you
-whether retrieval is any *good*. That is measured separately by a 55-question
+whether retrieval is any *good*. That is measured separately by a 71-question
 golden set scored on hit@5, recall@5, MRR, and nDCG@5, and gated in CI:
 
 ```bash
