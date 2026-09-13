@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.2.0](https://github.com/dwest1507/portfolio/compare/portfolio-v1.1.0...portfolio-v1.2.0) (2026-09-13)
+
+
+### Features
+
+* **eval:** add out-of-vocabulary paraphrase batch and interactive scoreboard breakdown ([2daa074](https://github.com/dwest1507/portfolio/commit/2daa07449ea87dc89e9608e79c6dce15cf8dbb8c)), closes [#38](https://github.com/dwest1507/portfolio/issues/38) [#40](https://github.com/dwest1507/portfolio/issues/40)
+* **eval:** curate conceptual synthesis batch, run 5-arm benchmark, and record findings ([ebe7cca](https://github.com/dwest1507/portfolio/commit/ebe7cca7cbe3482b4234dc80322698b59899ee2d)), closes [#38](https://github.com/dwest1507/portfolio/issues/38) [#41](https://github.com/dwest1507/portfolio/issues/41)
+* **rag:** add query category support and schema v3 eval pipeline ([578d22c](https://github.com/dwest1507/portfolio/commit/578d22c2e767979bbc2b99bcba1876eab6d0d884)), closes [#38](https://github.com/dwest1507/portfolio/issues/38) [#39](https://github.com/dwest1507/portfolio/issues/39)
+* **rag:** categorize golden set to schema v3, fix chunk overlap, and publish 5-arm findings ([b550467](https://github.com/dwest1507/portfolio/commit/b550467e922bac788c1a34ca31ea0225e5c2956a))
+
+
+### Bug Fixes
+
+* **eval:** publish categoryCounts and report exact category sample sizes in scoreboard ([42f655a](https://github.com/dwest1507/portfolio/commit/42f655a33b92be60017e5a5bf565c6d796b2e1e1))
+* **rag:** snap chunk overlap to word boundaries and update chatbot knowledge ([40ee9d1](https://github.com/dwest1507/portfolio/commit/40ee9d1704c3b4c7d1c37cdaa1edb6e007fc511a)), closes [#32](https://github.com/dwest1507/portfolio/issues/32)
+
 ## [1.1.0](https://github.com/dwest1507/portfolio/compare/portfolio-v1.0.0...portfolio-v1.1.0) (2026-09-12)
 
 
