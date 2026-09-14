@@ -1,7 +1,7 @@
 import FadeIn from '@/components/ui/FadeIn'
 
 const BIO_LINES = [
-  "I'm a Lead Data Scientist and AI Engineer with a background in the defense industry since 2018, building ML systems since 2020 and production full-stack LLM applications since 2025.",
+  "I'm a Lead Data Scientist recently turned Lead AI Engineer with a background in the defense industry since 2018, building ML systems since 2020 and production full-stack LLM applications since 2025.",
   'My work spans the full AI stack from enterprise Document AI in AWS GovCloud and evaluated RAG pipelines to pooled gradient-boosted time-series forecasting and full-stack web applications.',
   'Having spent my career developing defense systems for the US Army and Air Force, security, precision, and operational reliability are foundational to everything I build.',
   'I bring active Secret clearance and CompTIA Security+ rigor, Infrastructure as Code, and automated CI/CD evaluation gates to every system I deliver.',
