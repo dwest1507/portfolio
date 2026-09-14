@@ -49,7 +49,12 @@ export default function ProjectCard({ project }: ProjectCardProps) {
       />
 
       {/* Thumbnail */}
-      <div className="relative h-44 w-full overflow-hidden border-b border-white/[0.06] bg-[#0a0a0c]">
+      <Link
+        href={`/projects/${project.slug}`}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="relative block h-44 w-full cursor-pointer overflow-hidden border-b border-white/[0.06] bg-[#0a0a0c]"
+      >
         {project.thumbnail ? (
           <Image
             src={project.thumbnail}
@@ -79,7 +84,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
             {project.year}
           </span>
         </div>
-      </div>
+      </Link>
 
       {/* Content */}
       <div className="flex flex-1 flex-col gap-4 p-5">

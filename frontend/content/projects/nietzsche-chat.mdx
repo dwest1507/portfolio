@@ -26,7 +26,9 @@ The retrieval pipeline is multi-stage, designed to maximize the quality of conte
 
 **Source citations**: The UI surfaces the specific Nietzsche passages used to generate each response — title, translator, and a link to the Gutenberg source — alongside the answer. This transparency serves two purposes: it lets users verify authenticity, and it demonstrates that the retrieval pipeline found genuinely relevant context rather than hallucinating.
 
-**Deployment**: The frontend runs on Vercel; the backend runs on Railway from a Docker image with the embedding and cross-encoder models baked in, so cold starts never wait on a model download. It's the same split used by the AI music generator, and the reasoning is the same: the CPU-and-memory-hungry half gets a container it can size independently of the UI.
+**Security & Gateway Architecture**: The public browser talks exclusively to the Next.js origin. Its server-side `/api/chat` route validates the payload and proxies to the FastAPI backend presenting a shared secret header (`BACKEND_SHARED_SECRET`). The backend rejects any request lacking this secret with HTTP 401 Unauthorized, preventing direct public exposure or quota exhaustion.
+
+**Deployment & CI/CD**: The frontend runs on Vercel; the backend runs on Railway from a Docker image with embedding and cross-encoder models baked in so cold starts never wait on downloads. All pull requests are strictly gated in GitHub Actions: Pytest (with mocked ML models and APIs for fast, deterministic runs), Vitest with React Testing Library, Ruff, ESLint, and a Lighthouse CI budget check enforcing accessibility, best practices, and SEO.
 
 ## Skills Demonstrated
 

@@ -64,7 +64,7 @@ I lead the technical development for most of my projects. I'm responsible for un
 Most of my projects are cross-functional. We often have three teams: the tech team that builds the solution, the project managers that handle the customer engagements and financials, and the quality assurance / quality control (QAQC) team that provides a feedback loop to the tech team. In some recent projects, I've had a cross functional split across the tech team as well. The split was between app development and cloud operations. I was on the app development team, and the cloud operations team had ownership over an Impact Level 5 authorized AWS GovCloud.
 
 **What is David's most recent role?**
-I am a Lead Data Scientist that wears many hats. Most recently, I've been doing AI Engineering and DevSecOps work.
+I am a Lead Data Scientist recently turned Lead AI Engineer that wears many hats. Most recently, I've been doing AI Engineering and DevSecOps work.
 
 **Why is David looking for a new opportunity?**
 I'm looking for two reasons. The first is pay. My wife and I had our first kid and we are thinking about having my wife become a stay-at-home mom. She currently makes good money as a Quality Engineer but has been part-time since the little guy came along. I'm hoping to increase my pay to help offset the household income decrease. The second reason is remote work. My current job is mandating a 3-day in-office work week. I very much enjoy having the flexability of remote work and I find myself being more productive when I work from home. I want to see what my options are and if there are full-time remote jobs available.

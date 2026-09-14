@@ -1,43 +1,63 @@
 ## Overview
 
-Baby Names Explorer is an interactive data application for exploring 145 years of US baby name trends from the Social Security Administration. You can browse the most popular names for any year since 1880, pull up the full history of any single name with a statistical forecast of where it's heading, and ask questions about the whole dataset in plain English.
+Baby Names Explorer is an interactive data application for exploring 145 years of US baby name trends from the Social Security Administration (1880–2024). You can browse the most popular names for any year, pull up the full history of any single name with a 5-year machine-learning popularity forecast with measured uncertainty bands and projected ranks, and ask questions about the entire dataset in plain English.
 
-The project grew from a simple question: _is a name getting more or less popular, and will that trend continue?_ The SSA publishes name data going back to 1880, but raw data files are not interactive. Building this meant designing a data pipeline, working out a forecasting approach that holds up under validation, and wrapping it in a UI that makes the analysis accessible.
+The project began as a single-file Streamlit app. It has since been rebuilt as a decoupled, production-grade system: a Next.js 16 frontend over a Python FastAPI backend, with reproducible data ingestion, an empirical ML forecasting pipeline, and automated CI/CD validation gates.
 
-It started as a single-file Streamlit app. It has since been rebuilt as a Next.js frontend over a FastAPI backend, with the querying, forecasting, and chatbot logic split into services that can be tested independently of the UI.
+## Data Pipeline & Database Architecture
 
-## Data Pipeline
+The SSA publishes baby name records as annual text files behind anti-bot protections. Ingestion is fully automated and reproducible via `backend/scripts/build_db.py`: it handles download automation, aggregates and cleans ~145 annual files, computes relative metrics (`popularity_percent` share within sex/year, `popularity_rank`), and builds a composite index `(name, sex, year)` for zero-overhead streaming.
 
-The SSA doesn't offer a direct API download — the data comes as a ZIP archive from a page that blocks automated requests. The pipeline handles this with Selenium to automate the download, then processes all ~145 annual text files into a single normalized dataset.
+Relative metrics matter more than raw counts: a mid-century name given to 30,000 babies was a national phenomenon; the same count today in a much larger and more diverse birth pool represents a far smaller share.
 
-For each name-sex-year combination, the pipeline computes:
+The database is treated as a **published build artifact** rather than being checked into git:
 
-- `total_count` — raw number of births with that name
-- `popularity_percent` — count as a fraction of all births that year and sex, correcting for population growth
-- `popularity_rank` — ranking within year and sex (1 = most popular)
+- Observed records, canonical indexes, and precomputed forecast tables are generated via automated batch scripts.
+- The artifact is validated by an automated deployment gate (`backend/scripts/verify_db.py`) before publication.
+- At runtime, the FastAPI backend resolves `names.db` locally or downloads it from Hugging Face Hub, opening all connections in read-only mode (`mode=ro`).
 
-Relative metrics matter more than raw counts here. A mid-century name given to 30,000 babies was a genuine cultural phenomenon; the same raw count today, spread across a far larger and far more varied pool of births, is not. Share of births says which of those two happened. The pipeline also back-fills zero-count rows so every name has a continuous yearly series rather than gaps, which matters downstream — a time-series model can't be fit to a series with holes in it. The result is stored in a SQLite database the backend queries read-only.
+## Forecasting: From Per-Name ARIMA to Pooled LightGBM
 
-## Forecasting
+The core forecasting challenge is projecting a name's popularity trajectory over a 5-year horizon ($h \in \{1..5\}$).
 
-The forecasting task is time-series prediction: given a name's popularity trajectory, project where it goes over the next five years. The approach is ARIMA, and most of the work is in choosing the model rather than running it.
+### Why Per-Name ARIMA Was Replaced
 
-For each name, the backend:
+The original prototype explored per-name ARIMA modeling, running ADF and KPSS stationarity tests to determine differencing orders and selecting orders via AICc. However, rigorous rolling-origin backtesting across historical decades revealed a structural limitation: with only 30 to 100 annual observations per series, individual series lack the statistical power to reliably satisfy stationarity or identify true ARIMA orders. While ARIMA performed moderately in the top 100 names (+0.161 skill), it produced **negative skill** outside the top 1,000 (–0.211 on ranks 1001–5000, –0.413 beyond 5000) — meaning visitors were receiving forecasts demonstrably worse than a flat-line naive baseline.
 
-1. **Log-transforms** series with high relative variance, since name popularity tends to grow and decay multiplicatively rather than by fixed increments.
-2. **Determines the differencing order** by running ADF and KPSS stationarity tests and differencing until both agree the series is stationary.
-3. **Grid-searches** ARIMA orders around that differencing order, selecting by **AICc** — the small-sample-corrected criterion, which matters because some names only have a few decades of usable history.
-4. **Validates** on a five-year holdout: refit on everything but the last five years, forecast forward, and report MAE, RMSE, and MAPE against what actually happened.
-5. **Runs residual diagnostics** — Ljung-Box for autocorrelation, Jarque-Bera for normality, ARCH for heteroscedasticity — and surfaces whether the fit actually satisfies the model's assumptions.
+### The Pooled Gradient-Boosted Model
 
-Forecasts are returned with 80% and 95% confidence intervals rather than a single line. A single point forecast implies a precision this data doesn't support, and the interval width is the honest way to say so. Fitting is CPU-bound, so results are cached per name and sex.
+The solution was shifting to a **pooled model**: training across every eligible name's history simultaneously. A single LightGBM booster is trained per horizon ($h \in \{1..5\}$) over a rolling 40-origin training window:
 
-## Natural-Language Querying
+- **Target**: Scale-free relative log growth $\log(y_{t+h} / y_t)$.
+- **Feature engineering**: 13-feature base block including multi-horizon momentum (1/2/3/5/10-year growth), acceleration, historical volatility, popularity level, and distance/years from historical peaks and troughs.
+- **Sample weighting**: $\text{share}^{0.5}$ weighting to prioritize names visitors search for without letting a few historical giants dominate the split criteria.
 
-The chat feature translates questions into SQL rather than trying to answer them from a model's memory. Two LLM calls per question, through Groq: one generates a `SELECT` against the names schema, and one phrases the returned rows as an answer.
+### Post-Processing Stack
 
-The generated SQL is the untrusted part, so it's treated that way. Before anything runs, the query has to start with `SELECT`, is rejected outright if it contains any of a list of mutating or introspection keywords, and has a `LIMIT` injected or clamped down to 1,000 rows. It then executes on a read-only connection. The SQL is displayed with every answer — partly so the reasoning is auditable, and partly because a query that returns something surprising is usually a more interesting result than the summary of it.
+Direct booster outputs undergo a three-step sequential correction pipeline:
+
+1. **Growth capping**: Path implied log-growth is clipped at the empirical 99.9th percentile of historical 5-year moves, preventing unbounded extrapolation on volatile low-volume names.
+2. **Path smoothing**: An endpoint-preserving 3-point moving average over the log steps eliminates erratic year-over-year oscillations without altering the 5-year terminal projection.
+3. **Global reconciliation**: Because popularity is a zero-sum share of total births within a sex, multiplicative scaling reconciles the slice total onto the origin year's observed sum.
+
+### Conformal Uncertainty Bands & Projected Ranks
+
+- **Conformal prediction bands**: Rather than assuming theoretical Gaussian residuals, the 80% and 95% uncertainty intervals are derived from empirical residual quantiles stratified by popularity tier and volatility bin. A volatile breakout name receives an appropriately wider band than an entrenched classic at the same rank.
+- **Projected ranks**: Each forecast point includes a projected rank computed against a frozen field of all recorded names at that origin, preventing rank distortions in the long tail.
+- **Deploy gate**: `verify_db.py` enforces that every published artifact beats the naive baseline across a 26-window backtest span, scoring positive skill across every tier (+0.374 in the top 100).
+
+## Natural-Language Querying (Text-to-SQL)
+
+The chat feature translates natural-language questions into SQL rather than relying on hallucinated model memory:
+
+1. **Query generation**: Groq translates the user's question and recent history into a SQLite query against the names schema.
+2. **Resource-budgeted execution**: Generated SQL is validated against strict keyword guards (allowing only `SELECT` or `WITH` CTEs) and executed on a dedicated read-only connection with a 5-second deadline and 1 MB memory cap, wrapped with a `LIMIT 1000` boundary.
+3. **Response composition**: A second LLM pass synthesizes the query results into a concise explanation, displaying the raw SQL alongside the answer for complete transparency.
 
 ## Skills Demonstrated
 
-This project covers the full data lifecycle: raw data acquisition against a site that resists it, data engineering across 145 files, statistical time-series modeling with real model selection and validation, and an LLM feature built with the assumption that the model's output is hostile input. The forecasting choice reflects how I approach modeling — a well-specified ARIMA with diagnostics I can interpret and confidence intervals I can defend beats a black-box regressor for a problem that is genuinely a univariate time series.
+This project demonstrates end-to-end machine learning and data systems engineering:
+
+- **Empirical ML rigor**: Replacing an established model (ARIMA) when backtesting proved negative skill, designing a pooled gradient-boosted architecture that achieved positive skill across all popularity tiers.
+- **Conformal prediction**: Quantifying uncertainty through empirical, stratified calibration rather than fragile distribution assumptions.
+- **Data engineering & CI/CD**: Reproducible ETL, published database build artifacts, automated release gates, and sub-second full-stack query performance.

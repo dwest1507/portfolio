@@ -2,16 +2,41 @@
 
 import { useState, useEffect } from 'react'
 import Button from '@/components/ui/Button'
+import { projects } from '@/data/projects'
 
 const TAGLINE = 'Building intelligent systems at the intersection of AI and software engineering.'
 
+function getYearsSince(dateStr: string): number {
+  const start = new Date(dateStr)
+  const now = new Date()
+  let years = now.getFullYear() - start.getFullYear()
+  const monthDiff = now.getMonth() - start.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < start.getDate())) {
+    years--
+  }
+  return years
+}
+
+const yearsAiMl = `${getYearsSince('2020-01-01')}+`
+const yearsDefense = `${getYearsSince('2018-05-01')}+`
+
 const PROFILE_STATS = [
-  { num: '5+', label: 'Years AI/ML' },
-  { num: '8+', label: 'Years Defense' },
-  { num: '4', label: 'Projects' },
+  { num: yearsAiMl, label: 'Years AI/ML' },
+  { num: yearsDefense, label: 'Years Defense' },
+  { num: String(projects.length), label: 'Projects' },
 ]
 
-const STACK = ['Python', 'TypeScript', 'FastAPI', 'Next.js', 'LLMs', 'RAG', 'AWS', 'Groq']
+const STACK = [
+  'Document AI',
+  'RAG',
+  'AI Evals',
+  'FastAPI',
+  'Next.js',
+  'Terraform',
+  'Kubernetes',
+  'CI/CD',
+  'IL5 Compliance',
+]
 
 const HEADLINE_GRADIENT = {
   background:
@@ -136,9 +161,12 @@ export default function Hero() {
               {/* Info rows */}
               <div className="mb-5 space-y-3">
                 {[
-                  { label: 'Experience', value: '5+ yrs AI/ML · 8+ yrs defense' },
-                  { label: 'Stack', value: 'Python · TypeScript · FastAPI' },
-                  { label: 'Focus', value: 'LLMs · RAG · Production AI' },
+                  {
+                    label: 'Experience',
+                    value: `${yearsAiMl} yrs AI/ML · ${yearsDefense} yrs defense`,
+                  },
+                  { label: 'Stack', value: 'Python · TypeScript · AWS' },
+                  { label: 'Focus', value: 'LLMs · ML · Secure GovTech' },
                 ].map(({ label, value }) => (
                   <div key={label} className="flex items-baseline gap-3">
                     <span className="w-20 shrink-0 font-mono text-[10px] tracking-widest text-[#8a8f98]/60">
