@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.1](https://github.com/dwest1507/portfolio/compare/portfolio-v1.2.0...portfolio-v1.2.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* job title ([2749b5d](https://github.com/dwest1507/portfolio/commit/2749b5dd75ec772b01ed802d98449299e3056c4a))
+* new index ([d0e7da2](https://github.com/dwest1507/portfolio/commit/d0e7da28247711b20c31d50ed4468c22c194654a))
+* **portfolio:** update project tags, card links, descriptions, and dynamic stats ([c58ccb9](https://github.com/dwest1507/portfolio/commit/c58ccb9bfa50fb74f30bc38e3cda7228e36ae66f))
+* **portfolio:** update project tags, card links, descriptions, and dynamic stats ([0da2773](https://github.com/dwest1507/portfolio/commit/0da2773dfec19ab8520090aca665be18ec408091))
+
 ## [1.2.0](https://github.com/dwest1507/portfolio/compare/portfolio-v1.1.0...portfolio-v1.2.0) (2026-09-13)
 
 
