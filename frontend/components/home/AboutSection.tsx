@@ -1,16 +1,17 @@
 import FadeIn from '@/components/ui/FadeIn'
 
 const BIO_LINES = [
-  "I'm an AI Engineer who has been building production ML systems since 2020 and LLM-powered applications since 2025.",
-  'My work spans the full AI stack — from RAG pipelines and time-series forecasting to the frontend interfaces that make them usable.',
-  "I've spent my whole career in the defense industry, where precision, security, and reliability are non-negotiable.",
-  'I bring that same rigor to every system I build.',
+  "I'm a Lead Data Scientist and AI Engineer with a background in the defense industry since 2018, building ML systems since 2020 and production full-stack LLM applications since 2025.",
+  'My work spans the full AI stack from enterprise Document AI in AWS GovCloud and evaluated RAG pipelines to pooled gradient-boosted time-series forecasting and full-stack web applications.',
+  'Having spent my career developing defense systems for the US Army and Air Force, security, precision, and operational reliability are foundational to everything I build.',
+  'I bring active Secret clearance and CompTIA Security+ rigor, Infrastructure as Code, and automated CI/CD evaluation gates to every system I deliver.',
 ]
 
 const SKILLS = {
-  Languages: ['Python', 'TypeScript', 'JavaScript', 'R', 'SQL', 'Bash'],
+  Languages: ['Python', 'TypeScript', 'R', 'SQL', 'Bash'],
   'AI / ML': [
     'LLMs',
+    'Document AI',
     'RAG',
     'Hybrid Search',
     'FAISS',
@@ -18,12 +19,27 @@ const SKILLS = {
     'Cross-Encoder Re-ranking',
     'Sentence Transformers',
     'Prompt Engineering',
+    'LightGBM',
     'Scikit-Learn',
-    'Time Series / ARIMA',
+    'Time-Series Forecasting',
+    'Conformal Prediction',
+    'Evaluation Harnesses',
+    'Ollama',
+    'HuggingFace',
   ],
   Frameworks: ['FastAPI', 'Next.js', 'React', 'Tailwind CSS', 'Streamlit'],
-  'Cloud / Infra': ['AWS', 'Vercel', 'Railway', 'Modal', 'Docker', 'GitHub Actions'],
-  APIs: ['Groq', 'OpenAI', 'Anthropic'],
+  'Cloud / Infra': [
+    'AWS (GovCloud)',
+    'Terraform',
+    'Terragrunt',
+    'Kubernetes (EKS)',
+    'Docker (Chainguard and Iron Bank)',
+    'GitHub Actions',
+    'Modal',
+    'Railway',
+    'Vercel',
+  ],
+  APIs: ['Groq', 'OpenAI', 'Anthropic', 'AWS Bedrock'],
 }
 
 export default function AboutSection() {

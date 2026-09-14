@@ -69,4 +69,11 @@ describe('ProjectCard', () => {
     expect(repoLink).toHaveAttribute('href', 'https://github.com/dwest1507/test-project')
     expect(repoLink).toHaveAttribute('target', '_blank')
   })
+
+  it('links to the detail page when clicking the thumbnail picture', () => {
+    render(<ProjectCard project={externalProject} />)
+    const img = screen.getByAltText('Test Project')
+    const link = img.closest('a')
+    expect(link).toHaveAttribute('href', '/projects/test-project')
+  })
 })

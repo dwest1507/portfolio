@@ -41,7 +41,7 @@ export const projects: Project[] = [
     slug: 'baby-names',
     title: 'Baby Names Explorer',
     shortDescription:
-      'Explorer for 145 years of US baby name data, with ARIMA popularity forecasts and a chatbot that answers questions in plain English.',
+      'Explorer for 145 years of US baby name data, with pooled LightGBM popularity forecasts, conformal uncertainty bands, and a natural-language SQL chatbot.',
     thumbnail: '/projects/baby-names3.png',
     tags: [
       'Next.js',
@@ -51,7 +51,9 @@ export const projects: Project[] = [
       'Groq',
       'SQLite',
       'Time Series',
+      'LightGBM',
       'Data Visualization',
+      'CI/CD',
     ],
     liveUrl: 'https://baby-names-app-zeta.vercel.app/',
     repoUrl: 'https://github.com/dwest1507/baby-names-app',
@@ -64,7 +66,7 @@ export const projects: Project[] = [
     shortDescription:
       'Streaming RAG chatbot that answers in Nietzsche’s voice, grounded in hybrid search over his complete works with cited passages.',
     thumbnail: '/projects/nietzsche-chat4.png',
-    tags: ['Next.js', 'TypeScript', 'FastAPI', 'Python', 'Groq', 'RAG', 'FAISS', 'BM25'],
+    tags: ['Next.js', 'TypeScript', 'FastAPI', 'Python', 'Groq', 'RAG', 'FAISS', 'BM25', 'CI/CD'],
     liveUrl: 'https://nietzsche-chat-one.vercel.app',
     repoUrl: 'https://github.com/dwest1507/nietzsche-chat',
     featured: true,
@@ -84,6 +86,7 @@ export const projects: Project[] = [
       'Modal',
       'GPU Inference',
       'Generative Audio',
+      'CI/CD',
     ],
     liveUrl: 'https://ai-music-gen.vercel.app',
     repoUrl: 'https://github.com/dwest1507/ai-music-gen',

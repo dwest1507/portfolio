@@ -1,42 +1,49 @@
 ## Overview
 
-Generate Music with AI is a full-stack web application that turns a text prompt into an original music track using ACE-Step, a text-to-music generation model, running on serverless GPUs. You describe the vibe — _"lo-fi hip hop with rain ambiance"_ or _"aggressive metalcore with a jazz breakdown"_ — and the app composes something that didn't exist a moment before.
+Generate Music with AI is a full-stack web application that turns a text prompt into an original music track using ACE-Step, a diffusion and language-based music generation foundation model, running on serverless GPUs. You describe the style, tempo, and mood — _"lo-fi hip hop with rain ambiance"_ or _"aggressive metalcore with a jazz breakdown"_ — and the system composes and renders an original audio track.
 
-The project started as an experiment to close the loop between natural language and audio generation. Rather than wrapping a simple API call in a form, I wanted to build the full production-quality system: input validation, rate limiting, async job polling, streaming audio playback, and a UI that responds gracefully to the latency inherent in GPU inference.
+The project demonstrates full-stack AI systems engineering across two linked components:
+
+1. **Upstream Open-Source Contribution ([ACE-Step 1.5 Modal](https://github.com/dwest1507/ACE-Step-1.5-modal))**: Added serverless GPU deployment support (`modal_app.py`) to the open-source ACE-Step foundation model repository, leveraging CRIU-based GPU memory snapshotting for rapid cold starts and scale-to-zero when idle.
+2. **Web Application ([ai-music-gen](https://github.com/dwest1507/ai-music-gen))**: A Next.js 16 frontend and FastAPI stateless proxy handling rate limiting, speculative GPU prewarming, asynchronous job polling, and waveform rendering.
 
 ## How It Works
 
-The user fills out a prompt form on the Next.js frontend and submits. From there, every layer has a specific job:
+From user input to audio playback, each layer serves a distinct operational role:
 
-1. **FastAPI backend (Railway)** receives the request, validates input, checks rate limits using `slowapi` with session-cookie keying, then proxies the payload to the ACE-Step API running on Modal.
-2. **Modal** spins up a GPU worker, runs the ACE-Step model, and returns a `task_id` immediately — the job is asynchronous.
-3. **Frontend polls** `GET /api/jobs/{task_id}` at an interval until the job completes, showing a live progress indicator.
-4. **Audio delivery**: once complete, the frontend fetches the audio stream from `GET /api/audio/{task_id}` and renders it in a WaveSurfer.js waveform player.
-
-The backend is a **stateless proxy** — no audio data is stored server-side. Every request is forwarded to Modal and the response is passed back. This keeps the Railway deployment lightweight and cheap.
+1. **Speculative GPU prewarm**: On the visitor's first form interaction (keystroke or input focus), the frontend dispatches a background prewarm request. This wakes the serverless GPU container on Modal while the user is still crafting their prompt, hiding 30+ seconds of cold start latency. A visibility-gated, capped heartbeat holds the worker warm, bounded by an in-memory monthly budget cap.
+2. **FastAPI backend (Railway)**: Acts as a lightweight, stateless proxy. It validates payloads with Pydantic, applies client-IP-keyed rate limiting via `slowapi`, and proxies the generation task to Modal over a persistent HTTP/2 connection.
+3. **Modal GPU worker**: Launches asynchronous diffusion inference on demand and returns a task ID immediately, avoiding long-lived blocking HTTP connections.
+4. **Asynchronous job polling**: The frontend polls `/api/jobs/{task_id}` for real-time progress updates until inference completes.
+5. **Waveform audio playback**: Once rendered, the frontend proxies the generated audio stream from Modal and visualizes it using a WaveSurfer.js waveform player.
 
 ## Technical Architecture
 
-The architecture is deliberately layered to separate concerns cleanly:
-
 ```
 Browser (Next.js on Vercel)
-  └── fetch to NEXT_PUBLIC_API_URL
+  ├── Speculative prewarm on first interaction
+  └── Fetch / SSE to NEXT_PUBLIC_API_URL
 FastAPI (Railway)
-  ├── slowapi rate limiter (5 req/min on /generate)
-  ├── httpx AsyncClient with HTTP/2 (shared via lifespan)
-  └── proxy to ACE-Step REST API
-Modal GPU (ACE-Step inference)
-  └── returns task_id + audio output
+  ├── Client-IP rate limiting (slowapi, 5 req/min on /generate)
+  ├── In-memory prewarm budget & deduplication state
+  ├── Persistent HTTP/2 client (httpx, shared lifespan)
+  └── Stateless proxy to ACE-Step REST API
+Modal GPU (Serverless ACE-Step 1.5)
+  ├── CRIU memory snapshots for sub-second model reloads
+  └── Scale-to-zero GPU orchestration (L4 / A10G)
 ```
 
-Key engineering decisions:
+### Key Engineering Decisions
 
-- **HTTP/2 with httpx**: The `ACEStepClient` is instantiated once at startup via FastAPI's lifespan context and shared across all requests. This avoids TCP handshake overhead on every generation request and enables multiplexed connections to Modal.
-- **Session-based rate limiting**: Rate limits key on the session cookie and fall back to IP, which prevents one user from exhausting another's quota while handling clients behind shared NAT correctly.
-- **Typed API client**: The Next.js frontend uses a hand-rolled typed fetch wrapper with Zod validation for all API responses. API errors surface as `ApiError` instances with structured context rather than raw exceptions.
-- **Job polling over WebSockets**: Modal's ACE-Step API uses a job queue model. Polling was simpler to implement correctly and debug than maintaining a persistent WebSocket connection through a serverless reverse proxy.
+- **Speculative GPU Prewarm (ADR 0001)**: Cold starting a multi-gigabyte diffusion model on serverless GPUs can take 30 to 45 seconds. By initiating prewarm on first user interaction rather than form submission, the GPU is warm before the user clicks generate. Heartbeats pause when the browser tab is hidden and terminate after a capped duration to strictly control cloud GPU costs.
+- **Client-IP Rate Limiting**: Rate limits are keyed strictly on client IP rather than session cookies. Because session cookies are client-supplied, rotating cookies previously minted fresh allowances; IP-based limiting provides robust abuse prevention across all endpoints.
+- **HTTP/2 with httpx**: The ACEStepClient is instantiated once during the FastAPI lifespan startup and shared across requests. Driving persistent HTTP/2 with httpx eliminates repeated TCP handshake overhead and multiplexes requests to Modal.
+- **Production CI/CD & DevSecOps**: Comprehensive automated GitHub Actions pipelines enforce code quality (Ruff, ESLint, Prettier, TypeScript verification), unit testing (Pytest and Vitest with uv caching), and automated security scanning including SAST (Semgrep, Bandit), secrets detection (Gitleaks), container vulnerability auditing (Trivy), and automated semantic releases via Release Please.
 
 ## Skills Demonstrated
 
-This project touches every layer of a modern AI-integrated web application — from GPU inference orchestration down to waveform rendering. The engineering decisions were practical ones: stateless proxy to minimize Railway costs, shared HTTP client to reduce latency, typed API contract to catch integration bugs early. Building this sharpened my ability to design systems that are observable, cost-conscious, and handle async complexity without leaking it to the user.
+This project demonstrates practical AI infrastructure and full-stack product engineering:
+
+- **Serverless GPU orchestration**: Optimizing cold starts with memory snapshotting, lifecycle management, and cost-capped prewarming.
+- **Open-source foundation model deployment**: Packaging complex deep learning models (PyTorch, Hugging Face transformers, DiT) into production cloud APIs.
+- **Defensive API architecture**: Stateless proxy design, IP-keyed rate limiting, strict Pydantic/Zod schemas, and end-to-end CI/CD DevSecOps automation.
