@@ -35,9 +35,9 @@ describe('projects data', () => {
     const titles = projects.map((p) => p.title)
     expect(titles).toEqual([
       'This Portfolio',
+      'Generate Music with AI',
       'Baby Names Explorer',
       'Chat with Nietzsche',
-      'Generate Music with AI',
       'Diamonds: Predicting Price',
     ])
   })

@@ -38,6 +38,27 @@ export const projects: Project[] = [
     year: 2026,
   },
   {
+    slug: 'ai-music-gen',
+    title: 'Generate Music with AI',
+    shortDescription:
+      'Full-stack app that turns a text prompt into an original track, proxying to the ACE-Step model running on serverless GPUs.',
+    thumbnail: '/projects/ai-music-gen3.png',
+    tags: [
+      'Next.js',
+      'TypeScript',
+      'FastAPI',
+      'Python',
+      'Modal',
+      'GPU Inference',
+      'Generative Audio',
+      'CI/CD',
+    ],
+    liveUrl: 'https://ai-music-gen.vercel.app',
+    repoUrl: 'https://github.com/dwest1507/ai-music-gen',
+    featured: true,
+    year: 2026,
+  },
+  {
     slug: 'baby-names',
     title: 'Baby Names Explorer',
     shortDescription:
@@ -71,27 +92,6 @@ export const projects: Project[] = [
     repoUrl: 'https://github.com/dwest1507/nietzsche-chat',
     featured: true,
     year: 2025,
-  },
-  {
-    slug: 'ai-music-gen',
-    title: 'Generate Music with AI',
-    shortDescription:
-      'Full-stack app that turns a text prompt into an original track, proxying to the ACE-Step model running on serverless GPUs.',
-    thumbnail: '/projects/ai-music-gen3.png',
-    tags: [
-      'Next.js',
-      'TypeScript',
-      'FastAPI',
-      'Python',
-      'Modal',
-      'GPU Inference',
-      'Generative Audio',
-      'CI/CD',
-    ],
-    liveUrl: 'https://ai-music-gen.vercel.app',
-    repoUrl: 'https://github.com/dwest1507/ai-music-gen',
-    featured: true,
-    year: 2026,
   },
   {
     slug: 'diamonds-price',
