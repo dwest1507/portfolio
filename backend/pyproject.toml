@@ -10,7 +10,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "groq>=1.7.0",
     "httpx>=0.27.0",
-    "numpy>=1.26.0",
+    "numpy>=2.5.3",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.0.0",
     "pytest>=8.0.0",
@@ -30,9 +30,9 @@ dependencies = [
 # downloads — 17.2GB of image down to 544MB. app/rag/pipeline.py imports both lazily so
 # the arms they implement stay measurable without returning to the serving path.
 dev = [
-    "faiss-cpu>=1.9.0",
-    "ruff>=0.16.5",
-    "sentence-transformers>=6.0.1",
+    "faiss-cpu>=1.15.1",
+    "ruff>=0.16.8",
+    "sentence-transformers>=6.1.0",
 ]
 
 [tool.pytest.ini_options]
