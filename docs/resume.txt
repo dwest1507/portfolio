@@ -1,24 +1,43 @@
 DAVID P WEST
-Waterford, MI  ●  david.p.west2@gmail.com 
-Data Science Portfolio ●  LinkedIn
+6482 Misty Ct, Waterford, MI 48327  ●  (586) 549-3786  ●  david.p.west2@gmail.com 
+Portfolio of Personal Projects: https://www.davidpwest.com/ 
+SUMMARY
+I'm a Lead Data Scientist, recently turned Lead AI Engineer, with an active secret security clearance and a background in the defense industry since 2018, building ML systems since 2020, and production full-stack LLM applications since 2025. I am looking for a position where I can solve tough technical problems involving the use of AI. Please visit my portfolio to see my skills in action.
+
+TECHNICAL SKILLS
+Languages: Python, R, TypeScript, SQL, Bash
+AI/ML: Document Intelligence, OCR, LLMs, RAG, Ollama, HuggingFace, Evaluation Harnesses, Scikit-Learn
+Cloud/Infra: AWS (GovCloud), Terraform, Terragrunt, Kubernetes (EKS), Docker, Modal, Railway, Vercel
+AI-Assisted Development: Claude Code, Windsurf/Devin, Cursor, Antigravity, Matt Pocock Skills
 
 EXPERIENCE
 
+AI Engineer, Lead
+January 2026 – Present (40 Hrs/Week)
+Booz Allen Hamilton
+Royal Oak MI Office
+
+Develop a reusable, LLM-backed, intelligent document processing pipeline (Data ReconnAIssance™) that extracts information from PDFs and images into a structured format utilizing AWS, FastAPI, React, Docker, CI/CD, and more. This is utilized across multiple teams, thus reducing the time to delivery for our customers, ensuring consistent quality, and fostering collaboration.
+Deploy this pipeline into production environments that must maintain a security posture compliant to Impact Level 5 (IL5) and development environments compliant with Cybersecurity Maturity Model Certification (CMMC) Level 2.
+Design a scalable AWS architecture utilizing Infrastructure as Code (IaC), Terraform + Terragrunt. AWS resources include: Bedrock, Textract, Lambda, EKS, ECR, EC2, SQS, SNS, DynamoDB, S3, ALB, VPC Endpoints, and KMS.
+Develop an internal application (React + FastAPI + Docker) for Data ReconnAIssance™ that allows non-developers to process documents at scale, and includes a human-in-the-loop quality control interface where users can correct extraction errors.
+Collect data on extraction errors to estimate the overall accuracy of extraction and develop a machine learning model (HistGradientBoostingClassifier) for predicting extraction accuracy on unreviewed data.
+Automate CI/CD with GitHub Actions, including test/coverage gates, Docker Compose integration testing, container and FOSS security scanning, and semantic release automation.
+Notable projects: Identify hazardous parts within 33k pages of old engineering drawings for the Air Force to reduce exposure risks to maintainers. Extract information from 260k old paper records to add more information and identify errors within a database for the Arlington National Cemetery.
+
 Data Scientist, Lead
-January 2025 – Present (40 Hrs/Week)
+January 2025 – December 2025 (40 Hrs/Week)
 Booz Allen Hamilton
 Troy MI Office
 
-
-
 Lead technical teams by designing solution architectures, delegating tasks, mentoring junior staff, and writing code (Python/R) that automates inefficient government processes.
-Lead and manage the technical development of the trademarked capability Data ReconnAIssance™ which specializes in extracting information from technical documents, like engineering drawings, and is utilized by multiple Army and Air Force customers.
+Lead and manage the technical development of a Booz Allen trademarked capability called Data ReconnAIssance™ that specializes in extracting information from 2D engineering drawings and is utilized by the Air Force Nuclear Weapons Center (AFNWC), the Army Joint Program Executive Office Armaments & Ammunition (JPEO A&A), the Army Integrated Logistics Support Center (ILSC), and more.
 Integrate the government-approved Large Language Model, AWS GovCloud Claude 3.5 Sonnet, into Data ReconnAIssance™ to enhance its capabilities and accuracy.
 Manage the GitHub repository for Data ReconnAIssance™ and review/approve pull requests.
-Develop a technical roadmap for the future of Data ReconnAIssance™ to ensure further growth.
-Present technical findings to non-technical customers via dashboards and PowerPoint.
+Present technical findings to non-technical customers.
+Develop technical roadmap for the future of Data ReconnAIssance™ to ensure further growth.
 Propose projects to potential customers to win work, increase revenue, and ensure staff is billable.
-Lead a team of 4 for the development of an automation process that detects whether a part can be additively manufactured reducing engineering efforts ten-fold.
+Lead a team of 4 for the development of an automation process that detects whether a part can be additively manufactured using its logistics data and engineering drawing. Implementation of this process reduces engineering efforts ten-fold.
 Lead a team of 2 for the development of an automation process that builds a Bill of Material (BOM) using engineering drawings and detects which parts contain hazardous materials.
 Manage two full-time employees, help foster career growth, and trouble-shoot technical problems.
 
@@ -27,41 +46,77 @@ January 2022 – December 2024 (40 Hrs/Week)
 Booz Allen Hamilton
 Troy MI Office
 
-Creation of a supply chain risk management (SCRM) database and dashboard.
-Anomaly detection within Army Garrison financial data for the Installation Management Command.
-Created an automated web scraper using R and Selenium to aggregate material information.
-Lead a team of 3 for the development of an advanced manufacturing database and dashboard.
-Lead a team of 4 interns for the development of a classification machine learning algorithm that predicts when parts will fail on Army ground combat systems.
-Managed two full-time employees, helped foster career growth, and trouble-shoot technical problems.
+Developed a repeatable ETL pipeline that extracts critical information from PDF engineering drawings. This pipeline utilizes Python and AWS and has been applied to the Air Force Nuclear Weapons Center (AFNWC) and the Joint Program Executive Office Armaments & Ammunition (JPEO A&A).
+Creation of a supply chain risk management (SCRM) database and dashboard for the Joint Program Executive Office Armaments & Ammunition (JPEO A&A).
+Anomaly detection within Army Garrison financial data for the Installation Management Command (IMCOM).
+Created an automated web scraper using R and Selenium to aggregate material information, specifically the chemical compositions of ASTM metals.
+Lead a team of 3 for the development, deployment, and maintenance of an advanced manufacturing database. Manage timelines, client engagements, and task delegation. Segment workload into three sections, one section for each team member: database backend design, database frontend design, and data analytics dashboard.
+Lead a team of 2 for the development and maintenance of two hazardous materials databases, and one supply chain risk management (SCRM) database.
+Co-lead a team of 4 summer games interns for the development and presentation of a classification machine learning algorithm that predicts when parts will fail on Army ground combat systems by using telemetry and time series data (Prognostic and Predictive Maintenance).
+Performed SCRM analysis using bill of materials (BOMs) and DoD logistics databases (haystack). The following risks were reviewed: high demand, high unit price, high total price, foreign vendors, and parts with no TACOM owned technical data package (TDP).
+Developed HTML-based data analysis dashboards to summarize results.
+Worked with original equipment manufacturers (OEMs) and other subject matter experts (SMEs) to further enrich databases.
+Identified and resolve data discrepancies / abnormalities in databases.
+Managed two full-time employees, help foster career growth, and trouble-shoot technical problems.
 
 Data Scientist II
 January 2021 – January 2022 (40 Hrs/Week)
 Booz Allen Hamilton
 Troy MI Office
 
-Leverage R to identify hazardous materials within several Army Bills of Materials (BOMs).
-Create a SQL-based relational database to manage and organize analysis results. 
-Mentor a data analyst intern.
+Provide data collection, validation, management, and analysis consulting to defense acquisition and logistics clients.
+Leverage programming in R to analyze the BOMs of several Army platforms with the objective to find hazardous materials.
+Develop automated scripts and custom functions to speed up the data analysis process.
+Create a SQL-based relational database (Microsoft Access) to manage and organize analysis results. This database is used to feed an NLP/OCR machine learning tool.
+Write SQL scripts to maintain, update, and analyze a database.
+Present analysis results using Microsoft PowerPoint and data visualizations.
+Mentor a data analyst intern by delegating appropriate workloads, providing context for meetings, and maintaining an open line of communication for questions.
 
-Operations Research Analyst
-May 2018 – January 2021 (40 Hrs/Week)
+Operations Research Analyst (GS-1515-11)
+May 2020 – January 2021 (40 Hrs/Week)
 Army Tank-Automotive & Armaments Command
 Program Executive Office: Ground Combat Systems
 
-Promoted twice from GS-1515-07 to GS-1515-09 to GS-1515-11.
-Stood up and led the Data Analytics Working Group to encourage the use of R, Power BI, and other data analytics tools across the organization. Held lunch and learn sessions.
+Maintain and update a self-made Excel cost model that forecasts the cost requirements for the production of Bradley A4s. This model is the basis for the Bradley A4 Acquisition Program Baseline (APB), and the estimates submitted for President Budget Requests. In addition, this model is used in analyses of alternatives, and “what-if” drills.
+Help develop, update, and maintain a life-cycle cost estimate in ACEIT for the Bradley program.
+Collaborate with engineers, contracting specialists, logisticians, budget analysts, and EVM analysts to find and analyze reliable cost data.
 
-Utilized R to clean and merge multiple cost reports for a contract, conducted an exploratory data analysis, and projected the future requirements of the follow-on contract. 
+Develop a database and data pipeline for a Continuous Process Improvement (CPI) project using R scripts. The database will include monthly cost reports from 2010 to present. This database will auto-update when new monthly reports come in and estimate monthly burn rates.
+Utilized R to clean and merge multiple Earned Value Management (EVM) data sets for Systems Technical Support (STS) contracts, conducted an exploratory data analysis, and projected the future requirements of the follow-on contract. Developed an html report (using R Markdown) that communicates the analysis process in detail, along with a Word document that briefly summarizes the analysis and results. This analysis inspired the above CPI project.
+Created an Economic Analysis (EA) for the redesign of a Bradley part that is becoming obsolete.
+Used R and excel pivot tables to analyze Operating and Support Management Information System (OSMIS) data for the Bradley A3. This analysis produced cost metrics that will be used for the Bradley A3 Operational Sustainment Review (OSR).
+Collaboratively developed the Bradley A3 Cost Analysis Requirements Document (CARD) by collecting and consolidating Bradley A3 program data into one Excel file. This file will be used by the Office of the Deputy Assistant Secretary of the Army for Cost and Economics (ODASA-CE) for their Independent Cost Estimate (ICE) for the OSR.
+Assisted team members in the development of contract language for bill of material (BOM) data collection.
 
-Developed a BOM analysis tool using R that validated contractor-submitted data.
+Operations Research Analyst (GS-1515-09)
+May 2019 – May 2020 (40 Hrs/Week)
+Army Tank-Automotive & Armaments Command
+Program Executive Office: Ground Combat Systems
+
+Developed a PowerPoint slide presentation and co-led a brief to the Project Manager of Mounted Armor Vehicles (MAV) on the potential cost savings for the procurement of engines and transmissions as Government Furbished Material (GFM).
+Worked with the Self-Propelled Howitzer System (SPHS) cost team to develop, update, validate, present, and defend ACEIT cost estimates for the Cost Review Board (CRB) in support of a decision for Full-Rate of Production (FRP) at ODASA-CE.
+Developed a BOM analysis tool using R. This tool was used to validate the Bradley A4, and M88 HERCULES BOM submission data. The tool can be used to automate some of the data validation of future BOM submissions from contractors.
+Analyzed four years of cost analyst productivity data (WPR) for the Director of Cost & Systems, Dave Holm. This analysis was created using R. It provided descriptive statistics and trends on cost analysis work products.
+Presented the potential cost avoidance associated with procuring Bradley A4s in bulk. 
+Interpreted the language in contracts to understand its scope and impact on cost.
+
+Operations Research Analyst (GS-1515-07)
+May 2018 – May 2019 (40 Hrs/Week)
+Army Tank-Automotive & Armaments Command
+Program Executive Office: Ground Combat Systems
 
 Created Independent Government Cost Estimates (IGCEs) for price analysts to reference during their evaluations of proposed contractor prices.
+Developed pivot tables in Microsoft Excel to find errors in contractor cost data reporting for JLTV and used VLOOKUP & SUMIFS to automate tables that summarized all found errors.
+Estimated a consumables (cons) and repairables (reps) O&S estimate for the JLTV transparent armor. An analogous system was determined and a cost estimate relationship (CER) based on square footage of the transparent armor was used.
+Collaboratively developed estimates with team members from Bradley and JLTV.
 
 EDUCATION														
+
 Western Michigan University (WMU)
 Kalamazoo, MI
 Graduation: December 2017
 GPA: 3.57
+
 Bachelor of Science
 Major: Biochemistry
 Minor: Psychology
@@ -71,12 +126,14 @@ Minor: Psychology
 CompTIA
 Comptia.org
 Completion: June 2025
+
 Certificate of Completion
 Security+
 
 
 
 Data Camp
+
 Datacamp.com
 Completion: July 2020
 Certificate of Completion
@@ -84,6 +141,7 @@ Data Scientist with R
 
 
 Machine Learning with Andrew Ng
+
 Coursera.org
 Completion: June 2021
 Certificate of Completion
@@ -93,22 +151,22 @@ Stanford Online
 
 
 SKILLS / ADDITIONAL QUALIFICATIONS
-Security clearance: Secret
-Python: Pandas, PyMuPDF, boto3, Scikit-Learn, and more
-R: Tidyverse, ggplot2, plotly, caret, isotree, and more
-Large Language Models (LLMs): DoD-approved Claude 3.7 Sonnet and OpenAI GPT4
-Machine Learning: Optical Character Recognition, anomaly detection, Supervised regression and classification
-AWS GovCloud: Bedrock, Textract, S3, Lambda, SageMaker 
-Data Dashboards: Streamlit, RShiny, Qlik
-Data Notebooks: Jupyter, RMarkdown, Quarto
-SQL: Writing queries, developing database architectures, and managing database inputs and outputs
-Program Management: GitHub, Jira, Confluence
-DoD Databases/Environments: haystack, FLIS, Vantage, ADVANA, and engineering workbench
-Microsoft: Word, PowerPoint, Outlook, Teams, SharePoint
-Operating System: Windows, Windows Subsystem for Linux (WSL), Linux (Ubuntu)
+Secret security clearance
+Proficient in the programming language Python; specifically, pandas, PyMuPDF, and boto3
+Proficient in the programming language R; specifically, tidyverse, ggplot2, and plotly
+Proficient in AWS GovCloud; specifically, Bedrock, Textract, S3, Lambda, and SageMaker 
+Proficient in data dashboard development; specifically, RMarkdown, RShiny, Quarto, and Qlik
+Proficient in writing SQL queries, developing database architectures, and managing database inputs and outputs
+GitHub, Jira, Confluence
+Proficient in DoD Logistics databases; haystack, FEDLOG, and engineering workbench
+Experience with supervised regression and classification machine learning algorithms; multivariate linear regression, decision trees, random forests, and gradient boosting machines
+Experience with DoD-approved Large Language Models (LLMs); Claude 3.5 Sonnet, OpenAI GPT4
+Proficient in statistical analysis within R, Python, and Excel
+Proficient in Microsoft Word, PowerPoint, and Outlook
+Strong math, statistics, and physical sciences background
 
 LEADERSHIP
 Career Manager for two full-time employees and summer interns
-Data Science team lead for multiple projects for Booz Allen Hamilton
+Data Science project team lead for Booz Allen Hamilton
 Head of the Data Analytics Working Group for the Detroit Chapter of the International Cost Estimating and Analysis Association (ICEAA)
 General Chemistry I, General Physics I, and Research Method & Statistics Teaching Assistant; WMU

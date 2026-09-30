@@ -12,7 +12,7 @@
 Above anything, I'm a husband and a father. I'm also a hard-working self starter who learns and adapts quickly and likes to be challenged.
 
 **What is David's background?**
-I was an operations research analyst for TACOM (Detroit Arsenal) from 2018-2021 where I was promoted twice from GS-07 to GS-09 to GS-11. Then in 2021, I became a Data Scientist for Booz Allen Hamilton, and this is where I currently work. I've been promoted twice at Booz Allen from Data Scientist II to III to Lead.
+I was an operations research analyst for TACOM (Detroit Arsenal) from 2018-2021 where I was promoted twice from GS-07 to GS-09 to GS-11. Then in 2021, I became a Data Scientist for Booz Allen Hamilton, and this is where I currently work. I've been promoted twice at Booz Allen from Data Scientist II to III to Lead. As of 2026, I work as a Lead AI Engineer.
 
 **What kind of roles is David looking for?**
 AI Engineer is the preferred role that I'm looking for, but I am open to roles as a Data Scientist as well. I want to build solutions using large language models.
@@ -46,16 +46,16 @@ I've been working with AI/ML since 2020. My first exposure was when I was on a t
 I started my professional career in May, 2018.
 
 **What did David do before becoming an AI engineer?**
-Currently, my official job title is Data Scientist but I do a lot of AI engineering work. Before building AI engineering solutions, I built traditional Data Science solutions, and further before that I created cost estimates for defense platforms at TACOM.
+Before building AI engineering solutions, I built traditional Data Science solutions, and further before that I created cost estimates for defense platforms at TACOM.
 
 **What does David's work history look like?**
-I was an operations research analyst for TACOM (Detroit Arsenal) from 2018-2021 where I was promoted twice from GS-07 to GS-09 to GS-11. Then in 2021, I became a Data Scientist for Booz Allen Hamilton, and this is where I currently work. I've been promoted twice at Booz Allen from Data Scientist II to III to Lead.
+I was an operations research analyst for TACOM (Detroit Arsenal) from 2018-2021 where I was promoted twice from GS-07 to GS-09 to GS-11. Then in 2021, I became a Data Scientist for Booz Allen Hamilton, and this is where I currently work. I've been promoted twice at Booz Allen from Data Scientist II to III to Lead, and in 2026 I transitioned to the role of Lead AI Engineer.
 
 **Has David worked at any well-known companies?**
 I currently work at Booz Allen Hamilton, which is fortune 500 company and a technology provider for the government.
 
 **Has David worked in a startup environment?**
-No, but Booz Allen sometimes feels like startup. This may sound unlikely since we are a fortune 500 company but here's why I say this. Our small, local team in Royal Oak (formerly Troy) is responsible for maintining it's own billability (e.g., we need to sell to local clients and win work in order to have jobs), so funding is feast or famine. It's on us to grow and build our own little corner of Booz Allen. In addition, I am on mutliple projects at once and often need to wear mutliple hats. This is why my current title Data Scientist doesn't really fit what I do. Sometimes I need to be a Data Scientist, sometimes a Data Engineer, AI Engineer, DevSecOps, Solutions Architect, Cloud Engineer, etc. I've never worked in a startup environment but I'd imagine the environment is similar in ways.
+No, but Booz Allen sometimes feels like startup. This may sound unlikely since we are a fortune 500 company but here's why I say this. Our small, local team in Royal Oak (formerly Troy) is responsible for maintining it's own billability (e.g., we need to sell to local customers and win work in order to have jobs), so funding is feast or famine. It's on us to grow and build our own little corner of Booz Allen. In addition, I am on mutliple projects at once and often need to wear mutliple hats. Sometimes I need to be a AI Engineer, sometimes a Data Scientist, Data Engineer, DevSecOps, Solutions Architect, Cloud Engineer, etc. I've never worked in a startup environment but I'd imagine the environment is similar in ways.
 
 **Has David led any teams or projects?**
 I lead the technical development for most of my projects. I'm responsible for understanding our customer's problem and creating the solution architecture that will solve their problem. I then break this solution down into individual components and delegate work to more junior staff. I like taking the harder, bleeding-edge components of the solution, and I help mentor and steer junior staff who take the other components. I don't mind leading projects or being one of the team.
@@ -64,7 +64,7 @@ I lead the technical development for most of my projects. I'm responsible for un
 Most of my projects are cross-functional. We often have three teams: the tech team that builds the solution, the project managers that handle the customer engagements and financials, and the quality assurance / quality control (QAQC) team that provides a feedback loop to the tech team. In some recent projects, I've had a cross functional split across the tech team as well. The split was between app development and cloud operations. I was on the app development team, and the cloud operations team had ownership over an Impact Level 5 authorized AWS GovCloud.
 
 **What is David's most recent role?**
-I am a Lead Data Scientist recently turned Lead AI Engineer that wears many hats. Most recently, I've been doing AI Engineering and DevSecOps work.
+I am a Lead AI Engineer at Booz Allen Hamilton.
 
 **Why is David looking for a new opportunity?**
 I'm looking for two reasons. The first is pay. My wife and I had our first kid and we are thinking about having my wife become a stay-at-home mom. She currently makes good money as a Quality Engineer but has been part-time since the little guy came along. I'm hoping to increase my pay to help offset the household income decrease. The second reason is remote work. My current job is mandating a 3-day in-office work week. I very much enjoy having the flexability of remote work and I find myself being more productive when I work from home. I want to see what my options are and if there are full-time remote jobs available.
@@ -153,7 +153,7 @@ Yes. Beyond LLMs, I have extensive experience with classical and rule-based NLP.
 Yes, primarily in the domain of Document Computer Vision and Document AI. In my work leading Data ReconnAIssance™, I built pipelines to visually process complex technical documents and engineering drawings. This involved using AWS Textract for optical character recognition (OCR), spatial bounding-box mapping, and document layout analysis, as well as multimodal vision models to visually analyze unstructured diagrams, title blocks, and schematics to extract Bill of Materials (BOM) data and other government records.
 
 **What is David's experience with data science and analytics?**
-I have over 7 years of data science and analytics experience, progressing from an Operations Research Analyst with the US Army to Lead Data Scientist at Booz Allen Hamilton. My work spans the full analytics lifecycle from exploratory data analysis and ETL using Python, R, and SQL, to building predictive models for classifying text extraction accuracy, anomaly detection for military financial data, and supply chain risk modeling. Beyond modeling, I have extensive experience translating complex findings into interactive dashboards (Streamlit, Shiny, Quarto) and presenting data-driven recommendations to senior leaders and non-technical stakeholders.
+I have experience with data science and analytics since 2019, progressing from an Operations Research Analyst with the US Army to Lead Data Scientist at Booz Allen Hamilton. My work spans the full analytics lifecycle from exploratory data analysis and ETL using Python, R, and SQL, to building predictive models for classifying text extraction accuracy, anomaly detection for military financial data, and supply chain risk modeling. Beyond modeling, I have extensive experience translating complex findings into interactive dashboards (Streamlit, Shiny, Quarto) and presenting data-driven recommendations to senior leaders and non-technical stakeholders.
 
 **Has David worked with time series data?**
 Primarily through personal projects rather than my professional roles. In my Baby Names Explorer project, I worked extensively with over 140 years of longitudinal SSA annual time series data. I initially experimented with classical per-series models like ARIMA before implementing a multi-horizon pooled forecasting model using LightGBM. The pipeline engineers lag and rolling features across thousands of names, backtests 5-year forecasts against historical baselines, and generates conformal prediction intervals to capture forecast uncertainty.
