@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/dwest1507/portfolio/compare/portfolio-v1.2.1...portfolio-v1.2.2) (2026-09-30)
+
+
+### Bug Fixes
+
+* **deps:** bump undici for security advisories ([bbd6704](https://github.com/dwest1507/portfolio/commit/bbd67041be6d920636f0c1cc185064bb477d6b87))
+
 ## [1.2.1](https://github.com/dwest1507/portfolio/compare/portfolio-v1.2.0...portfolio-v1.2.1) (2026-09-14)
 
 
