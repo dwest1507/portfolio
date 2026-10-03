@@ -2,7 +2,7 @@ DAVID P WEST
 Waterford, MI  ●  david.p.west2@gmail.com
 Portfolio of Personal Projects: https://www.davidpwest.com/ 
 SUMMARY
-I'm a Lead Data Scientist, recently turned Lead AI Engineer, with an active secret security clearance and a background in the defense industry since 2018, building ML systems since 2020, and production full-stack LLM applications since 2025. I am looking for a position where I can solve tough technical problems involving the use of AI. Please visit my portfolio to see my skills in action.
+I'm a Lead AI Engineer, with an active secret security clearance and a background in the defense industry since 2018, applying AI/ML to solve customer problems since 2020, and production full-stack LLM applications since 2025. I am looking for a position where I can solve tough, real-world problems involving the use of AI. Please visit my portfolio to see my skills in action. If you have any questions about my experience/qualifications, be sure to ask the chatbot in my portfolio.
 
 TECHNICAL SKILLS
 Languages: Python, R, TypeScript, SQL, Bash
@@ -17,13 +17,19 @@ January 2026 – Present (40 Hrs/Week)
 Booz Allen Hamilton
 Royal Oak MI Office
 
+Notable projects: 
+Extract information from 260k old paper records to add more information and identify errors within a database for the Army.
+Identify hazardous parts within 33k pages of old engineering drawings for the Air Force to reduce exposure risks to maintainers. 
+Lead technical teams by designing solution architectures, delegating tasks, mentoring junior staff, and developing automation solutions for inefficient processes collaboratively with government customers.
 Develop a reusable, LLM-backed, intelligent document processing pipeline (Data ReconnAIssance™) that extracts information from PDFs and images into a structured format utilizing AWS, FastAPI, React, Docker, CI/CD, and more. This is utilized across multiple teams, thus reducing the time to delivery for our customers, ensuring consistent quality, and fostering collaboration.
 Deploy this pipeline into production environments that must maintain a security posture compliant to Impact Level 5 (IL5) and development environments compliant with Cybersecurity Maturity Model Certification (CMMC) Level 2.
 Design a scalable AWS architecture utilizing Infrastructure as Code (IaC), Terraform + Terragrunt. AWS resources include: Bedrock, Textract, Lambda, EKS, ECR, EC2, SQS, SNS, DynamoDB, S3, ALB, VPC Endpoints, and KMS.
 Develop an internal application (React + FastAPI + Docker) for Data ReconnAIssance™ that allows non-developers to process documents at scale, and includes a human-in-the-loop quality control interface where users can correct extraction errors.
-Collect data on extraction errors to estimate the overall accuracy of extraction and develop a machine learning model (HistGradientBoostingClassifier) for predicting extraction accuracy on unreviewed data.
+Collect data on extraction errors to estimate the overall accuracy of extraction and develop a machine learning model (HistGradientBoostingClassifier) for predicting extraction accuracy.
 Automate CI/CD with GitHub Actions, including test/coverage gates, Docker Compose integration testing, container and FOSS security scanning, and semantic release automation.
-Notable projects: Identify hazardous parts within 33k pages of old engineering drawings for the Air Force to reduce exposure risks to maintainers. Extract information from 260k old paper records to add more information and identify errors within a database for the Arlington National Cemetery.
+Manage the GitHub repositories for Data ReconnAIssance™ and review/approve pull requests.
+Present technical findings to non-technical customers.
+
 
 Data Scientist, Lead
 January 2025 – December 2025 (40 Hrs/Week)
