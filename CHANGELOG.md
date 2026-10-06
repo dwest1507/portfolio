@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/dwest1507/portfolio/compare/portfolio-v1.2.2...portfolio-v1.3.0) (2026-10-06)
+
+
+### Features
+
+* add custom site favicons, app icons, and update gitignore for prep docs ([18b5027](https://github.com/dwest1507/portfolio/commit/18b50271632b3c46cfa3c59cbd09ebd4d221b8f8))
+* **frontend:** add DW. favicon and app icons; patch dev dependency vulnerabilities ([fb48ef7](https://github.com/dwest1507/portfolio/commit/fb48ef7480bf5f2d251ce6147b542ead093caa47))
+
 ## [1.2.2](https://github.com/dwest1507/portfolio/compare/portfolio-v1.2.1...portfolio-v1.2.2) (2026-09-30)
 
 
