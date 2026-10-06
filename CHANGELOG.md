@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/dwest1507/portfolio/compare/portfolio-v1.3.0...portfolio-v1.3.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **deps:** bump sharp to 0.35.5 for GHSA-wq5f-xc86-pv6w ([d751b8e](https://github.com/dwest1507/portfolio/commit/d751b8e83567ff46efeadeb4cf10d699d919ed36))
+
 ## [1.3.0](https://github.com/dwest1507/portfolio/compare/portfolio-v1.2.2...portfolio-v1.3.0) (2026-10-06)
 
 
