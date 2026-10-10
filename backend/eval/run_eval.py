@@ -257,6 +257,16 @@ def select_cases(cases: list[dict], split: str) -> list[dict]:
             "cannot answer `answerable: false`."
         )
 
+    # Fact Recall is the share of a case's Required Facts an answer conveys: a case
+    # with none could never be scored, and would drop out of that metric unnoticed.
+    unlabelled_facts = [c["id"] for c in answerable_cases(cases) if not c.get("required_facts")]
+    if unlabelled_facts:
+        raise ValueError(
+            "Answerable golden cases carry no Required Facts: "
+            f"{', '.join(unlabelled_facts)}. Write the facts a correct answer conveys, or "
+            "mark a question the Corpus cannot answer `answerable: false`."
+        )
+
     labelled_out_of_scope = [
         c["id"]
         for c in cases

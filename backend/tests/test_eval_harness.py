@@ -375,6 +375,7 @@ def _answerable(case_id: str, *phrases: str) -> dict:
         "category": "direct",
         "question": f"question {case_id}",
         "relevant_phrases": list(phrases),
+        "required_facts": [f"David knows about {case_id}."],
     }
 
 
@@ -453,6 +454,19 @@ class TestGoldenCaseValidation:
         with pytest.raises(ValueError, match="no Relevant Phrases: forgot"):
             select_cases([_answerable("forgot")], "all")
 
+    @pytest.mark.parametrize("facts", [{"required_facts": []}, {"required_facts": None}])
+    def test_rejects_an_answerable_case_with_no_required_facts(self, facts):
+        """Fact Recall is the share of a case's Required Facts an answer conveys, so an
+        answerable case with none could never be scored and would drop out silently."""
+        with pytest.raises(ValueError, match="no Required Facts: forgot"):
+            select_cases([{**_answerable("forgot", "Booz Allen Hamilton"), **facts}], "all")
+
+    def test_rejects_an_answerable_case_missing_the_required_facts_field(self):
+        case = _answerable("forgot", "Booz Allen Hamilton")
+        del case["required_facts"]
+        with pytest.raises(ValueError, match="no Required Facts: forgot"):
+            select_cases([case], "all")
+
     @pytest.mark.parametrize(
         "field", [{"relevant_phrases": ["salary"]}, {"required_facts": ["David earns X."]}]
     )
@@ -460,6 +474,23 @@ class TestGoldenCaseValidation:
         """Labels on a question the Corpus cannot answer contradict the case itself."""
         with pytest.raises(ValueError, match="Out-of-Scope cases carry labels: salary"):
             select_cases([{**_out_of_scope("salary"), **field}], "all")
+
+    def test_every_committed_required_fact_is_a_self_contained_sentence(self):
+        """A Required Fact is judged on its own, beside an answer, with no question in
+        view: one that opens on "He" or "It" leaves the Judge guessing who or what it
+        is about."""
+        leaning_on_context = {"he", "she", "it", "they", "this", "that", "these", "those"}
+        malformed = [
+            (case["id"], fact)
+            for case in ANSWERABLE
+            for fact in case["required_facts"]
+            if not (
+                fact[:1].isupper()
+                and fact.endswith(".")
+                and fact.split()[0].lower() not in leaning_on_context
+            )
+        ]
+        assert not malformed
 
     def test_rejects_an_unknown_case_origin(self):
         """Visitor-origin results are reported separately, so a misspelt origin would

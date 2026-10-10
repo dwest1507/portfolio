@@ -1,5 +1,5 @@
 {
-  "description": "Retrieval ground truth for the portfolio chatbot. Each case is a question a recruiter, hiring manager, or technical interviewer might realistically ask. A retrieved chunk counts as relevant if ANY phrase in `relevant_phrases` appears in its text beginning at the start of a word (case-insensitive, whitespace-normalized; a phrase may end mid-word, so `mentor` matches `mentoring` but `no` does not match `know`). Matching on phrases rather than chunk IDs keeps the labels valid across re-chunking and re-indexing. A case may also carry `answerable` (default true; false marks an Out-of-Scope Case the Corpus cannot answer, which carries no `relevant_phrases`, `required_facts` or `category` and is skipped by the retrieval harness), `required_facts` (full-sentence statements a correct answer conveys, read by the generation harness), and `origin` (`authored` or `visitor`, default `authored`).",
+  "description": "Retrieval ground truth for the portfolio chatbot. Each case is a question a recruiter, hiring manager, or technical interviewer might realistically ask. A retrieved chunk counts as relevant if ANY phrase in `relevant_phrases` appears in its text beginning at the start of a word (case-insensitive, whitespace-normalized; a phrase may end mid-word, so `mentor` matches `mentoring` but `no` does not match `know`). Matching on phrases rather than chunk IDs keeps the labels valid across re-chunking and re-indexing. A case may also carry `answerable` (default true; false marks an Out-of-Scope Case the Corpus cannot answer, which carries no `relevant_phrases`, `required_facts` or `category` and is skipped by the retrieval harness), `required_facts` (required on every answerable case: self-contained, full-sentence statements a correct answer conveys, judged on meaning by the generation harness), and `origin` (`authored` or `visitor`, default `authored`).",
   "splits": {
     "description": "Every case belongs to exactly one split. `dev` is where parameters, weights and stage choices are decided; `holdout` is never looked at while deciding one, so the published numbers are not the numbers something was tuned against. Assignment is deterministic rather than hand-picked — a case is held out when sha256(salt + ':' + id) sorts below `holdoutBelow` — so it can be recomputed and audited, and nobody can move an inconvenient question across the line. The rule is per-case and depends on nothing but the id: adding, removing or reordering questions cannot move a case that already has a split, which is what lets the recorded labels be frozen and the rule be checked at the same time. A rank-based rule (`the first 40% by hash`) could not do both — its cutoff moves with the size of the set, so every addition would reshuffle cases across the boundary and leak held-out questions into `dev`.",
     "salt": "portfolio-golden-split-v1",
@@ -21,6 +21,9 @@
       "question": "Where does David currently work?",
       "relevant_phrases": [
         "Booz Allen Hamilton"
+      ],
+      "required_facts": [
+        "David currently works at Booz Allen Hamilton."
       ]
     },
     {
@@ -30,6 +33,9 @@
       "question": "What is David's current job title?",
       "relevant_phrases": [
         "AI Engineer"
+      ],
+      "required_facts": [
+        "David's current job title is Lead AI Engineer."
       ]
     },
     {
@@ -41,6 +47,10 @@
         "Operations Research Analyst",
         "TACOM",
         "Army civilian"
+      ],
+      "required_facts": [
+        "David worked directly for the government as an Army civilian at TACOM.",
+        "David was an Operations Research Analyst at TACOM from 2018 to 2021."
       ]
     },
     {
@@ -52,6 +62,10 @@
         "Promoted twice",
         "II to Lead",
         "GS-11"
+      ],
+      "required_facts": [
+        "David was promoted twice at TACOM, from GS-07 to GS-09 to GS-11.",
+        "David has been promoted twice at Booz Allen Hamilton, from Data Scientist II to III to Lead."
       ]
     },
     {
@@ -62,6 +76,9 @@
       "relevant_phrases": [
         "working with AI/ML since 2020",
         "since 2020"
+      ],
+      "required_facts": [
+        "David has worked with AI and machine learning since 2020."
       ]
     },
     {
@@ -72,6 +89,9 @@
       "relevant_phrases": [
         "started my professional career in May, 2018",
         "May 2018"
+      ],
+      "required_facts": [
+        "David started his professional career in May 2018."
       ]
     },
     {
@@ -82,6 +102,10 @@
       "relevant_phrases": [
         "Biochemistry",
         "Western Michigan University"
+      ],
+      "required_facts": [
+        "David earned a Bachelor of Science in Biochemistry.",
+        "David studied at Western Michigan University."
       ]
     },
     {
@@ -92,6 +116,10 @@
       "relevant_phrases": [
         "Biochemistry",
         "Bachelor of Science"
+      ],
+      "required_facts": [
+        "David does not have a computer science degree.",
+        "David's degree is a Bachelor of Science in Biochemistry."
       ]
     },
     {
@@ -102,6 +130,9 @@
       "relevant_phrases": [
         "Security+",
         "CompTIA"
+      ],
+      "required_facts": [
+        "David holds the CompTIA Security+ certification."
       ]
     },
     {
@@ -112,6 +143,9 @@
       "relevant_phrases": [
         "Security clearance: Secret",
         "Security clearance"
+      ],
+      "required_facts": [
+        "David has a Secret security clearance."
       ]
     },
     {
@@ -122,6 +156,9 @@
       "relevant_phrases": [
         "Python, R, Typescript, and SQL",
         "programming languages"
+      ],
+      "required_facts": [
+        "David programs in Python, R, TypeScript, and SQL."
       ]
     },
     {
@@ -132,6 +169,10 @@
       "relevant_phrases": [
         "very proficient in Python",
         "go-to language"
+      ],
+      "required_facts": [
+        "David is very proficient in Python.",
+        "Python is David's go-to language for AI engineering and data science."
       ]
     },
     {
@@ -145,6 +186,10 @@
         "Modal",
         "Railway",
         "Vercel"
+      ],
+      "required_facts": [
+        "David has primarily used AWS.",
+        "David has some experience with Palantir Foundry, Vercel, Cloudflare, Railway, and Modal."
       ]
     },
     {
@@ -156,6 +201,11 @@
         "Bedrock",
         "GovCloud",
         "Textract"
+      ],
+      "required_facts": [
+        "David has used Amazon Bedrock and AWS Textract.",
+        "David has used AWS Lambda, SQS, SNS, DynamoDB, and S3.",
+        "Most of David's AWS experience is in AWS GovCloud."
       ]
     },
     {
@@ -166,6 +216,10 @@
       "relevant_phrases": [
         "GovCloud",
         "Impact Level 5"
+      ],
+      "required_facts": [
+        "David has extensive experience with AWS GovCloud.",
+        "David has deployed to environments authorized at Impact Level 5 (IL5)."
       ]
     },
     {
@@ -176,6 +230,10 @@
       "relevant_phrases": [
         "SQLite and DynamoDB",
         "Neptune"
+      ],
+      "required_facts": [
+        "David has worked with SQLite and DynamoDB.",
+        "David is starting to develop skills with graph databases, specifically Neo4j."
       ]
     },
     {
@@ -187,6 +245,10 @@
         "FastAPI",
         "API Gateway",
         "RESTful APIs"
+      ],
+      "required_facts": [
+        "David has built APIs using FastAPI.",
+        "David has built serverless APIs with AWS API Gateway and Lambda."
       ]
     },
     {
@@ -197,6 +259,10 @@
       "relevant_phrases": [
         "frontend experience using React",
         "not a frontend expert"
+      ],
+      "required_facts": [
+        "David has some frontend experience using React and TypeScript.",
+        "David is not a frontend expert but can build a functional frontend for most applications."
       ]
     },
     {
@@ -207,6 +273,10 @@
       "relevant_phrases": [
         "worked with LLMs since 2025",
         "applications using LLMs"
+      ],
+      "required_facts": [
+        "David has worked with large language models since 2025.",
+        "David has built applications using LLMs for both personal and professional work."
       ]
     },
     {
@@ -218,6 +288,12 @@
         "OpenAI's GPT models",
         "Anthropic's Claude",
         "Gemini"
+      ],
+      "required_facts": [
+        "David has used OpenAI's GPT models.",
+        "David has used Anthropic's Claude models.",
+        "David has used Google's Gemini models.",
+        "David has used Meta's Llama models."
       ]
     },
     {
@@ -228,6 +304,9 @@
       "relevant_phrases": [
         "built a few RAG systems",
         "RAG is a great way"
+      ],
+      "required_facts": [
+        "David has built several RAG systems for both work and personal projects."
       ]
     },
     {
@@ -238,6 +317,10 @@
       "relevant_phrases": [
         "FAISS for local vector search",
         "OpenSearch"
+      ],
+      "required_facts": [
+        "David has used FAISS for local vector search in personal projects.",
+        "David has used OpenSearch for cloud-based vector search in work projects."
       ]
     },
     {
@@ -248,6 +331,10 @@
       "relevant_phrases": [
         "Titan embedding",
         "all-mpnet-base-v2"
+      ],
+      "required_facts": [
+        "David has used Amazon's Titan embedding models for work.",
+        "David has used all-mpnet-base-v2 for personal projects."
       ]
     },
     {
@@ -258,6 +345,10 @@
       "relevant_phrases": [
         "Not yet",
         "fine-tuning"
+      ],
+      "required_facts": [
+        "David has not fine-tuned a model yet.",
+        "David is interested in learning more about fine-tuning."
       ]
     },
     {
@@ -268,6 +359,10 @@
       "relevant_phrases": [
         "prompt engineering",
         "context and grounding is key"
+      ],
+      "required_facts": [
+        "David has done a fair amount of prompt engineering for work and personal projects.",
+        "David has found that context and grounding are key to getting good results from LLMs."
       ]
     },
     {
@@ -278,6 +373,10 @@
       "relevant_phrases": [
         "Groq's API",
         "serving LLMs on a budget"
+      ],
+      "required_facts": [
+        "David has used Groq's API to serve some of his own models.",
+        "David considers Groq a good platform for serving LLMs on a budget."
       ]
     },
     {
@@ -287,6 +386,9 @@
       "question": "Does David know LangChain?",
       "relevant_phrases": [
         "LangChain"
+      ],
+      "required_facts": [
+        "David has used LangChain for personal projects."
       ]
     },
     {
@@ -298,6 +400,13 @@
         "Windsurf",
         "Terraform with Terragrunt",
         "Jira"
+      ],
+      "required_facts": [
+        "At work, David uses a government-approved version of Windsurf as his IDE.",
+        "David uses Terraform with Terragrunt for infrastructure as code.",
+        "David uses GitHub Actions for CI/CD and Docker for containerization.",
+        "David uses Jira for project management and Confluence for documentation.",
+        "For personal projects, David uses VS Code and Claude Code."
       ]
     },
     {
@@ -309,6 +418,11 @@
         "Terraform",
         "Kubernetes",
         "GitHub Actions"
+      ],
+      "required_facts": [
+        "David has extensive experience with infrastructure as code using Terraform and Terragrunt.",
+        "David designs and maintains CI/CD pipelines with GitHub Actions.",
+        "David has deployed applications to Kubernetes clusters on AWS EKS."
       ]
     },
     {
@@ -320,6 +434,11 @@
         "Manage two full-time employees",
         "Career Manager",
         "lead the technical development"
+      ],
+      "required_facts": [
+        "David manages two full-time employees as their Career Manager.",
+        "David leads the technical development for most of his projects.",
+        "David has led project teams of up to four people."
       ]
     },
     {
@@ -331,6 +450,10 @@
         "mentoring junior staff",
         "Mentor a data analyst intern",
         "mentor"
+      ],
+      "required_facts": [
+        "David mentors junior staff on his projects.",
+        "David has mentored a data analyst intern."
       ]
     },
     {
@@ -341,6 +464,10 @@
       "relevant_phrases": [
         "cross-functional",
         "quality assurance"
+      ],
+      "required_facts": [
+        "Most of David's projects are cross-functional.",
+        "David's projects typically involve a tech team, project managers, and a quality assurance / quality control team."
       ]
     },
     {
@@ -351,6 +478,9 @@
       "relevant_phrases": [
         "Propose projects to potential customers",
         "win work"
+      ],
+      "required_facts": [
+        "David has helped win new work by proposing projects and marketing AI solutions to potential customers."
       ]
     },
     {
@@ -361,6 +491,11 @@
       "relevant_phrases": [
         "non-technical customers",
         "dashboards and PowerPoint"
+      ],
+      "required_facts": [
+        "With non-technical audiences, David focuses on a clear problem statement and what the solution does to solve it.",
+        "David emphasizes the why behind his work and the value it brings to the customer.",
+        "David uses analogies or metaphors to explain technical concepts."
       ]
     },
     {
@@ -371,6 +506,11 @@
       "relevant_phrases": [
         "additively manufactured",
         "additive manufacturing"
+      ],
+      "required_facts": [
+        "David led a team of four that built an automation process to detect whether a part can be additively manufactured.",
+        "David's additive manufacturing process uses a part's logistics data and engineering drawing.",
+        "David's additive manufacturing process reduces engineering effort ten-fold."
       ]
     },
     {
@@ -382,6 +522,10 @@
         "Bill of Material",
         "Bills of Materials",
         "hazardous materials"
+      ],
+      "required_facts": [
+        "David led a team of two that built an automation process to build a Bill of Materials from engineering drawings and detect parts containing hazardous materials.",
+        "David has used R to analyze the bills of materials of Army platforms to find hazardous materials."
       ]
     },
     {
@@ -392,6 +536,11 @@
       "relevant_phrases": [
         "Anomaly detection",
         "Installation Management Command"
+      ],
+      "required_facts": [
+        "David performed anomaly detection on Army Garrison financial data for the Installation Management Command (IMCOM).",
+        "David built a prototype isolation forest model to detect potentially fraudulent financial activity.",
+        "David's isolation forest prototype was not pursued because rule-based detection methods sufficed."
       ]
     },
     {
@@ -402,6 +551,10 @@
       "relevant_phrases": [
         "web scraper using R and Selenium",
         "Selenium"
+      ],
+      "required_facts": [
+        "David built an automated web scraper using R and Selenium.",
+        "David's web scraper aggregated material information, specifically the chemical compositions of ASTM metals."
       ]
     },
     {
@@ -412,6 +565,10 @@
       "relevant_phrases": [
         "Predictive Maintenance",
         "predicts when parts will fail"
+      ],
+      "required_facts": [
+        "David co-led a team of four interns that built a classification model predicting when parts will fail on Army ground combat systems.",
+        "David's predictive maintenance model used telemetry and time series data."
       ]
     },
     {
@@ -422,6 +579,11 @@
       "relevant_phrases": [
         "Chat with Nietzsche",
         "Nietzsche"
+      ],
+      "required_facts": [
+        "Chat with Nietzsche is a conversational AI that answers in Friedrich Nietzsche's philosophical voice.",
+        "Chat with Nietzsche uses Retrieval-Augmented Generation over Nietzsche's written works.",
+        "Chat with Nietzsche shows the source passages used to generate each answer."
       ]
     },
     {
@@ -433,6 +595,11 @@
         "cross-encoder",
         "ms-marco-MiniLM",
         "re-rank"
+      ],
+      "required_facts": [
+        "David's Nietzsche chatbot retrieves candidates with hybrid search, weighting a FAISS semantic index at 70% and a BM25 keyword index at 30%.",
+        "David's Nietzsche chatbot re-ranks candidate passages with a cross-encoder that scores each passage against the question jointly.",
+        "David's Nietzsche chatbot passes the top six re-ranked passages to the LLM."
       ]
     },
     {
@@ -443,6 +610,12 @@
       "relevant_phrases": [
         "Generate Music with AI",
         "music track"
+      ],
+      "required_facts": [
+        "Generate Music with AI is a full-stack web app that turns a text prompt into an original music track.",
+        "Generate Music with AI uses the ACE-Step music generation model running on serverless GPUs.",
+        "Generate Music with AI has a Next.js frontend and a FastAPI backend.",
+        "David contributed serverless GPU deployment support on Modal to the open-source ACE-Step project."
       ]
     },
     {
@@ -453,6 +626,11 @@
       "relevant_phrases": [
         "Modal",
         "GPU"
+      ],
+      "required_facts": [
+        "David's AI music app runs its model on serverless GPUs on Modal.",
+        "David's ACE-Step deployment on Modal uses GPU memory snapshotting for fast cold starts and scales to zero when idle.",
+        "David's AI music app prewarms the GPU container when a visitor first interacts with the form, hiding cold-start latency."
       ]
     },
     {
@@ -463,6 +641,11 @@
       "relevant_phrases": [
         "rate limit",
         "slowapi"
+      ],
+      "required_facts": [
+        "David's AI music app's FastAPI backend rate-limits requests by client IP.",
+        "David keys rate limits on client IP rather than session cookies, because rotating cookies would mint fresh allowances.",
+        "David's portfolio chatbot backend uses SlowAPI for rate limiting."
       ]
     },
     {
@@ -473,6 +656,12 @@
       "relevant_phrases": [
         "baby name",
         "Social Security Administration"
+      ],
+      "required_facts": [
+        "Baby Names Explorer is an interactive app for exploring US baby name trends from Social Security Administration data covering 1880 to 2024.",
+        "Baby Names Explorer forecasts a name's popularity five years ahead with uncertainty bands.",
+        "Baby Names Explorer answers plain-English questions about the dataset by translating them into SQL.",
+        "Baby Names Explorer has a Next.js frontend and a FastAPI backend."
       ]
     },
     {
@@ -483,6 +672,11 @@
       "relevant_phrases": [
         "time-series",
         "forecast"
+      ],
+      "required_facts": [
+        "David has worked with time series mainly through personal projects rather than his professional roles.",
+        "In Baby Names Explorer, David replaced per-name ARIMA models with a pooled LightGBM forecasting model.",
+        "David's Baby Names Explorer forecasts come with conformal prediction intervals."
       ]
     },
     {
@@ -493,6 +687,12 @@
       "relevant_phrases": [
         "Diamonds",
         "diamond price"
+      ],
+      "required_facts": [
+        "David's diamond price project models diamond prices from physical and quality attributes, written in R.",
+        "David's diamond price project uses a dataset of about 54,000 diamonds.",
+        "David's diamond price project compares linear regression, regression decision trees, random forests, and gradient boosting machines.",
+        "The diamond price project was David's earliest end-to-end data science project."
       ]
     },
     {
@@ -504,6 +704,10 @@
         "Leverage R",
         "using R",
         "R:"
+      ],
+      "required_facts": [
+        "David is proficient in the R programming language.",
+        "David has used R professionally for data analysis, such as analyzing bills of materials for hazardous materials."
       ]
     },
     {
@@ -514,6 +718,11 @@
       "relevant_phrases": [
         "prefer remote work",
         "open to a hybrid schedule"
+      ],
+      "required_facts": [
+        "David prefers remote work.",
+        "David is open to a hybrid schedule.",
+        "David is not open to working full-time in an office."
       ]
     },
     {
@@ -524,6 +733,9 @@
       "relevant_phrases": [
         "open to relocation",
         "relocation"
+      ],
+      "required_facts": [
+        "David is open to relocation if the pay justifies the move."
       ]
     },
     {
@@ -534,6 +746,10 @@
       "relevant_phrases": [
         "Waterford",
         "Metro-Detroit"
+      ],
+      "required_facts": [
+        "David is based in the Metro-Detroit area of Michigan.",
+        "David works remotely from Waterford, Michigan."
       ]
     },
     {
@@ -544,6 +760,11 @@
       "relevant_phrases": [
         "AI Engineer is the preferred role",
         "build solutions using large language models"
+      ],
+      "required_facts": [
+        "David's preferred role is AI Engineer.",
+        "David is also open to Data Scientist roles.",
+        "David wants to build solutions using large language models."
       ]
     },
     {
@@ -554,6 +775,10 @@
       "relevant_phrases": [
         "defense industry",
         "TACOM"
+      ],
+      "required_facts": [
+        "David has worked in the defense industry since college.",
+        "David worked as an Army civilian at TACOM and then as a Data Science consultant at Booz Allen Hamilton."
       ]
     },
     {
@@ -565,6 +790,12 @@
         "well rounded",
         "leadership experience",
         "cognizant of cybersecurity"
+      ],
+      "required_facts": [
+        "David's experience at Booz Allen Hamilton has made him well rounded in skills beyond AI engineering.",
+        "David has experience marketing AI solutions to potential customers and winning work.",
+        "David has leadership experience, with two direct reports whom he mentors.",
+        "David is very cognizant of cybersecurity and holds the CompTIA Security+ certification."
       ]
     },
     {
@@ -575,6 +806,9 @@
       "relevant_phrases": [
         "david.p.west2@gmail.com",
         "LinkedIn"
+      ],
+      "required_facts": [
+        "David can be contacted by email at david.p.west2@gmail.com."
       ]
     },
     {
@@ -584,6 +818,9 @@
       "question": "Which consulting enterprise presently employs him?",
       "relevant_phrases": [
         "Booz Allen Hamilton"
+      ],
+      "required_facts": [
+        "David currently works at Booz Allen Hamilton."
       ]
     },
     {
@@ -593,6 +830,9 @@
       "question": "Which higher education institution conferred his bachelor's diploma?",
       "relevant_phrases": [
         "Western Michigan University"
+      ],
+      "required_facts": [
+        "David earned his bachelor's degree from Western Michigan University."
       ]
     },
     {
@@ -602,6 +842,9 @@
       "question": "What scientific discipline did he specialize in during his undergraduate program?",
       "relevant_phrases": [
         "Biochemistry"
+      ],
+      "required_facts": [
+        "David majored in Biochemistry."
       ]
     },
     {
@@ -612,6 +855,9 @@
       "relevant_phrases": [
         "Security clearance: Secret",
         "Security clearance"
+      ],
+      "required_facts": [
+        "David has a Secret security clearance."
       ]
     },
     {
@@ -623,6 +869,10 @@
         "Operations Research Analyst",
         "TACOM",
         "Army civilian"
+      ],
+      "required_facts": [
+        "David served as an Army civilian at the Army Tank-Automotive & Armaments Command (TACOM).",
+        "David was an Operations Research Analyst at TACOM from 2018 to 2021."
       ]
     },
     {
@@ -633,6 +883,9 @@
       "relevant_phrases": [
         "CompTIA Security+",
         "Security+"
+      ],
+      "required_facts": [
+        "David holds the CompTIA Security+ certification."
       ]
     },
     {
@@ -642,6 +895,9 @@
       "question": "Which asynchronous Python framework handles endpoints and routing for his web services?",
       "relevant_phrases": [
         "FastAPI"
+      ],
+      "required_facts": [
+        "David builds his Python web service backends with FastAPI."
       ]
     },
     {
@@ -652,6 +908,10 @@
       "relevant_phrases": [
         "Next.js",
         "Tailwind CSS"
+      ],
+      "required_facts": [
+        "David's portfolio frontend is built with Next.js and React.",
+        "David's portfolio frontend uses Tailwind CSS for styling."
       ]
     },
     {
@@ -662,6 +922,9 @@
       "relevant_phrases": [
         "faiss",
         "faiss-cpu"
+      ],
+      "required_facts": [
+        "David uses FAISS to index dense embeddings for similarity search."
       ]
     },
     {
@@ -672,6 +935,9 @@
       "relevant_phrases": [
         "ms-marco-MiniLM-L-6-v2",
         "cross-encoder"
+      ],
+      "required_facts": [
+        "David uses the ms-marco-MiniLM-L-6-v2 cross-encoder to re-rank candidate passages."
       ]
     },
     {
@@ -681,6 +947,9 @@
       "question": "What cloud provider manages remote GPU containers for his audio synthesis app?",
       "relevant_phrases": [
         "Modal"
+      ],
+      "required_facts": [
+        "David's AI music app runs its GPU inference on Modal."
       ]
     },
     {
@@ -691,6 +960,10 @@
       "relevant_phrases": [
         "HTTP/2 with httpx",
         "httpx"
+      ],
+      "required_facts": [
+        "David's AI music app's backend keeps a persistent HTTP/2 connection to Modal using httpx.",
+        "David's AI music app creates its httpx client once at FastAPI startup and shares it across requests, avoiding repeated TCP handshakes."
       ]
     },
     {
@@ -701,6 +974,9 @@
       "relevant_phrases": [
         "ADF and KPSS",
         "KPSS"
+      ],
+      "required_facts": [
+        "David used the ADF and KPSS tests to check stationarity in the per-name ARIMA prototype for Baby Names Explorer."
       ]
     },
     {
@@ -711,6 +987,10 @@
       "relevant_phrases": [
         "four families on an 80/20",
         "regression decision trees"
+      ],
+      "required_facts": [
+        "David's diamond price project compared linear regression, regression decision trees, random forests, and gradient boosting machines.",
+        "David's diamond price project scored the models on an 80/20 train-test split."
       ]
     },
     {
@@ -720,6 +1000,9 @@
       "question": "Whose historical writings and aphorisms are indexed for interactive dialogue?",
       "relevant_phrases": [
         "Nietzsche"
+      ],
+      "required_facts": [
+        "David's Chat with Nietzsche chatbot indexes the writings of Friedrich Nietzsche."
       ]
     },
     {
@@ -729,6 +1012,10 @@
       "question": "Which historic military cemetery required automated auditing of over a quarter million burial archives?",
       "relevant_phrases": [
         "Arlington National Cemetery"
+      ],
+      "required_facts": [
+        "David's records-auditing project was for Arlington National Cemetery.",
+        "David's Arlington National Cemetery project processed over 260,000 old paper records."
       ]
     },
     {
@@ -739,6 +1026,11 @@
       "relevant_phrases": [
         "cost of interpretability",
         "between a linear model and a random forest"
+      ],
+      "required_facts": [
+        "In the diamond price project, David used linear regression as the interpretable baseline.",
+        "David found that ensemble models captured non-linear interactions more accurately at the cost of interpretability.",
+        "David compared every diamond price model side by side on held-out data using MAE, RMSE, and adjusted R²."
       ]
     },
     {
@@ -749,6 +1041,12 @@
       "relevant_phrases": [
         "lost to plain keyword search on every metric",
         "cheaper and better is a stronger outcome than a tuned constant"
+      ],
+      "required_facts": [
+        "David's hybrid retrieval pipeline with a cross-encoder lost to plain keyword search on every metric.",
+        "David deleted the hybrid pipeline rather than retuning it.",
+        "David's portfolio chatbot now uses keyword search only, which cut the container image from 17.2GB to 544MB.",
+        "David considers a result that is cheaper and better a stronger outcome than a tuned constant."
       ]
     },
     {
@@ -759,6 +1057,11 @@
       "relevant_phrases": [
         "running regression harnesses on pull requests to benchmark retrieval accuracy",
         "gate that fails the build when it stops working"
+      ],
+      "required_facts": [
+        "David runs retrieval regression harnesses in GitHub Actions on pull requests before code can merge.",
+        "David's CI gate fails the build if the shipped retrieval configuration drops below its floor.",
+        "David sets thresholds below measured performance as regression floors rather than targets."
       ]
     },
     {
@@ -770,6 +1073,12 @@
         "Next.js on Vercel",
         "Modal",
         "serverless reverse proxy"
+      ],
+      "required_facts": [
+        "David runs GPU inference on Modal's serverless GPUs, which scale to zero when idle.",
+        "David's AI music app keeps its FastAPI backend on Railway as a lightweight stateless proxy.",
+        "David deploys Next.js frontends on Vercel.",
+        "David caps the GPU prewarming heartbeat in his AI music app to control cloud GPU costs."
       ]
     },
     {
@@ -780,6 +1089,11 @@
       "relevant_phrases": [
         "conformal prediction intervals",
         "ADF and KPSS"
+      ],
+      "required_facts": [
+        "David derives conformal prediction intervals from empirical residual quantiles rather than assuming Gaussian residuals.",
+        "David stratifies the uncertainty bands by popularity tier and volatility, so volatile names get wider bands.",
+        "David replaced per-name ARIMA models because short series lacked the statistical power to reliably satisfy stationarity tests."
       ]
     },
     {
@@ -790,6 +1104,11 @@
       "relevant_phrases": [
         "relevant context rather than relying on",
         "Phrases survive re-chunking"
+      ],
+      "required_facts": [
+        "David labels a golden set of questions with the phrases a correct answer must be grounded in, and scores retrieval against it.",
+        "David labels relevance by phrase rather than by chunk, so the labels survive re-chunking.",
+        "David's Nietzsche chatbot shows the source passages behind each answer, so users can verify the retrieval found genuinely relevant context."
       ]
     },
     {
@@ -800,6 +1119,11 @@
       "relevant_phrases": [
         "human-in-the-loop review",
         "prioritize human review, and deployed full-stack review tools"
+      ],
+      "required_facts": [
+        "David builds human-in-the-loop review interfaces where users correct extraction errors.",
+        "David uses human-validated data to train a model that predicts extraction accuracy and identifies likely errors.",
+        "David uses predicted extraction accuracy to prioritize human review."
       ]
     },
     {
@@ -811,6 +1135,11 @@
         "Next.js frontend and submits",
         "deliberately layered to separate concerns cleanly",
         "FastAPI backend on Railway"
+      ],
+      "required_facts": [
+        "David's full-stack apps pair a Next.js or React frontend with a FastAPI backend.",
+        "In David's AI music app, the FastAPI backend on Railway is a stateless proxy and model inference runs on separate serverless GPU workers on Modal.",
+        "In David's Nietzsche chatbot, the frontend never talks to the backend directly; a server-side route validates and proxies each request."
       ]
     },
     {
@@ -822,6 +1151,12 @@
         "weighted blend of semantic and keyword search",
         "only measurement tells you the system does what you meant",
         "deleted it rather than tuned it"
+      ],
+      "required_facts": [
+        "David's original retrieval parameters, such as the weighted blend of semantic and keyword search, were guesses.",
+        "David holds that unit tests show the parts do what you said, but only measurement shows the system does what you meant.",
+        "Rather than retuning the fusion weights, David tested keyword search without the semantic stage and deleted the stages that did not earn their place.",
+        "David's evaluation found two bugs no test caught: a tokenizer mismatch and a rank-fusion constant used at the wrong scale."
       ]
     },
     {
@@ -832,6 +1167,10 @@
       "relevant_phrases": [
         "physically impossible. Those were converted to NAs",
         "correcting for population growth"
+      ],
+      "required_facts": [
+        "In the diamond price data, David converted physically impossible zero-length, zero-width, or zero-depth measurements to NAs rather than leaving them as valid values.",
+        "In Baby Names Explorer, David uses relative metrics such as share of births instead of raw counts, because the birth pool has grown over time."
       ]
     },
     {
@@ -842,6 +1181,12 @@
       "relevant_phrases": [
         "meeting strict DevSecOps standards",
         "container vulnerability scanning"
+      ],
+      "required_facts": [
+        "David deploys infrastructure as code that meets DoD Impact Level 5 (IL5) and CMMC Level 2 compliance standards.",
+        "David has mitigated findings from static code analysis (SonarQube) and container vulnerability scanning (Grype and Syft).",
+        "David routes service-to-service communication through private VPC endpoints rather than the public internet.",
+        "David's CI/CD pipelines include container and open-source security scanning."
       ]
     },
     {
@@ -852,6 +1197,12 @@
       "relevant_phrases": [
         "split into a development portion and a held-out portion",
         "numbers i publish aren't the numbers something was tuned against"
+      ],
+      "required_facts": [
+        "David splits the golden set into a development portion and a held-out portion.",
+        "David makes architecture decisions on the development questions and never looks at the held-out questions while making one.",
+        "David publishes results from the held-out portion, so the published numbers are not the numbers something was tuned against.",
+        "David assigns each question's split by hashing its ID, so a question cannot be quietly moved across the line."
       ]
     },
     {
@@ -862,6 +1213,13 @@
       "relevant_phrases": [
         "Antigravity and Claude Code",
         "reproduces the PR gates exactly"
+      ],
+      "required_facts": [
+        "David uses Antigravity and Claude Code at home and a government-approved version of Windsurf/Devin at work.",
+        "David follows Matt Pocock's AI Skills for Real Engineers workflow, grilling the design, writing a spec, and breaking it into vertical-slice tickets.",
+        "David has AI agents implement vertical slices with test-driven development, sometimes in parallel.",
+        "David has an AI agent review each pull request before reviewing it manually and merging.",
+        "David shares his checks between the Makefile and GitHub Actions, so running them locally reproduces the PR gates exactly."
       ]
     },
     {
@@ -872,6 +1230,11 @@
       "relevant_phrases": [
         "HTTP/2 with httpx",
         "service-to-service communication routed entirely through private VPC"
+      ],
+      "required_facts": [
+        "David's AI music app keeps a persistent HTTP/2 connection to Modal using httpx, eliminating repeated TCP handshakes and multiplexing requests.",
+        "David's AI music app creates its httpx client once at FastAPI startup and shares it across requests.",
+        "In his AWS architectures, David routes service-to-service communication through private VPC endpoints rather than the public internet."
       ]
     },
     {
@@ -882,6 +1245,11 @@
       "relevant_phrases": [
         "against the names schema",
         "rule-based detection methods"
+      ],
+      "required_facts": [
+        "In Baby Names Explorer, LLM-generated SQL is validated against strict keyword guards before it runs.",
+        "Baby Names Explorer runs generated SQL on a dedicated read-only connection.",
+        "Baby Names Explorer caps each generated query at a 5-second deadline and 1 MB of memory."
       ]
     },
     {
@@ -892,6 +1260,12 @@
       "relevant_phrases": [
         "Manage two full-time employees, help foster career growth",
         "Lead a team of 4"
+      ],
+      "required_facts": [
+        "David manages two full-time employees and helps foster their career growth.",
+        "David has led technical teams, including a team of four on the additive manufacturing automation project.",
+        "David designs solution architectures, delegates components to junior staff, and mentors them.",
+        "David has managed timelines, client engagements, and task delegation for his teams."
       ]
     },
     {

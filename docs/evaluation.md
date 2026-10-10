@@ -113,10 +113,15 @@ carries labels. Every split count, metric and published `goldenQuestions` in thi
 counts answerable cases only.
 
 **Generation fields** — each case may also carry `answerable` (default `true`),
-`required_facts` (full-sentence statements a correct answer conveys, read by the generation
-harness and populated in a later batch), and `origin` (`authored` or `visitor`, default
-`authored`) so results on real visitor questions can be reported separately. See
-[ADR-0007](adr/0007-generation-evaluation-harness.md).
+`required_facts`, and `origin` (`authored` or `visitor`, default `authored`) so results on
+real visitor questions can be reported separately. `required_facts` are the statements a
+correct answer conveys, read by the generation harness for Fact Recall and judged on
+meaning rather than wording. Every answerable case carries at least one (`select_cases`
+rejects one with none), each a self-contained sentence that names its subject ("David holds
+the CompTIA Security+ certification.", not "He holds Security+."), because the Judge reads
+it beside an answer with no question in view. They are written from the question and the
+corpus only, never with any arm's answers in view, and David reviews every one: they are
+facts about him. See [ADR-0007](adr/0007-generation-evaluation-harness.md).
 
 **Metrics**
 
