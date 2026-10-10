@@ -536,13 +536,111 @@ uv run --frozen python eval/judge_generation.py --split dev --output judged.json
 This needs `JEV_API_KEY`. The CLI prints the metrics and then each Contradiction with
 its case, sentence and chunk. `--output` writes the same, plus per-case judgments, the
 Judge version, Jev's billed usage and the judged record's provenance, as JSON. Judged
-runs are not committed or published yet: the Judge has not been validated against
-hand-labelled sentences, the variance study that sets the Floors has not run, and
-nothing is gated.
+runs are not committed or published yet, and nothing is gated.
+
+## Validating the Judge
+
+Before a Judge result gates anything, its verdicts are compared with hand labels
+([ADR-0007](adr/0007-generation-evaluation-harness.md)). `backend/eval/judge_validation.json`
+holds 32 sentences from the Groq baseline's answers, each labelled against the chunks its
+answer was written from:
+
+| Label | Meaning |
+|---|---|
+| filler | states nothing about David: a pleasantry, heading, transition, or a remark about the context |
+| supported | every claim in it is stated or clearly implied by the chunks, together if not by one |
+| contradicted | a chunk states the opposite of a claim in it |
+| says nothing | neither: at least one claim has no basis in the chunks, and none is contradicted |
+
+Each sentence is also marked compound (several claims) or single. 23 of the 32 are
+compound on purpose: if Jev's disagreements cluster there, that is the case for an LLM
+step that splits answers into atomic claims, rejected for now in ADR-0007. A test fails if
+a labelled sentence is no longer one the harness's splitter produces from its stored
+answer, so the labels cannot quietly drift away from what is judged.
+
+`eval/validate_judge.py` runs every labelled sentence through the harness's own sentence
+judgment and reports two agreements, one per thing a judged run outputs:
+
+- **Faithfulness agreement**: filler, supported or unsupported, where contradicted and
+  says-nothing both count as unsupported;
+- **Contradiction agreement**: whether a Contradiction is listed for the sentence.
+
+It then lists every disagreement with Jev's per-chunk relations, and counts disagreements
+separately for compound and single sentences.
+
+```bash
+cd backend
+uv run --frozen python eval/validate_judge.py --output validation-run.json
+```
+
+The labels are drafts, written before any of Jev's judgments of these sentences were
+looked at, and are being reviewed by David. Until the file's `status` is `reviewed`, the
+CLI refuses to measure against them (`--draft` overrides). The agreement rate is recorded
+here once they are reviewed.
+
+## Run-to-run spread
+
+The same commit does not give the same numbers twice: Jev is not fully deterministic, and
+OpenAI's reasoning models generate only at the default temperature. The spread of three
+runs sets two things ([ADR-0007](adr/0007-generation-evaluation-harness.md)):
+
+- the **rounding step** for published generation metrics, from the held-out spread
+  (held-out is what is published): the smallest of 0.005 / 0.01 / 0.02 / 0.05 / 0.1 no
+  smaller than any published metric's range;
+- the **Floors** for Faithfulness and Decline accuracy, from the spread over every case
+  (the gate runs on the full Golden Set): the lowest run minus twice the range (three runs
+  understate the noise), and at least one step, rounded down to the step.
+
+Measured on 2026-10-10 at commit `060c340`: `gpt-6-luna` with reasoning effort `low`, the
+`bm25` Arm, 123 Corpus Chunks, all 107 cases, judged by `jev-1.13.0`.
+
+**Judge only.** One Luna record, judged three times:
+
+| Metric | Held-out | Range | All cases | Range |
+|---|---|---|---|---|
+| Fact Recall | 0.736, 0.736, 0.747 | 0.011 | 0.741, 0.737, 0.741 | 0.005 |
+| Faithfulness | 0.981, 0.981, 0.981 | 0 | 0.992, 0.992, 0.984 | 0.008 |
+| Decline accuracy | 1.000, 1.000, 1.000 | 0 | 0.953, 0.953, 0.953 | 0 |
+
+**End to end.** Three Luna generations of the same commit, each judged once:
+
+| Metric | Held-out | Range | All cases | Range |
+|---|---|---|---|---|
+| Fact Recall | 0.736, 0.736, 0.747 | 0.011 | 0.741, 0.741, 0.727 | 0.015 |
+| Faithfulness | 0.981, 1.000, 1.000 | 0.019 | 0.992, 0.992, 0.992 | 0.000 |
+| Decline accuracy | 1.000, 1.000, 1.000 | 0 | 0.953, 0.953, 0.944 | 0.009 |
+
+Only 7 of the 107 answers were word-for-word the same in all three generations. The
+metrics hardly move all the same, because a reworded answer mostly makes the same claims.
+The largest held-out range is Faithfulness at 0.019, one of ~52 factual sentences
+changing verdict. Derived from the end-to-end runs, which include the Judge's noise:
+
+| | Value | Derivation |
+|---|---|---|
+| Rounding step | **0.02** | smallest step ≥ 0.019 |
+| Faithfulness Floor | **0.96** | 0.992 − max(2 × 0.000, 0.02) = 0.972, rounded down to 0.96 |
+| Decline accuracy Floor | **0.92** | 0.944 − max(2 × 0.009, 0.02) = 0.924, rounded down to 0.92 |
+
+The Judge-only runs give the same three numbers. On full-set ranges this small, the
+one-step minimum headroom sets both Floors. A change to the Judge's questions, the
+generation model or its reasoning effort is a new measurement, and the study is rerun:
+
+```bash
+cd backend
+uv run --frozen python eval/run_generation.py --provider openai --record runs/luna-1.json
+uv run --frozen python eval/judge_generation.py --record runs/luna-1.json --output runs/judged-1.json
+# ... three of each, then:
+uv run --frozen python eval/variance.py runs/judged-1.json runs/judged-2.json runs/judged-3.json
+```
+
+`--provider openai` sends no temperature (the candidates reject any but the default) and
+pins `--reasoning-effort` (default `low`). It needs `OPENAI_CI_API_KEY` and a `--record`
+path, so it cannot overwrite the Groq baseline. A Luna run of all 107 cases billed ~108k
+tokens; judging one costs Jev ~590k input tokens.
 
 ## Not yet measured
 
 Retrieval quality is only half of a RAG system's behaviour. Generation can now be
-judged, but nothing published or gated relies on it yet. Still open: validating the
-Judge against ~30 hand-labelled sentences, the three-run variance study, the generation
-Floors and published results, and adversarial/prompt-injection robustness.
+judged, but nothing published or gated relies on it yet. Still open: the Judge's
+agreement with the reviewed hand labels, the generation gate and published results, and
+adversarial/prompt-injection robustness.

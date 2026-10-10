@@ -69,7 +69,7 @@ def main() -> int:
     print()
     judged = {
         "record": {
-            "path": str(args.record.resolve().relative_to(BACKEND_ROOT.parent)),
+            "path": repo_path(args.record),
             **{key: record.get(key) for key in RECORD_KEYS},
             "commit": record.get("commit"),
             "measuredAt": record.get("measuredAt"),
@@ -92,6 +92,13 @@ def main() -> int:
         )
         print(f"Wrote {args.output}")
     return 0
+
+
+def repo_path(path: Path) -> str:
+    """`path` relative to the repository when it is inside it, as a committed record is."""
+    path = path.resolve()
+    root = BACKEND_ROOT.parent
+    return str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
 
 
 if __name__ == "__main__":

@@ -56,3 +56,23 @@ LLM calls" therefore stays true of the retrieval harness and does not apply to t
   either is a new measurement, as a Corpus change is.
 - Before any Jev judgment gates a build, it is validated against roughly 30 hand-labelled
   sentences from this domain.
+
+## Amendment (2026-10-10)
+
+- **OpenAI's candidates cannot generate at temperature 0.** `gpt-6-luna` and `gpt-6.1-sol`
+  are reasoning models and reject any temperature but the default (1). Once generation
+  moves to OpenAI, answers vary from run to run however the request is set, so "the same
+  inputs give the same answer" no longer holds. What the eval and production share instead
+  is the model, the prompt, `max_completion_tokens` and the **reasoning effort**, which is
+  pinned (`low`, the one explicit value both candidates accept) and recorded with each run.
+  Groq keeps generating at temperature 0 until the switch.
+- **The variance study ran on Luna, not Groq.** The Floors defend what production serves,
+  and production is moving to OpenAI (ADR-0008), so Floors measured on Groq at temperature
+  0 would have understated the noise and been re-measured at the switch. If the selection
+  rule picks Sol, the study is rerun on Sol.
+- **Floors and the rounding step are derived by a fixed rule** (`eval/variance.py`): the
+  step is the smallest of 0.005 / 0.01 / 0.02 / 0.05 / 0.1 no smaller than any published
+  metric's held-out range across three runs; each Floor is the lowest full-set run minus
+  twice its range, at least one step, rounded down to the step. Three runs understate the
+  noise, hence the factor of two. A change to the Judge's questions is a new measurement
+  and the study is rerun, as it is for a new generation model.
