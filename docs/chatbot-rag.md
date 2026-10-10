@@ -78,7 +78,7 @@ Prompt construction
 (system + context + history)
     │
     ▼
-Groq API (GROQ_MODEL env var)
+Groq API (GROQ_MODEL env var, temperature 0)
 Streaming SSE response
 ```
 

@@ -74,6 +74,10 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | Golden splits | dev and holdout partition the set, and the recorded split still matches the documented hash rule |
 | High | Out-of-Scope Cases | Excluded from retrieval scoring by their `answerable: false` label and counted in the summary; a broken label on an answerable case still fails; malformed generation fields are rejected |
 | High | Published run | The published document reports the held-out split, and a changed split counts as a new measurement |
+| High | Generation harness | Each case records its answer, retrieved chunks, billed usage and answering model; answers are handed over as recorded so a stopped run can resume |
+| High | Generation prompt | The eval's Groq generator sends exactly the model, messages, temperature and `max_tokens` the chat endpoint sends |
+| High | Free-tier throttle | Calls are paced to a tokens-per-minute limit by billed tokens; a call that could pass the token budget is never made |
+| High | `POST /api/chat` | Production generates at temperature 0 |
 | Medium | `GET /api/health` | Returns 200 `{ "status": "ok" }` |
 
 Test files are in `backend/tests/`. Fixtures (including mock indexes) are defined

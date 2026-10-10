@@ -42,8 +42,8 @@ BASELINE_PATH = Path(__file__).resolve().parent / "baselines" / "groq.json"
 # for a visitor's question during the run.
 TOKENS_PER_MINUTE = 7000
 
-# Groq's free tier allows 200,000 tokens a day, shared with visitors. A full run measured
-# ~1.3-1.6k tokens a case, ~160k for the whole Golden Set.
+# Groq's free tier allows 200,000 tokens a day, shared with visitors. The baseline run
+# billed 132,249 tokens over 107 cases (0.8-1.9k each).
 DEFAULT_TOKEN_BUDGET = 180_000
 
 
@@ -129,7 +129,8 @@ def main() -> int:
         save_record(BASELINE_PATH, record, order)
         print(
             f"  [{len(record['cases'])}/{len(cases)}] {result['id']}: "
-            f"{result['usage']['total_tokens']} tokens ({result['model']})"
+            f"{result['usage']['total_tokens']} tokens ({result['model']})",
+            flush=True,
         )
 
     try:

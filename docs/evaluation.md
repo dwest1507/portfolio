@@ -446,8 +446,48 @@ split into `dev` and `holdout`, decisions are made against `dev`, and `--publish
 `holdout` only — see [Splits](#method). The published sample is 33 questions, which is
 small; the numbers should be read with that in mind.
 
+## Generation baseline
+
+Before generation moves from Groq to OpenAI
+([ADR-0008](adr/0008-generation-moves-to-openai.md)), the current model's answers are
+captured while Groq's free tier still serves it. `eval/run_generation.py` runs every
+Golden Set case (both Splits, answerable and Out-of-Scope) through production retrieval
+(the Shipped Arm) and `GROQ_MODEL`, and commits `backend/eval/baselines/groq.json`:
+
+- per case, the answer, the exact retrieved chunk texts, billed usage, and the model ID
+  Groq reports answering with;
+- the requested model, Arm, temperature, `max_tokens`, Corpus size and commit it was
+  measured at.
+
+Nothing in it is judged yet. Keeping the contexts is the point: a Judge can score the
+record later, and OpenAI candidates can replay identical contexts, so the model is the
+only variable.
+
+The generator has no prompt of its own. It builds messages with the production
+`build_messages` and samples with production's `TEMPERATURE` (0) and `MAX_TOKENS`, and a
+test asserts it sends exactly what `/api/chat` sends for the same question and chunks.
+Production generates at temperature 0 for the same reason
+([ADR-0007](adr/0007-generation-evaluation-harness.md)): the eval should measure what
+visitors are served.
+
+Groq's free tier (8k tokens/min, 200k tokens/day) is shared with visitors, so calls are
+paced to 7k billed tokens a minute and the run stops before passing a 180k-token budget.
+Each answer is written as it arrives, so a run stopped by the budget resumes where it left
+off the next day. The committed baseline (107 cases, `openai/gpt-oss-120b`) billed 132,249
+tokens in one run. The record refuses to resume across a changed model, Arm, sampling
+settings or Corpus size.
+
+```bash
+cd backend
+uv run --frozen python eval/run_generation.py   # capture, or resume a partial record
+```
+
+The harness entry point, `run_generation` in `eval/generation.py`, takes the cases, a
+retriever and a generator, all injected, and is tested with fakes.
+
 ## Not yet measured
 
-Retrieval quality is only half of a RAG system's behaviour. Still open: generation
-faithfulness (does the answer stay inside the retrieved context?), refusal behaviour on
-out-of-scope questions, and adversarial/prompt-injection robustness.
+Retrieval quality is only half of a RAG system's behaviour. The generation baseline
+records answers but does not yet judge them. Still open: Fact Recall, Faithfulness
+(does the answer stay inside the retrieved context?), Decline accuracy on Out-of-Scope
+Cases, and adversarial/prompt-injection robustness.
