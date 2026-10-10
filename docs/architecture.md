@@ -90,7 +90,7 @@ backend/
 │       ├── chat.py                POST /api/chat
 │       └── health.py              GET /api/health
 ├── scripts/build_index.py         Offline index builder
-├── eval/                          Golden set, retrieval + generation harnesses, publishing, baselines
+├── eval/                          Golden set, retrieval + generation harnesses, Judge, publishing, baselines
 └── indexes/                       BM25 model, chunks JSON, FAISS index (eval-only)
 ```
 

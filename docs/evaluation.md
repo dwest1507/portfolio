@@ -483,11 +483,67 @@ uv run --frozen python eval/run_generation.py   # capture, or resume a partial r
 ```
 
 The harness entry point, `run_generation` in `eval/generation.py`, takes the cases, a
-retriever and a generator, all injected, and is tested with fakes.
+retriever, a generator and optionally a Judge, all injected, and is tested with fakes.
+
+## Judging answers
+
+The Judge is TypeSafe's Jev, pinned to `jev-1.13.0`, never `jev-latest`
+([ADR-0007](adr/0007-generation-evaluation-harness.md)). `eval/judge.py` sends every
+request with the pinned version and refuses an answer from any other version, so a
+judged run records the version that actually judged it. The Judge interface has one
+method per judgment, each asked about the smallest input that answers it:
+
+| Judgment | Asked about | Answer |
+|---|---|---|
+| Declines | the question and the whole answer | yes / no |
+| Is factual | one sentence | yes / no (no = filler) |
+| Relation | one sentence and one retrieved chunk | supports / contradicts / says nothing |
+| Conveys | the whole answer and one Required Fact | yes / no |
+
+Per case, the answer is first asked whether it Declines. A Decline, and any answer to
+an Out-of-Scope Case, is scored only on Decline accuracy and judged no further: the
+Judge is weak on negation, so "the information doesn't include that" would otherwise
+count as an unsupported claim. Every other answer is split into sentences in code,
+filler is dropped, and each factual sentence is judged against each retrieved chunk
+separately. One supporting chunk is enough.
+
+Sentences are split so that each states its claim on its own. A list item ("SQLite")
+is judged together with the line introducing its list ("David has worked with the
+following databases: SQLite"), and a table row is judged as one claim with each cell
+labelled by its column heading. Markdown emphasis is removed, and "e.g." ends no
+sentence.
+
+| Metric | Definition |
+|---|---|
+| Fact Recall | Required Facts conveyed / Required Facts, over answerable cases that did not Decline |
+| Faithfulness | supported factual sentences / factual sentences, over the same answers |
+| Contradictions | every (sentence, chunk) pair judged `contradicts`, listed individually |
+| Decline accuracy | correct / all cases, where declining an Out-of-Scope Case and answering an answerable one are both correct; also reported in each direction |
+
+A declined answerable case therefore leaves Fact Recall and Faithfulness untouched and
+counts only against Decline accuracy. Read Fact Recall alongside the "answered
+answerable" rate.
+
+A stored record, such as the Groq baseline, is judged without regenerating it: each
+case is replayed from the record, so the Judge sees the answer the model gave and the
+exact chunks it was given.
+
+```bash
+cd backend
+uv run --frozen python eval/judge_generation.py                                  # all cases
+uv run --frozen python eval/judge_generation.py --split dev --output judged.json
+```
+
+This needs `JEV_API_KEY`. The CLI prints the metrics and then each Contradiction with
+its case, sentence and chunk. `--output` writes the same, plus per-case judgments, the
+Judge version, Jev's billed usage and the judged record's provenance, as JSON. Judged
+runs are not committed or published yet: the Judge has not been validated against
+hand-labelled sentences, the variance study that sets the Floors has not run, and
+nothing is gated.
 
 ## Not yet measured
 
-Retrieval quality is only half of a RAG system's behaviour. The generation baseline
-records answers but does not yet judge them. Still open: Fact Recall, Faithfulness
-(does the answer stay inside the retrieved context?), Decline accuracy on Out-of-Scope
-Cases, and adversarial/prompt-injection robustness.
+Retrieval quality is only half of a RAG system's behaviour. Generation can now be
+judged, but nothing published or gated relies on it yet. Still open: validating the
+Judge against ~30 hand-labelled sentences, the three-run variance study, the generation
+Floors and published results, and adversarial/prompt-injection robustness.
