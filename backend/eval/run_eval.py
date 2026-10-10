@@ -19,8 +19,9 @@ Usage:
     uv run python eval/run_eval.py --json results.json  # machine-readable output
     uv run python eval/run_eval.py --publish            # refresh the published results
 
-A chunk counts as relevant when its text contains any of the case's
-`relevant_phrases`. Labelling by phrase rather than chunk ID keeps the golden
+A chunk counts as relevant when any of the case's `relevant_phrases` appears in
+its text beginning at the start of a word (`no` does not match "know"; `mentor`
+does match "mentoring"). Labelling by phrase rather than chunk ID keeps the golden
 set valid when the corpus is re-chunked.
 
 The golden set is split into `dev` and `holdout` portions (see golden_set.json).
@@ -131,9 +132,19 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
+def _phrase_pattern(phrase: str) -> re.Pattern[str]:
+    """A phrase matches where it begins a word, and may end mid-word.
+
+    The start is anchored so `no` cannot match inside "know" and `R:` cannot match
+    inside "ER:". The end is left open so a label can name a stem: `mentor` still
+    matches "mentoring" and `rate limit` still matches "rate limiting".
+    """
+    return re.compile(r"(?<![a-z0-9])" + re.escape(_normalize(phrase)))
+
+
 def is_relevant(chunk_text: str, phrases: list[str]) -> bool:
     haystack = _normalize(chunk_text)
-    return any(_normalize(p) in haystack for p in phrases)
+    return any(_phrase_pattern(p).search(haystack) for p in phrases)
 
 
 def relevant_ids(chunks: list[dict], phrases: list[str]) -> set[int]:

@@ -26,6 +26,7 @@ from run_eval import (
     VALID_CATEGORIES,
     check_thresholds,
     evaluate_arm,
+    is_relevant,
     retrievers_for_arms,
     select_cases,
 )
@@ -230,6 +231,35 @@ class TestCategories:
                 ],
                 "all",
             )
+
+
+# ---------------------------------------------------------------------------
+# Relevance matching
+# ---------------------------------------------------------------------------
+
+
+class TestWordStartMatching:
+    """A Relevant Phrase matches only where it begins a word. A raw substring match let
+    `no` mark 63 of 120 chunks relevant, which made the case a free hit for every arm."""
+
+    def test_a_phrase_does_not_match_inside_a_word(self):
+        assert not is_relevant("I know some technology.", ["no"])
+
+    def test_a_phrase_matches_as_a_word_of_its_own(self):
+        assert is_relevant("There is no TACOM owned data package.", ["no"])
+
+    def test_a_punctuated_phrase_does_not_match_inside_a_longer_label(self):
+        assert not is_relevant("SKILLS ACQUIRED FROM ENGINEER: Python", ["R:"])
+        assert is_relevant("R: tidyverse, Shiny", ["R:"])
+
+    def test_a_phrase_still_matches_when_the_chunk_extends_its_last_word(self):
+        assert is_relevant("He enjoys mentoring junior engineers.", ["mentor"])
+        assert is_relevant("Rate limiting protects the endpoint.", ["rate limit"])
+
+    def test_a_word_start_may_follow_punctuation(self):
+        assert is_relevant(
+            "time series data (Prognostic and Predictive Maintenance).", ["Predictive Maintenance"]
+        )
 
 
 # ---------------------------------------------------------------------------
