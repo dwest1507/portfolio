@@ -421,11 +421,12 @@ SALARY_CASE = {
 DECLINE = "I'm sorry, but the provided information doesn't include that."
 
 
-def test_a_declining_answer_is_scored_only_on_whether_it_should_have_declined():
+def test_a_declined_fair_question_conveys_none_of_its_required_facts():
     """The Judge is weak on negation, so a Decline is never judged for support or facts.
 
-    Declining a fair question is a failure: it counts against Decline accuracy, and
-    leaves Faithfulness and Fact Recall with nothing to measure.
+    Declining a fair question is a failure twice over: it counts against Decline
+    accuracy, and it conveys none of the Required Facts, so Fact Recall falls. A Decline
+    states nothing, so it leaves Faithfulness with nothing to measure.
     """
     judge = FakeJudge(declining={DECLINE})
 
@@ -440,8 +441,12 @@ def test_a_declining_answer_is_scored_only_on_whether_it_should_have_declined():
     assert run["cases"][0]["declined"] is True
     assert run["metrics"]["declineAccuracy"] == 0.0
     assert run["metrics"]["answeredAnswerable"] == 0.0
+    assert run["cases"][0]["facts"] == [
+        {"fact": "David currently works at Booz Allen Hamilton.", "conveyed": False},
+        {"fact": "David is a Lead AI Engineer.", "conveyed": False},
+    ]
+    assert run["metrics"]["factRecall"] == 0.0
     assert run["metrics"]["faithfulness"] is None
-    assert run["metrics"]["factRecall"] is None
 
 
 def test_out_of_scope_cases_are_scored_only_on_declining():

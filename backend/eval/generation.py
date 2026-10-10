@@ -232,13 +232,15 @@ def run_generation(
 def judge_case(case: dict, chunks: list[str], answer: str, judge: Judge) -> dict:
     """One answer's judgments: whether it declined, and otherwise what it states and conveys.
 
-    A Decline, and any answer to an Out-of-Scope Case, is scored only on whether it should
-    have declined. The Judge is weak on negation, so "the information doesn't include
-    that" would otherwise be counted as an unsupported claim, and an Out-of-Scope Case
-    has no Required Facts to convey.
+    A Decline, and any answer to an Out-of-Scope Case, is not judged further. The Judge
+    is weak on negation, so "the information doesn't include that" would otherwise be
+    counted as an unsupported claim. A Decline conveys none of its Required Facts, so a
+    declined fair question lowers Fact Recall as well as Decline accuracy; an
+    Out-of-Scope Case has no Required Facts to convey.
     """
     declined = judge.declines(case["question"], answer)
-    judged = {"declined": declined, "sentences": [], "contradictions": [], "facts": []}
+    facts = [{"fact": fact, "conveyed": False} for fact in case.get("required_facts", [])]
+    judged = {"declined": declined, "sentences": [], "contradictions": [], "facts": facts}
     if declined or not case.get("answerable", True):
         return judged
 

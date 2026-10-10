@@ -501,9 +501,8 @@ method per judgment, each asked about the smallest input that answers it:
 | Conveys | the whole answer and one Required Fact | yes / no |
 
 Per case, the answer is first asked whether it Declines. A Decline, and any answer to
-an Out-of-Scope Case, is scored only on Decline accuracy and judged no further: the
-Judge is weak on negation, so "the information doesn't include that" would otherwise
-count as an unsupported claim. Every other answer is split into sentences in code,
+an Out-of-Scope Case, is judged no further: the Judge is weak on negation, so "the
+information doesn't include that" would otherwise count as an unsupported claim. Every other answer is split into sentences in code,
 filler is dropped, and each factual sentence is judged against each retrieved chunk
 separately. One supporting chunk is enough.
 
@@ -515,14 +514,14 @@ sentence.
 
 | Metric | Definition |
 |---|---|
-| Fact Recall | Required Facts conveyed / Required Facts, over answerable cases that did not Decline |
-| Faithfulness | supported factual sentences / factual sentences, over the same answers |
+| Fact Recall | Required Facts conveyed / Required Facts, over every answerable case |
+| Faithfulness | supported factual sentences / factual sentences, over answerable cases that did not Decline |
 | Contradictions | every (sentence, chunk) pair judged `contradicts`, listed individually |
 | Decline accuracy | correct / all cases, where declining an Out-of-Scope Case and answering an answerable one are both correct; also reported in each direction |
 
-A declined answerable case therefore leaves Fact Recall and Faithfulness untouched and
-counts only against Decline accuracy. Read Fact Recall alongside the "answered
-answerable" rate.
+A declined answerable case conveys none of its Required Facts, so it counts against both
+Fact Recall and Decline accuracy. Declining a fair question can't make Fact Recall look
+better. A Decline states nothing, so it leaves Faithfulness untouched.
 
 A stored record, such as the Groq baseline, is judged without regenerating it: each
 case is replayed from the record, so the Judge sees the answer the model gave and the
