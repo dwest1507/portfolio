@@ -1,9 +1,9 @@
 {
-  "schemaVersion": 3,
-  "generatedAt": "2026-09-13T15:48:32+00:00",
-  "commit": "ebe7cca",
+  "schemaVersion": 4,
+  "generatedAt": "2026-10-10T03:30:52+00:00",
+  "commit": "589d3c2",
   "runUrl": null,
-  "corpusChunks": 100,
+  "corpusChunks": 120,
   "goldenQuestions": 33,
   "split": "holdout",
   "topK": 5,
@@ -32,31 +32,37 @@
       "technical": "BM25 over stemmed, stopword-filtered terms. Needs no embedding model, which is why the production image ships none. Matches RAGPipeline.retrieve.",
       "shipped": true,
       "metrics": {
-        "recall@5": 0.6394,
-        "hit@5": 0.9697,
-        "mrr": 0.8217,
-        "ndcg@5": 0.7265
+        "recall@5": 0.5517,
+        "hit@5": 0.8788,
+        "mrr": 0.8409,
+        "ndcg@5": 0.689
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.2611,
-          "hit@5": 0.8333,
-          "mrr": 0.4861,
-          "ndcg@5": 0.3115
+          "recall@5": 0.1333,
+          "hit@5": 0.3333,
+          "mrr": 0.3333,
+          "ndcg@5": 0.2007
         },
         "direct": {
-          "recall@5": 0.7212,
+          "recall@5": 0.6541,
           "hit@5": 1.0,
-          "mrr": 0.9182,
-          "ndcg@5": 0.8336
+          "mrr": 0.9659,
+          "ndcg@5": 0.8249
         },
         "paraphrase": {
-          "recall@5": 0.7333,
+          "recall@5": 0.603,
           "hit@5": 1.0,
-          "mrr": 0.8,
-          "ndcg@5": 0.7531
+          "mrr": 0.9,
+          "ndcg@5": 0.6768
         }
-      }
+      },
+      "mrrInterval": [
+        0.7121,
+        0.947
+      ],
+      "vsShipped": null,
+      "vsShippedByCategory": null
     },
     {
       "id": "dense",
@@ -65,29 +71,55 @@
       "technical": "FAISS inner-product search over normalized all-mpnet-base-v2 embeddings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.4983,
-        "hit@5": 0.8485,
-        "mrr": 0.6854,
-        "ndcg@5": 0.5393
+        "recall@5": 0.4392,
+        "hit@5": 0.8182,
+        "mrr": 0.6485,
+        "ndcg@5": 0.5028
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.2111,
+          "recall@5": 0.25,
           "hit@5": 0.6667,
-          "mrr": 0.5833,
-          "ndcg@5": 0.3258
+          "mrr": 0.5556,
+          "ndcg@5": 0.3412
         },
         "direct": {
-          "recall@5": 0.5686,
+          "recall@5": 0.5297,
           "hit@5": 0.8636,
-          "mrr": 0.7061,
-          "ndcg@5": 0.6062
+          "mrr": 0.6985,
+          "ndcg@5": 0.5935
         },
         "paraphrase": {
-          "recall@5": 0.5333,
-          "hit@5": 1.0,
-          "mrr": 0.7167,
-          "ndcg@5": 0.5011
+          "recall@5": 0.2682,
+          "hit@5": 0.8,
+          "mrr": 0.54,
+          "ndcg@5": 0.2978
+        }
+      },
+      "mrrInterval": [
+        0.5,
+        0.7838
+      ],
+      "vsShipped": {
+        "won": 2,
+        "lost": 4,
+        "outcome": "indistinguishable"
+      },
+      "vsShippedByCategory": {
+        "conceptual": {
+          "won": 2,
+          "lost": 0,
+          "outcome": "indistinguishable"
+        },
+        "direct": {
+          "won": 0,
+          "lost": 3,
+          "outcome": "indistinguishable"
+        },
+        "paraphrase": {
+          "won": 0,
+          "lost": 1,
+          "outcome": "indistinguishable"
         }
       }
     },
@@ -98,29 +130,55 @@
       "technical": "Weighted reciprocal-rank fusion of the sparse and dense rankings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.5274,
+        "recall@5": 0.4935,
         "hit@5": 0.9091,
-        "mrr": 0.7525,
-        "ndcg@5": 0.5956
+        "mrr": 0.7045,
+        "ndcg@5": 0.5649
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.2111,
+          "recall@5": 0.25,
           "hit@5": 0.6667,
-          "mrr": 0.5833,
-          "ndcg@5": 0.3258
+          "mrr": 0.4722,
+          "ndcg@5": 0.3203
         },
         "direct": {
-          "recall@5": 0.5972,
+          "recall@5": 0.5691,
           "hit@5": 0.9545,
           "mrr": 0.7879,
-          "ndcg@5": 0.6724
+          "ndcg@5": 0.6592
         },
         "paraphrase": {
-          "recall@5": 0.6,
+          "recall@5": 0.453,
           "hit@5": 1.0,
-          "mrr": 0.8,
-          "ndcg@5": 0.5813
+          "mrr": 0.6167,
+          "ndcg@5": 0.4438
+        }
+      },
+      "mrrInterval": [
+        0.5732,
+        0.8232
+      ],
+      "vsShipped": {
+        "won": 2,
+        "lost": 1,
+        "outcome": "indistinguishable"
+      },
+      "vsShippedByCategory": {
+        "conceptual": {
+          "won": 2,
+          "lost": 0,
+          "outcome": "indistinguishable"
+        },
+        "direct": {
+          "won": 0,
+          "lost": 1,
+          "outcome": "indistinguishable"
+        },
+        "paraphrase": {
+          "won": 0,
+          "lost": 0,
+          "outcome": "indistinguishable"
         }
       }
     },
@@ -131,29 +189,55 @@
       "technical": "Cross-encoder re-ranking of the fused candidates: hybrid_search over 2×k candidates → cross-encoder narrows to k. Shipped until the harness measured it against the keyword arm.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.5737,
-        "hit@5": 0.9394,
-        "mrr": 0.8343,
-        "ndcg@5": 0.6758
+        "recall@5": 0.5224,
+        "hit@5": 0.9091,
+        "mrr": 0.8091,
+        "ndcg@5": 0.6388
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.3444,
-          "hit@5": 0.8333,
-          "mrr": 0.5056,
-          "ndcg@5": 0.3836
+          "recall@5": 0.2333,
+          "hit@5": 0.6667,
+          "mrr": 0.45,
+          "ndcg@5": 0.286
         },
         "direct": {
-          "recall@5": 0.6037,
+          "recall@5": 0.5716,
           "hit@5": 0.9545,
           "mrr": 0.9091,
-          "ndcg@5": 0.7327
+          "ndcg@5": 0.7276
         },
         "paraphrase": {
-          "recall@5": 0.7167,
+          "recall@5": 0.653,
           "hit@5": 1.0,
-          "mrr": 0.9,
-          "ndcg@5": 0.7758
+          "mrr": 0.8,
+          "ndcg@5": 0.6713
+        }
+      },
+      "mrrInterval": [
+        0.6879,
+        0.9152
+      ],
+      "vsShipped": {
+        "won": 2,
+        "lost": 1,
+        "outcome": "indistinguishable"
+      },
+      "vsShippedByCategory": {
+        "conceptual": {
+          "won": 2,
+          "lost": 0,
+          "outcome": "indistinguishable"
+        },
+        "direct": {
+          "won": 0,
+          "lost": 1,
+          "outcome": "indistinguishable"
+        },
+        "paraphrase": {
+          "won": 0,
+          "lost": 0,
+          "outcome": "indistinguishable"
         }
       }
     },
@@ -164,29 +248,55 @@
       "technical": "Cross-encoder re-ranking of BM25 candidates. The arm that answers whether the dense stage contributes anything the re-ranker cannot recover on its own.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.5962,
+        "recall@5": 0.5477,
         "hit@5": 0.9091,
-        "mrr": 0.8333,
-        "ndcg@5": 0.6944
+        "mrr": 0.7955,
+        "ndcg@5": 0.6619
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.3083,
-          "hit@5": 0.6667,
-          "mrr": 0.5,
-          "ndcg@5": 0.3573
+          "recall@5": 0.1667,
+          "hit@5": 0.5,
+          "mrr": 0.4167,
+          "ndcg@5": 0.226
         },
         "direct": {
-          "recall@5": 0.6436,
-          "hit@5": 0.9545,
-          "mrr": 0.9091,
-          "ndcg@5": 0.7648
+          "recall@5": 0.6088,
+          "hit@5": 1.0,
+          "mrr": 0.8977,
+          "ndcg@5": 0.7664
         },
         "paraphrase": {
-          "recall@5": 0.7333,
+          "recall@5": 0.7364,
           "hit@5": 1.0,
-          "mrr": 0.9,
-          "ndcg@5": 0.7891
+          "mrr": 0.8,
+          "ndcg@5": 0.7251
+        }
+      },
+      "mrrInterval": [
+        0.6742,
+        0.8939
+      ],
+      "vsShipped": {
+        "won": 1,
+        "lost": 0,
+        "outcome": "indistinguishable"
+      },
+      "vsShippedByCategory": {
+        "conceptual": {
+          "won": 1,
+          "lost": 0,
+          "outcome": "indistinguishable"
+        },
+        "direct": {
+          "won": 0,
+          "lost": 0,
+          "outcome": "indistinguishable"
+        },
+        "paraphrase": {
+          "won": 0,
+          "lost": 0,
+          "outcome": "indistinguishable"
         }
       }
     }

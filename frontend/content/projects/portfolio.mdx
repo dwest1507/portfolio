@@ -28,7 +28,7 @@ The thresholds sit _below_ measured performance with headroom for noise. They ar
 
 ## The current results
 
-Everything in this table is generated. The harness runs in CI, writes its results to a file, and commits them; this page renders that file. The sentence underneath the table — which configuration is in production, and which one is actually winning — is derived from the numbers rather than written by me.
+Everything in this table is generated. The harness runs in CI, writes its results to a file, and commits them; this page renders that file. The sentence underneath the table — which configuration is in production, and whether any other one is distinguishably better or worse — is derived from the numbers rather than written by me. On a few dozen held-out questions, a lead of one or two questions is noise, so a configuration is only called ahead or behind when the questions it disagrees with production on are too lopsided to be chance. The last column shows that raw disagreement: how many questions each configuration got right that production missed, and the reverse.
 
 <EvalScoreboard />
 

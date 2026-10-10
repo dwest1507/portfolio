@@ -8,10 +8,17 @@ import {
   sampleLabel,
   verdictLine,
   type EvalArm,
+  type EvalRun,
 } from '@/data/evalResults'
 
 function format(value: number | undefined): string {
   return value === undefined ? '—' : value.toFixed(3)
+}
+
+/** Questions won and lost against the shipped arm. The shipped arm itself has no entry. */
+function wonLost(arm: EvalArm, category: string): string {
+  const vs = category === 'all' ? arm.vsShipped : arm.vsShippedByCategory?.[category]
+  return vs ? `${vs.won} won · ${vs.lost} lost` : '—'
 }
 
 function categoryLabel(cat: string): string {
@@ -24,20 +31,23 @@ function categoryLabel(cat: string): string {
 /**
  * The measured run, rendered.
  *
- * Every claim here is derived from `evalResults.json`: which arm leads each column, and
- * the verdict line beneath the table. Nothing about the outcome is written by hand, so the
- * component cannot contradict its own numbers and needs no edit when the numbers move, an
- * arm is added, or the shipped configuration changes.
+ * Every claim here is derived from `evalResults.json`: which arm leads each column, how
+ * many questions each arm won and lost against production, and the verdict line beneath
+ * the table. Nothing about the outcome is written by hand, so the component cannot
+ * contradict its own numbers and needs no edit when the numbers move, an arm is added, or
+ * the shipped configuration changes.
+ *
+ * `run` defaults to the published run; it is a prop only so tests can render fixtures.
  */
-export default function EvalScoreboard() {
+export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
   const [activeCategory, setActiveCategory] = useState<string>('all')
-  const metrics = evalRun.metricNames
-  const categories = ['all', ...(evalRun.categories ?? [])]
+  const metrics = run.metricNames
+  const categories = ['all', ...(run.categories ?? [])]
 
   // Sets, not single ids: every arm tied for a column's best is highlighted, so the
   // caption's "Best score per column in blue" stays true when two arms tie.
   const winners = Object.fromEntries(
-    metrics.map((m) => [m, new Set(leadingArmIds(m, evalRun.arms, activeCategory))])
+    metrics.map((m) => [m, new Set(leadingArmIds(m, run.arms, activeCategory))])
   )
 
   const getMetric = (arm: EvalArm, m: string) => {
@@ -82,7 +92,7 @@ export default function EvalScoreboard() {
             </div>
           </div>
           <span className="font-mono text-[9px] tracking-widest text-[#8a8f98]">
-            {sampleLabel(evalRun, activeCategory)} · {evalRun.corpusChunks} chunks
+            {sampleLabel(run, activeCategory)} · {run.corpusChunks} chunks
           </span>
         </div>
 
@@ -91,7 +101,7 @@ export default function EvalScoreboard() {
           <table className="w-full min-w-[34rem] border-collapse text-left">
             <caption className="sr-only">
               Retrieval quality by pipeline configuration, measured on{' '}
-              {sampleLabel(evalRun, activeCategory)}.
+              {sampleLabel(run, activeCategory)}.
             </caption>
             <thead>
               <tr className="border-b border-white/[0.06]">
@@ -110,10 +120,18 @@ export default function EvalScoreboard() {
                     {metricLabel(m)}
                   </th>
                 ))}
+                {/* Raw disagreement, so a reader can see what the verdict rests on without
+                    reading any statistics (ADR-0006). */}
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+                >
+                  VS PRODUCTION
+                </th>
               </tr>
             </thead>
             <tbody>
-              {evalRun.arms.map((arm: EvalArm) => (
+              {run.arms.map((arm: EvalArm) => (
                 <tr
                   key={arm.id}
                   className="border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02]"
@@ -149,6 +167,9 @@ export default function EvalScoreboard() {
                       </td>
                     )
                   })}
+                  <td className="px-4 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
+                    {wonLost(arm, activeCategory)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -158,7 +179,7 @@ export default function EvalScoreboard() {
         {/* The verdict is computed from the table above it, never typed. */}
         <div className="border-t border-white/[0.06] bg-white/[0.03] px-4 py-3">
           <p className="text-sm leading-relaxed text-[#ededef]">
-            {verdictLine(evalRun, activeCategory)}
+            {verdictLine(run, activeCategory)}
           </p>
         </div>
       </div>
@@ -168,7 +189,7 @@ export default function EvalScoreboard() {
         evaluation harness.{' '}
         {/* Only claimed when the run actually measured the held-out portion — which portion
             gets published is the harness's call, not this component's. */}
-        {evalRun.split === 'holdout' && (
+        {run.split === 'holdout' && (
           <>
             The questions are the held-out portion of the labelled set: no configuration here was
             chosen against them, so these are measurements rather than the score of whatever won on
@@ -176,17 +197,17 @@ export default function EvalScoreboard() {
           </>
         )}
         Measured at{' '}
-        {evalRun.runUrl ? (
+        {run.runUrl ? (
           <a
-            href={evalRun.runUrl}
+            href={run.runUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#0ea5e9] underline decoration-[#0ea5e9]/30 underline-offset-4 transition-all duration-150 hover:decoration-[#0ea5e9]"
           >
-            commit {evalRun.commit}
+            commit {run.commit}
           </a>
         ) : (
-          <span className="font-mono">commit {evalRun.commit}</span>
+          <span className="font-mono">commit {run.commit}</span>
         )}
         .
       </figcaption>

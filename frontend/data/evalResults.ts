@@ -14,6 +14,19 @@ import run from './evalResults.json'
 
 export type QueryCategory = 'direct' | 'paraphrase' | 'conceptual'
 
+/**
+ * How an arm compares with the shipped arm, question by question, on the gating metric.
+ *
+ * `won` counts questions only this arm hit and `lost` questions only the shipped arm hit.
+ * The arm is `ahead` or `behind` only when that split is too lopsided to be sampling noise
+ * (an exact sign test at p < 0.05, computed by the harness — see ADR-0006).
+ */
+export interface VsShipped {
+  won: number
+  lost: number
+  outcome: 'ahead' | 'behind' | 'indistinguishable'
+}
+
 export interface EvalArm {
   /** Harness arm name, matching `--arms` in eval/run_eval.py. */
   id: string
@@ -28,6 +41,15 @@ export interface EvalArm {
   metrics: Record<string, number>
   /** Per-category metrics, keyed by category (e.g. `direct`). */
   byCategory: Record<string, Record<string, number>>
+  /** Against the shipped arm over the whole sample. `null` on the shipped arm itself. */
+  vsShipped: VsShipped | null
+  /** The same comparison within each category. `null` on the shipped arm itself. */
+  vsShippedByCategory: Record<string, VsShipped> | null
+  /**
+   * 95% bootstrap interval for MRR, as `[low, high]`. Published for docs/evaluation.md
+   * only — this page deliberately does not render it (ADR-0006).
+   */
+  mrrInterval: number[] | null
 }
 
 export interface EvalRun {
@@ -106,41 +128,64 @@ export function shippedArm(arms: EvalArm[] = evalRun.arms): EvalArm | undefined 
   return arms.find((a) => a.shipped)
 }
 
+function comparison(arm: EvalArm, category?: string): VsShipped | null | undefined {
+  return category && category !== 'all' ? arm.vsShippedByCategory?.[category] : arm.vsShipped
+}
+
+function joinNames(names: string[]): string {
+  return names.length === 1
+    ? names[0]
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 /**
- * One generated sentence placing the shipped configuration against the leading one.
+ * One generated sentence placing every arm against the shipped arm on the gating metric.
  *
- * Derived rather than written so it cannot contradict the table beside it, and so it
- * changes on its own when the shipped configuration does. Mirrors `verdict_line()` in
- * backend/eval/publish.py.
+ * An arm is named ahead or behind only when the harness's sign test says the questions the
+ * two disagree on are too lopsided to be sampling noise; otherwise the sentence says no arm
+ * is distinguishable and names the sample, because on a few dozen questions that is the
+ * usual, honest answer. Derived rather than written so it cannot contradict the table
+ * beside it. Mirrors `verdict_line()` in backend/eval/publish.py.
  */
 export function verdictLine(run: EvalRun = evalRun, category?: string): string {
   const metric = run.gatingMetric
-  const leader = leadingArm(metric, run.arms, category)
-  const leaders = leadingArmIds(metric, run.arms, category)
   const shipped = shippedArm(run.arms)
-  const score = (arm: EvalArm) => {
-    const val = getArmMetric(arm, metric, category)
-    return val === -Infinity ? '0.000' : val.toFixed(3)
+  if (!shipped) {
+    return 'No arm is flagged as shipped, so no arm is compared against production.'
   }
 
-  if (!shipped) {
-    return `${leader.label} leads on ${metric} (${score(leader)}). No arm is flagged as shipped.`
+  const opening = `Production runs ${shipped.label}.`
+  const others = run.arms.filter((a) => a.id !== shipped.id)
+  if (!others.length) return `${opening} No other arm was measured.`
+
+  // The won/lost counts sit in parentheses straight after each label, which also keeps a
+  // label containing a comma from reading as two arms.
+  const named = (outcome: VsShipped['outcome']) =>
+    others.flatMap((a) => {
+      const vs = comparison(a, category)
+      return vs?.outcome === outcome ? [`${a.label} (won ${vs.won}, lost ${vs.lost})`] : []
+    })
+  const ahead = named('ahead')
+  const behind = named('behind')
+  const be = (names: string[]) => (names.length === 1 ? 'is' : 'are')
+
+  const across = `Across ${run.split === 'all' ? 'all' : 'the'} ${sampleLabel(run, category)}`
+  if (!ahead.length && !behind.length) {
+    return `${opening} ${across}, no other arm is distinguishable from it on ${metric}.`
   }
-  if (leaders.includes(shipped.id)) {
-    // A tie is named rather than rounded into a win: the shipped arm is listed first,
-    // so "leads" is otherwise how every tie would read.
-    const others = run.arms.filter((a) => leaders.includes(a.id) && a.id !== shipped.id)
-    if (!others.length) {
-      return `Production runs ${shipped.label}, which also leads on ${metric} (${score(shipped)}).`
-    }
-    // Arm labels contain commas, so the tied names go last rather than mid-sentence.
-    const named = others.map((a) => a.label).join(', ')
-    return `Production runs ${shipped.label}, tied for the lead on ${metric} (${score(shipped)}) with ${named}.`
+
+  const clauses: string[] = []
+  if (ahead.length) {
+    clauses.push(`${joinNames(ahead)} ${be(ahead)} distinguishably ahead of it on ${metric}`)
   }
-  return (
-    `Production runs ${shipped.label}. On the current corpus, ${leader.label} ` +
-    `leads on ${metric} (${score(leader)} vs ${score(shipped)}).`
-  )
+  if (behind.length) {
+    clauses.push(
+      ahead.length
+        ? `${joinNames(behind)} ${be(behind)} behind it`
+        : `${joinNames(behind)} ${be(behind)} distinguishably behind it on ${metric}`
+    )
+  }
+  return `${opening} ${across}, ${clauses.join(', and ')}.`
 }
 
 /** Display name for a metric column. `mrr` is an initialism; the rest read as written. */

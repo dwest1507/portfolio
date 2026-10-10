@@ -12,7 +12,9 @@ and the verdict can be tested without loading a pipeline or downloading model we
 from __future__ import annotations
 
 import json
+import math
 import os
+import random
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -23,7 +25,10 @@ from pathlib import Path
 # compared with one.
 # Bumped to 3 when the document gained `categories` and per-arm `byCategory` breakdowns
 # to segment in-vocabulary direct queries from paraphrases and conceptual questions.
-SCHEMA_VERSION = 3
+# Bumped to 4 when each arm gained `vsShipped` — questions won and lost against the
+# shipped arm and the sign-test outcome (ADR-0006) — and `mrrInterval`. A v3 verdict named
+# whichever arm scored highest; a v4 verdict names only differences beyond sampling noise.
+SCHEMA_VERSION = 4
 
 BEGIN_MARKER = "<!-- eval:begin -->"
 END_MARKER = "<!-- eval:end -->"
@@ -154,6 +159,76 @@ def _run_url() -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Comparison against the shipped arm
+# ---------------------------------------------------------------------------
+
+#: An arm is called ahead of or behind the shipped arm only below this p-value.
+SIGNIFICANCE = 0.05
+
+
+def sign_test_p(won: int, lost: int) -> float:
+    """Exact two-sided sign test (McNemar's exact test) on the discordant questions.
+
+    Under the null hypothesis that neither arm is better, each question only one of them
+    hit is a fair coin toss between them. The p-value is the probability of a split at
+    least as lopsided as `won`/`lost`.
+    """
+    n = won + lost
+    if n == 0:
+        return 1.0
+    tail = sum(math.comb(n, i) for i in range(min(won, lost) + 1)) / 2**n
+    return min(1.0, 2 * tail)
+
+
+def compare_with_shipped(cases: list[dict], shipped_cases: list[dict], metric: str) -> dict:
+    """Questions this arm won and lost against the shipped arm, and whether it matters.
+
+    Only the questions the two arms disagree on carry information about which is better
+    (ADR-0006): a question both hit, or both missed, is the same for either arm. The split
+    of the rest is called `ahead` or `behind` only when it is too lopsided to be chance;
+    otherwise the arms are `indistinguishable` on this sample.
+    """
+    shipped_hits = {c["id"]: bool(c[metric]) for c in shipped_cases}
+    won = lost = 0
+    for case in cases:
+        mine, theirs = bool(case[metric]), shipped_hits.get(case["id"])
+        if theirs is None or mine == theirs:
+            continue
+        if mine:
+            won += 1
+        else:
+            lost += 1
+
+    if sign_test_p(won, lost) >= SIGNIFICANCE:
+        outcome = "indistinguishable"
+    else:
+        outcome = "ahead" if won > lost else "behind"
+    return {"won": won, "lost": lost, "outcome": outcome}
+
+
+#: Resamples per bootstrap interval, and the seed that makes a re-run reproduce it.
+BOOTSTRAP_RESAMPLES = 2000
+BOOTSTRAP_SEED = 0
+
+
+def bootstrap_interval(values: list[float]) -> list[float] | None:
+    """95% percentile-bootstrap interval for the mean of `values`.
+
+    Seeded, so the same per-question outcomes always give the same interval: an
+    interval that moved on every run would rewrite docs/evaluation.md with nothing
+    re-measured. Published in docs/evaluation.md only, never on the page (ADR-0006).
+    """
+    if not values:
+        return None
+    rng = random.Random(BOOTSTRAP_SEED)
+    n = len(values)
+    means = sorted(sum(rng.choices(values, k=n)) / n for _ in range(BOOTSTRAP_RESAMPLES))
+    lo = means[int(0.025 * BOOTSTRAP_RESAMPLES)]
+    hi = means[int(0.975 * BOOTSTRAP_RESAMPLES) - 1]
+    return [round(lo, 4), round(hi, 4)]
+
+
+# ---------------------------------------------------------------------------
 # The measured-run document
 # ---------------------------------------------------------------------------
 
@@ -183,6 +258,10 @@ def build_results_document(
                 if cat:
                     category_counts[cat] = category_counts.get(cat, 0) + 1
 
+    shipped_cases = next(
+        (r.get("cases", []) for r in results if r["arm"] == shipped_arm_id()), None
+    )
+
     arms = []
     for r in results:
         spec = ARM_SPEC_BY_ID.get(r["arm"])
@@ -199,6 +278,16 @@ def build_results_document(
                     for m in metric_names
                     if m in r["by_category"][cat]
                 }
+        compared = compared_by_category = None
+        if not spec.shipped and shipped_cases is not None:
+            cases = r.get("cases", [])
+            compared = compare_with_shipped(cases, shipped_cases, gating_metric)
+            compared_by_category = {
+                cat: compare_with_shipped(
+                    [c for c in cases if c.get("category") == cat], shipped_cases, gating_metric
+                )
+                for cat in sorted({c["category"] for c in cases if c.get("category")})
+            }
         arms.append(
             {
                 "id": spec.id,
@@ -208,6 +297,9 @@ def build_results_document(
                 "shipped": spec.shipped,
                 "metrics": {m: round(r["summary"][m], 4) for m in metric_names},
                 "byCategory": by_category,
+                "mrrInterval": bootstrap_interval([c["mrr"] for c in r.get("cases", [])]),
+                "vsShipped": compared,
+                "vsShippedByCategory": compared_by_category,
             }
         )
 
@@ -320,42 +412,65 @@ def leading_arm_ids(document: dict, metric: str) -> list[str]:
     return [a["id"] for a in document["arms"] if a["metrics"].get(metric) == best]
 
 
-def verdict_line(document: dict) -> str:
-    """One sentence naming the shipped arm and the arm that currently leads.
+def sample_phrase(document: dict) -> str:
+    """The measured questions in a phrase: "the 33 held-out questions"."""
+    n, split = document["goldenQuestions"], document.get("split", "all")
+    noun = "question" if n == 1 else "questions"
+    if split == "all":
+        return f"all {n} {noun}"
+    if split == "holdout":
+        return f"the {n} held-out {noun}"
+    return f"the {n} {split} {noun}"
 
-    Generated rather than written so it cannot drift from the table above it. When the
-    shipped configuration is also the leading one, it says so instead of manufacturing a
-    contrast.
+
+def verdict_line(document: dict) -> str:
+    """One sentence placing every arm against the shipped arm on the gating metric.
+
+    Generated rather than written so it cannot drift from the table above it. An arm is
+    named ahead or behind only when the questions it disagrees with the shipped arm on are
+    too lopsided to be sampling noise (ADR-0006); otherwise the sentence says no arm is
+    distinguishable and gives the sample size that makes that the usual answer.
     """
     metric = document["gatingMetric"]
     shipped = next((a for a in document["arms"] if a["shipped"]), None)
-    leader = leading_arm(document, metric)
-    leaders = leading_arm_ids(document, metric)
-
     if shipped is None:
-        return (
-            f"{leader['label']} leads on {metric} "
-            f"({leader['metrics'][metric]:.3f}). No arm is flagged as shipped."
-        )
+        return "No arm is flagged as shipped, so no arm is compared against production."
 
-    if shipped["id"] in leaders:
-        # A tie is named rather than rounded into a win. The shipped arm is listed
-        # first, so "leads" would otherwise be how every tie reads.
-        others = [a["label"] for a in document["arms"] if a["id"] in leaders and a is not shipped]
-        score = f"{shipped['metrics'][metric]:.3f}"
-        if not others:
-            return f"Production runs {shipped['label']}, which also leads on {metric} ({score})."
-        # Arm labels contain commas, so the tied names go last rather than mid-sentence.
-        return (
-            f"Production runs {shipped['label']}, tied for the lead on {metric} "
-            f"({score}) with {', '.join(others)}."
-        )
+    opening = f"Production runs {shipped['label']}."
+    others = [a for a in document["arms"] if a is not shipped]
+    if not others:
+        return f"{opening} No other arm was measured."
 
-    return (
-        f"Production runs {shipped['label']}. On the current corpus, {leader['label']} "
-        f"leads on {metric} ({leader['metrics'][metric]:.3f} vs "
-        f"{shipped['metrics'][metric]:.3f})."
-    )
+    def named(outcome: str) -> list[str]:
+        # The won/lost counts sit in parentheses straight after each label, which also
+        # keeps a label containing a comma from reading as two arms.
+        return [
+            f"{a['label']} (won {a['vsShipped']['won']}, lost {a['vsShipped']['lost']})"
+            for a in others
+            if (a.get("vsShipped") or {}).get("outcome") == outcome
+        ]
+
+    ahead, behind = named("ahead"), named("behind")
+    sample = f"Across {sample_phrase(document)}"
+    if not ahead and not behind:
+        return f"{opening} {sample}, no other arm is distinguishable from it on {metric}."
+
+    clauses = []
+    if ahead:
+        clauses.append(f"{_join(ahead)} {_be(ahead)} distinguishably ahead of it on {metric}")
+    if behind:
+        where = "" if ahead else f" on {metric}"
+        lead = "" if ahead else "distinguishably "
+        clauses.append(f"{_join(behind)} {_be(behind)} {lead}behind it{where}")
+    return f"{opening} {sample}, {', and '.join(clauses)}."
+
+
+def _join(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def _be(items: list[str]) -> str:
+    return "is" if len(items) == 1 else "are"
 
 
 # ---------------------------------------------------------------------------
@@ -371,8 +486,12 @@ def metric_label(metric: str) -> str:
 def render_markdown(document: dict) -> str:
     """The generated block for docs/evaluation.md: provenance, table, verdict."""
     metrics = document["metricNames"]
-    header = "| Arm | " + " | ".join(metric_label(m) for m in metrics) + " |"
-    align = "|-----|" + "|".join(["---------:"] * len(metrics)) + "|"
+    header = (
+        "| Arm | "
+        + " | ".join(metric_label(m) for m in metrics)
+        + " | MRR 95% CI | vs shipped (won / lost) |"
+    )
+    align = "|-----|" + "|".join(["---------:"] * (len(metrics) + 2)) + "|"
 
     # Every arm tied for a column's best is bolded, not just the first one listed —
     # "Best score per column in bold" has to mean it.
@@ -384,6 +503,10 @@ def render_markdown(document: dict) -> str:
         for m in metrics:
             value = f"{arm['metrics'][m]:.3f}"
             cells.append(f"**{value}**" if arm["id"] in bests[m] else value)
+        interval = arm.get("mrrInterval")
+        cells.append(f"{interval[0]:.3f}–{interval[1]:.3f}" if interval else "—")
+        vs = arm.get("vsShipped")
+        cells.append(f"{vs['won']} / {vs['lost']}" if vs else "—")
         shipped = " _(shipped)_" if arm["shipped"] else ""
         rows.append(f"| `{arm['id']}`{shipped} | " + " | ".join(cells) + " |")
 
