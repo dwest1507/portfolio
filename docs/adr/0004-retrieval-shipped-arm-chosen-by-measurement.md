@@ -4,6 +4,8 @@ status: accepted
 
 # The shipped retrieval Arm is whichever one the harness picks, and only it is gated
 
+> How the harness picks is recorded in ADR-0009.
+
 The pipeline was built as hybrid retrieval — weighted reciprocal-rank fusion of FAISS
 semantic search and BM25 — followed by cross-encoder re-ranking. The evaluation harness
 measured that configuration against plain BM25 on this Corpus and it lost on every metric.

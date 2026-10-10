@@ -73,3 +73,18 @@ Category-level metrics are diagnostic: they are displayed in the harness CLI and
 the data contract, but are not independently gated by floors. Gating individual categories
 prior to completing dataset expansion would introduce arbitrary constants before baseline
 empirical measurement.
+
+## Amendment (2026-10-09)
+
+- **Hard cases are written to be realistic, not adversarial.** The negative-keyword
+  constraint above produced questions no visitor would type ("What level of national
+  defense vetting has been granted to him?"). New `paraphrase` and `conceptual` cases are
+  phrased as a recruiter or engineer would actually ask, avoid the Corpus's wording because
+  people do rather than by rule, and each targets a different chunk where possible, since
+  ten questions about one chunk are one sample.
+- **Growth targets the categories where Arms disagree.** `direct` cases are added only to
+  cover new Corpus content; `paraphrase` and `conceptual` grow toward ~50 each, because only
+  questions Arms disagree on can distinguish them (ADR-0006).
+- **The Golden Set gains Out-of-Scope Cases**, scored by the generation harness only.
+- **"Zero dynamic LLM calls" is a property of the retrieval harness.** The generation
+  harness (ADR-0007) is separate and makes such calls by design.
