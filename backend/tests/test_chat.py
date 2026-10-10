@@ -142,6 +142,32 @@ def test_rag_context_included_in_system_prompt(client, mock_pipeline):
     assert "AI Engineer" in system_msg["content"] or "David" in system_msg["content"]
 
 
+def test_production_generates_at_temperature_zero(client, mock_pipeline):
+    """Visitors are served what the generation eval measures (ADR-0007).
+
+    The eval generates at temperature 0 so its Floors are stable. Sampling above zero in
+    production would make every eval number describe answers no visitor receives.
+    """
+    captured = {}
+
+    async def _fake_create(**kwargs):
+        captured.update(kwargs)
+
+        async def _empty():
+            return
+            yield
+
+        return _empty()
+
+    mock_groq = AsyncMock()
+    mock_groq.chat.completions.create = AsyncMock(side_effect=_fake_create)
+
+    with patch("app.llm.AsyncGroq", return_value=mock_groq):
+        client.post("/api/chat", json={"message": "What is David's background?"})
+
+    assert captured["temperature"] == 0
+
+
 # ---------------------------------------------------------------------------
 # Groq API error
 # ---------------------------------------------------------------------------

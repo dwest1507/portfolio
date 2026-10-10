@@ -1,13 +1,15 @@
 """Tests for app.llm — model wiring and a live provider smoke check."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from dotenv import dotenv_values
 from groq import AsyncGroq
 
 from app.llm import NO_CONTEXT, SYSTEM_PROMPT, build_messages, generate_stream
+from eval.generation import groq_generator
 
 
 @pytest.mark.asyncio
@@ -85,3 +87,69 @@ def test_an_empty_context_is_stated_rather_than_left_blank():
 def test_history_is_marked_as_history_not_context():
     """The instruction that makes an empty context safe when prior turns are present."""
     assert "history, not context" in SYSTEM_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Groq generator for the generation eval
+# ---------------------------------------------------------------------------
+
+
+def _fake_groq_client(text: str = "An answer.", model: str = "openai/gpt-oss-120b"):
+    """A synchronous Groq client whose completion records its request."""
+    client = MagicMock()
+    client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=text))],
+        usage=SimpleNamespace(
+            prompt_tokens=1200, completion_tokens=300, total_tokens=1500, queue_time=0.01
+        ),
+        model=model,
+    )
+    return client
+
+
+def test_the_eval_prompt_is_the_production_prompt(client, mock_pipeline):
+    """The Groq generator sends exactly what the chat endpoint sends for the same input.
+
+    An eval prompt that drifted from production's would measure answers no visitor gets,
+    so the generator has no prompt of its own: both go through the production builder.
+    """
+    question = "What is David's background?"
+    chunks = mock_pipeline.retrieve.return_value
+
+    served = {}
+
+    async def _fake_create(**kwargs):
+        served.update(kwargs)
+
+        async def _empty():
+            return
+            yield
+
+        return _empty()
+
+    mock_groq = AsyncMock()
+    mock_groq.chat.completions.create = AsyncMock(side_effect=_fake_create)
+    with patch("app.llm.AsyncGroq", return_value=mock_groq):
+        client.post("/api/chat", json={"message": question})
+
+    groq = _fake_groq_client()
+    groq_generator(groq, model=served["model"])(question, chunks)
+    evaluated = groq.chat.completions.create.call_args.kwargs
+
+    for setting in ("model", "messages", "temperature", "max_tokens"):
+        assert evaluated[setting] == served[setting], setting
+
+
+def test_the_groq_generator_reports_billed_usage_and_the_answering_model():
+    """The model is the one Groq says answered, not the one requested."""
+    groq = _fake_groq_client(text="David is an AI Engineer.", model="openai/gpt-oss-120b-0901")
+
+    generation = groq_generator(groq, model="openai/gpt-oss-120b")("Who is David?", ["ctx"])
+
+    assert generation.text == "David is an AI Engineer."
+    assert generation.usage == {
+        "prompt_tokens": 1200,
+        "completion_tokens": 300,
+        "total_tokens": 1500,
+    }
+    assert generation.model == "openai/gpt-oss-120b-0901"

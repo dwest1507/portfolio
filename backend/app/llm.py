@@ -33,6 +33,16 @@ SYSTEM_PROMPT = (
 #: "say so honestly" actionable rather than merely unopposed.
 NO_CONTEXT = "(No relevant context was retrieved for this question.)"
 
+#: Sampling settings shared by production and the generation eval, so the eval measures
+#: what visitors are served. Temperature 0 also keeps the eval's Floors stable (ADR-0007).
+TEMPERATURE = 0
+MAX_TOKENS = 1024
+
+
+def format_context(chunks: list[str]) -> str:
+    """Join retrieved chunk texts into the context section of the system prompt."""
+    return "\n\n---\n\n".join(chunks)
+
 
 def build_messages(
     context: str,
@@ -60,8 +70,8 @@ async def generate_stream(
         model=GROQ_MODEL,
         messages=messages,
         stream=True,
-        max_tokens=1024,
-        temperature=0.3,
+        max_tokens=MAX_TOKENS,
+        temperature=TEMPERATURE,
     )
     async for chunk in stream:
         token = chunk.choices[0].delta.content

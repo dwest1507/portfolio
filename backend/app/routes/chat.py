@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from ..llm import Message, build_messages, generate_stream
+from ..llm import Message, build_messages, format_context, generate_stream
 from ..rag.pipeline import get_pipeline
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class ChatRequest(BaseModel):
 async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
     pipeline = get_pipeline()
     context_chunks = pipeline.retrieve(body.message)
-    context = "\n\n---\n\n".join(context_chunks)
+    context = format_context(context_chunks)
 
     messages = build_messages(context, body.history, body.message)
 
