@@ -23,9 +23,10 @@ from app.llm import MAX_TOKENS, TEMPERATURE, build_messages, format_context
 
 if TYPE_CHECKING:
     from groq import Groq
+    from openai import OpenAI
 
 #: The usage fields recorded per answer. Groq's usage also carries timings, which are
-#: not billed and vary from run to run.
+#: not billed and vary from run to run. OpenAI counts reasoning tokens as completion tokens.
 USAGE_FIELDS = ("prompt_tokens", "completion_tokens", "total_tokens")
 
 
@@ -104,6 +105,31 @@ def groq_generator(client: Groq, model: str) -> Generator:
             messages=build_messages(format_context(chunks), [], question),
             temperature=TEMPERATURE,
             max_tokens=MAX_TOKENS,
+        )
+        return Generation(
+            text=response.choices[0].message.content or "",
+            usage={field: getattr(response.usage, field) for field in USAGE_FIELDS},
+            model=response.model,
+        )
+
+    return generate
+
+
+def openai_generator(client: OpenAI, model: str, reasoning_effort: str) -> Generator:
+    """A Generator answering with `model` on OpenAI, the provider being migrated to (ADR-0008).
+
+    Messages come from the production builder, as for Groq. OpenAI's reasoning models
+    reject any temperature but the default, so none is sent and answers vary from run to
+    run; the reasoning effort is sent instead, because it changes the answer too.
+    `max_completion_tokens` caps reasoning and answer tokens together.
+    """
+
+    def generate(question: str, chunks: list[str]) -> Generation:
+        response = client.chat.completions.create(
+            model=model,
+            messages=build_messages(format_context(chunks), [], question),
+            reasoning_effort=reasoning_effort,
+            max_completion_tokens=MAX_TOKENS,
         )
         return Generation(
             text=response.choices[0].message.content or "",
@@ -247,9 +273,9 @@ def judge_case(case: dict, chunks: list[str], answer: str, judge: Judge) -> dict
     sentences = []
     contradictions = []
     for text in split_sentences(answer):
-        if not judge.is_factual(text):
+        relations = judge_sentence(text, chunks, judge)
+        if relations is None:
             continue
-        relations = [judge.relation(text, chunk).label for chunk in chunks]
         sentences.append({"text": text, "supported": "supports" in relations})
         contradictions += [
             {"sentence": text, "chunk": chunk}
@@ -261,6 +287,13 @@ def judge_case(case: dict, chunks: list[str], answer: str, judge: Judge) -> dict
         for fact in case.get("required_facts", [])
     ]
     return {**judged, "sentences": sentences, "contradictions": contradictions, "facts": facts}
+
+
+def judge_sentence(text: str, chunks: list[str], judge: Judge) -> list[str] | None:
+    """How each chunk bears on one sentence of an answer, or None if it is filler."""
+    if not judge.is_factual(text):
+        return None
+    return [judge.relation(text, chunk).label for chunk in chunks]
 
 
 LIST_ITEM = re.compile(r"^(?:[-*+•]|\d+[.)])\s+")

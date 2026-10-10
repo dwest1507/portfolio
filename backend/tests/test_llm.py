@@ -8,8 +8,8 @@ import pytest
 from dotenv import dotenv_values
 from groq import AsyncGroq
 
-from app.llm import NO_CONTEXT, SYSTEM_PROMPT, build_messages, generate_stream
-from eval.generation import groq_generator
+from app.llm import MAX_TOKENS, NO_CONTEXT, SYSTEM_PROMPT, build_messages, generate_stream
+from eval.generation import groq_generator, openai_generator
 
 
 @pytest.mark.asyncio
@@ -94,8 +94,8 @@ def test_history_is_marked_as_history_not_context():
 # ---------------------------------------------------------------------------
 
 
-def _fake_groq_client(text: str = "An answer.", model: str = "openai/gpt-oss-120b"):
-    """A synchronous Groq client whose completion records its request."""
+def _fake_completions_client(text: str = "An answer.", model: str = "openai/gpt-oss-120b"):
+    """A synchronous Groq or OpenAI client whose completion records its request."""
     client = MagicMock()
     client.chat.completions.create.return_value = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content=text))],
@@ -132,7 +132,7 @@ def test_the_eval_prompt_is_the_production_prompt(client, mock_pipeline):
     with patch("app.llm.AsyncGroq", return_value=mock_groq):
         client.post("/api/chat", json={"message": question})
 
-    groq = _fake_groq_client()
+    groq = _fake_completions_client()
     groq_generator(groq, model=served["model"])(question, chunks)
     evaluated = groq.chat.completions.create.call_args.kwargs
 
@@ -142,7 +142,9 @@ def test_the_eval_prompt_is_the_production_prompt(client, mock_pipeline):
 
 def test_the_groq_generator_reports_billed_usage_and_the_answering_model():
     """The model is the one Groq says answered, not the one requested."""
-    groq = _fake_groq_client(text="David is an AI Engineer.", model="openai/gpt-oss-120b-0901")
+    groq = _fake_completions_client(
+        text="David is an AI Engineer.", model="openai/gpt-oss-120b-0901"
+    )
 
     generation = groq_generator(groq, model="openai/gpt-oss-120b")("Who is David?", ["ctx"])
 
@@ -153,3 +155,40 @@ def test_the_groq_generator_reports_billed_usage_and_the_answering_model():
         "total_tokens": 1500,
     }
     assert generation.model == "openai/gpt-oss-120b-0901"
+
+
+def test_the_openai_generator_reports_billed_usage_and_the_answering_model():
+    """Billed usage includes reasoning tokens, which OpenAI counts as completion tokens."""
+    openai = _fake_completions_client(
+        text="David is an AI Engineer.", model="gpt-6-luna-2026-08-01"
+    )
+
+    generation = openai_generator(openai, model="gpt-6-luna", reasoning_effort="low")(
+        "Who is David?", ["ctx"]
+    )
+
+    assert generation.text == "David is an AI Engineer."
+    assert generation.usage == {
+        "prompt_tokens": 1200,
+        "completion_tokens": 300,
+        "total_tokens": 1500,
+    }
+    assert generation.model == "gpt-6-luna-2026-08-01"
+
+
+def test_the_openai_generator_sends_the_production_prompt_and_no_temperature():
+    """OpenAI's reasoning models only accept the default temperature, so none is sent.
+
+    The reasoning effort is sent instead: it is part of what is being measured.
+    """
+    openai = _fake_completions_client()
+
+    openai_generator(openai, model="gpt-6-luna", reasoning_effort="low")("Who is David?", ["ctx"])
+    request = openai.chat.completions.create.call_args.kwargs
+
+    assert request == {
+        "model": "gpt-6-luna",
+        "messages": build_messages("ctx", [], "Who is David?"),
+        "reasoning_effort": "low",
+        "max_completion_tokens": MAX_TOKENS,
+    }

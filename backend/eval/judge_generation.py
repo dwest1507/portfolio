@@ -32,7 +32,15 @@ from eval.run_eval import GOLDEN_SET_PATH, SPLITS, select_cases
 from eval.run_generation import BASELINE_PATH
 
 #: What a judged run carries over from the record it judged: what was measured, and when.
-RECORD_KEYS = ("provider", "requestedModel", "arm", "temperature", "maxTokens", "corpusChunks")
+RECORD_KEYS = (
+    "provider",
+    "requestedModel",
+    "reasoningEffort",
+    "arm",
+    "temperature",
+    "maxTokens",
+    "corpusChunks",
+)
 
 
 def main() -> int:

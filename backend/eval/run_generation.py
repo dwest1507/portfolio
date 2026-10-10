@@ -13,12 +13,20 @@ it left off:
 
     uv run --frozen python eval/run_generation.py              # capture or resume
     uv run --frozen python eval/run_generation.py --token-budget 50000
+
+With `--provider openai` it answers with an OpenAI model instead, unpaced (OpenAI's paid
+tier is not shared with visitors), into its own record. This is how the run-to-run
+spread of the generation metrics is measured: three records of one commit, each judged
+with judge_generation.py (ADR-0007). Needs OPENAI_CI_API_KEY:
+
+    uv run --frozen python eval/run_generation.py --provider openai --record runs/luna-1.json
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +37,7 @@ sys.path.insert(0, str(BACKEND_ROOT))
 from eval.generation import (  # (needs the sys.path line above)
     TokenBudgetExhausted,
     groq_generator,
+    openai_generator,
     run_generation,
     throttled,
     total_usage,
@@ -46,13 +55,29 @@ TOKENS_PER_MINUTE = 7000
 # billed 132,249 tokens over 107 cases (0.8-1.9k each).
 DEFAULT_TOKEN_BUDGET = 180_000
 
+#: OpenAI's candidate (ADR-0008) and the reasoning effort chosen for it. Its reasoning
+#: models accept no temperature but the default, so the effort is what is pinned.
+OPENAI_MODEL = "gpt-6-luna"
+OPENAI_REASONING_EFFORT = "low"
+
+#: What a record measured: resuming it with any of these changed would mix two measurements.
+MEASURED = (
+    "provider",
+    "requestedModel",
+    "reasoningEffort",
+    "arm",
+    "temperature",
+    "maxTokens",
+    "corpusChunks",
+)
+
 
 def load_record(path: Path, header: dict) -> dict:
     """The record to resume, or a fresh one. Refuses to mix runs that measured different things."""
     if not path.exists():
         return {**header, "cases": [], "usage": {}}
     record = json.loads(path.read_text(encoding="utf-8"))
-    for key in ("provider", "requestedModel", "arm", "temperature", "maxTokens", "corpusChunks"):
+    for key in MEASURED:
         if record.get(key) != header[key]:
             raise SystemExit(
                 f"FAIL — {path.name} was measured with {key}={record.get(key)!r}, this run "
@@ -79,9 +104,22 @@ def main() -> int:
         default=DEFAULT_TOKEN_BUDGET,
         help=f"Stop before this run spends more tokens (default: {DEFAULT_TOKEN_BUDGET:,}).",
     )
+    parser.add_argument("--provider", choices=("groq", "openai"), default="groq")
+    parser.add_argument("--model", help=f"OpenAI model (default: {OPENAI_MODEL}).")
+    parser.add_argument(
+        "--reasoning-effort",
+        default=OPENAI_REASONING_EFFORT,
+        help=f"OpenAI reasoning effort (default: {OPENAI_REASONING_EFFORT}).",
+    )
+    parser.add_argument(
+        "--record",
+        type=Path,
+        help="Where to write the record (default: the Groq baseline; required for OpenAI).",
+    )
     args = parser.parse_args()
-
-    from groq import Groq
+    if args.provider == "openai" and args.record is None:
+        parser.error("--provider openai needs --record: the Groq baseline is not to be replaced.")
+    record_path = args.record or BASELINE_PATH
 
     from app.config import GROQ_API_KEY, GROQ_MODEL
     from app.llm import MAX_TOKENS, TEMPERATURE
@@ -91,42 +129,55 @@ def main() -> int:
     cases = select_cases(golden["cases"], "all")
     pipeline = RAGPipeline()
 
+    openai = args.provider == "openai"
+    model = (args.model or OPENAI_MODEL) if openai else GROQ_MODEL
     header = {
         "description": (
-            "Groq generation baseline: each Golden Set case answered by the Shipped Arm, "
-            "with the chunks it was answered from. Unjudged. See docs/evaluation.md."
+            f"{args.provider} generation {'run' if openai else 'baseline'}: each Golden Set "
+            "case answered by the Shipped Arm, with the chunks it was answered from. "
+            "Unjudged. See docs/evaluation.md."
         ),
-        "provider": "groq",
-        "requestedModel": GROQ_MODEL,
+        "provider": args.provider,
+        "requestedModel": model,
+        "reasoningEffort": args.reasoning_effort if openai else None,
         "arm": shipped_arm_id(),
-        "temperature": TEMPERATURE,
+        # OpenAI's reasoning models are sent no temperature: they accept only the default.
+        "temperature": None if openai else TEMPERATURE,
         "maxTokens": MAX_TOKENS,
         "corpusChunks": len(pipeline.chunks),
         "commit": _git_commit(),
         "measuredAt": datetime.now(UTC).isoformat(timespec="seconds"),
     }
-    record = load_record(BASELINE_PATH, header)
+    record = load_record(record_path, header)
     done = {c["id"] for c in record["cases"]}
     pending = [c for c in cases if c["id"] not in done]
     order = [c["id"] for c in cases]
 
     print(
         f"Golden set: {describe_cases(cases)} | {len(done)} recorded, {len(pending)} to go | "
-        f"{GROQ_MODEL} on the {header['arm']} arm\n"
+        f"{model} on the {header['arm']} arm\n"
     )
 
-    # Groq's own retries honour its retry-after header, which is what a brief overrun of
-    # the per-minute limit returns.
-    client = Groq(api_key=GROQ_API_KEY, max_retries=6)
-    generate = throttled(
-        groq_generator(client, GROQ_MODEL),
-        tokens_per_minute=TOKENS_PER_MINUTE,
-        token_budget=args.token_budget,
-    )
+    if openai:
+        from openai import OpenAI
+
+        client = OpenAI(api_key=os.environ["OPENAI_CI_API_KEY"], max_retries=6)
+        generate = openai_generator(client, model, args.reasoning_effort)
+    else:
+        from groq import Groq
+
+        # Groq's own retries honour its retry-after header, which is what a brief overrun
+        # of the per-minute limit returns.
+        client = Groq(api_key=GROQ_API_KEY, max_retries=6)
+        generate = throttled(
+            groq_generator(client, GROQ_MODEL),
+            tokens_per_minute=TOKENS_PER_MINUTE,
+            token_budget=args.token_budget,
+        )
 
     def on_case(result: dict) -> None:
         record["cases"].append(result)
-        save_record(BASELINE_PATH, record, order)
+        save_record(record_path, record, order)
         print(
             f"  [{len(record['cases'])}/{len(cases)}] {result['id']}: "
             f"{result['usage']['total_tokens']} tokens ({result['model']})",
@@ -139,7 +190,7 @@ def main() -> int:
         print(f"\nStopped: {exc}\nRerun tomorrow to resume.")
         return 1
 
-    save_record(BASELINE_PATH, record, order)
+    save_record(record_path, record, order)
     print(f"\nRecorded {len(record['cases'])} cases; usage {record['usage']}")
     return 0
 

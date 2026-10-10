@@ -1,0 +1,237 @@
+{
+  "description": "Hand-labelled sentences for validating the Judge (ADR-0007). Each is a sentence the harness judges, taken from a stored answer, labelled against the chunks that answer was written from. Chunk numbers in notes count from 1 in the record's order. See docs/evaluation.md.",
+  "status": "draft",
+  "record": "backend/eval/baselines/groq.json",
+  "labels": {
+    "filler": "States nothing about David: a pleasantry, heading, transition, or a remark about the context.",
+    "supported": "Every claim in it is stated or clearly implied by the chunks, together if not by one.",
+    "contradicted": "A chunk states the opposite of a claim in it, or clearly implies the claim is false.",
+    "says_nothing": "Neither: at least one claim has no basis in the chunks, and none is contradicted."
+  },
+  "sentences": [
+    {
+      "case": "tacom-history",
+      "text": "Yes.",
+      "label": "filler",
+      "compound": false,
+      "note": "Says nothing on its own; the claim it answers is carried by the next sentence."
+    },
+    {
+      "case": "nietzsche-project",
+      "text": "Key technical details",
+      "label": "filler",
+      "compound": false,
+      "note": "A section heading."
+    },
+    {
+      "case": "cloud-platforms",
+      "text": "No other cloud providers are mentioned in the provided context.",
+      "label": "filler",
+      "compound": false,
+      "note": "A remark about the context, not about David. (If read as 'David has used no other cloud providers', chunk 3 (Modal) would make it unsupported.)"
+    },
+    {
+      "case": "employer-current",
+      "text": "David is currently employed as a Lead AI Engineer at Booz Allen Hamilton.",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 4: 'I am a Lead AI Engineer at Booz Allen Hamilton.'"
+    },
+    {
+      "case": "degree-cs",
+      "text": "David holds a Bachelor of Science in Biochemistry, not a computer‑science degree.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: Bachelor of Science in Biochemistry, 'not a programming-focused degree'. Two claims, one a negation."
+    },
+    {
+      "case": "years-experience",
+      "text": "David has been working with AI/ML since 2020, giving him roughly 6 years of experience in the field.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: 'working with AI/ML since 2020'. 'Roughly 6 years' is arithmetic to the present; no chunk states the current year. Call it says_nothing if you read strictly."
+    },
+    {
+      "case": "python-proficiency",
+      "text": "It’s his primary language for AI engineering and data science, and he has been using it for about three years, including strong experience with libraries such as pandas, PyMuPDF, and boto3.",
+      "label": "supported",
+      "compound": true,
+      "note": "Split across chunks: chunk 1 'go-to language for AI engineering and data science ... about 3 years'; chunk 5 'pandas, PyMuPDF, and boto3'. No single chunk supports the whole sentence."
+    },
+    {
+      "case": "certifications",
+      "text": "David holds the following certifications: CompTIA Security+ (Certificate of Completion, June 2025) – a requirement for many defense contracts.",
+      "label": "supported",
+      "compound": true,
+      "note": "Split across chunks: chunk 1 Security+ completed June 2025; chunk 5 'a requirement on defense contracts'."
+    },
+    {
+      "case": "certifications",
+      "text": "David holds the following certifications: Data Scientist with R – DataCamp certificate (July 2020).",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 1: Data Camp, July 2020, 'Data Scientist with R'. Chunk 2 mentions only Security+, which does not contradict it."
+    },
+    {
+      "case": "aws-services",
+      "text": "David has worked with a broad range of AWS services, including: Messaging & Eventing: SQS, SNS, EventBridge (implied in serverless pipelines)",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "SQS and SNS are in chunks 1 and 3; EventBridge appears in no chunk (the answer itself hedges 'implied')."
+    },
+    {
+      "case": "databases",
+      "text": "David has worked with the following databases: Neo4j (currently developing skills with this graph database)",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 2: 'starting to develop skills with graph databases as well, specifically Neo4j'."
+    },
+    {
+      "case": "llm-experience",
+      "text": "He has experience with DoD‑approved LLMs such as Claude 3.5 Sonnet and OpenAI GPT‑4, among others.",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 3: 'DoD-approved Large Language Models (LLMs); Claude 3.5 Sonnet, OpenAI GPT4'. 'Among others' is a slight stretch."
+    },
+    {
+      "case": "llm-providers",
+      "text": "David has worked with the following LLM providers and their models: Anthropic – Claude models",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 1: 'Anthropic's Claude models'. Chunk 2's 'LLM hosted on Groq' is about this chatbot and does not contradict it."
+    },
+    {
+      "case": "groq",
+      "text": "David has used Groq’s API to serve his own models and for low‑latency LLM inference in his full‑stack AI applications.",
+      "label": "supported",
+      "compound": true,
+      "note": "Split across chunks: chunk 1 'used Groq's API to serve a few of my own models'; chunk 2 the chatbot's low-latency inference on Groq; chunk 4 Baby Names text-to-SQL on Groq."
+    },
+    {
+      "case": "iac-devops",
+      "text": "He also designs and maintains CI/CD pipelines with GitHub Actions (and Azure DevOps), integrates Docker, Kubernetes, and other cloud services, and mentors teams on IaC best practices.",
+      "label": "supported",
+      "compound": true,
+      "note": "Split across chunks: chunk 4 CI/CD with GitHub Actions and Azure DevOps; chunk 2 Docker and Kubernetes; chunk 5 mentored team members on IaC best practices."
+    },
+    {
+      "case": "promotions",
+      "text": "I was promoted twice at TAC OM (from GS‑07 to GS‑09 to GS‑11) and have been promoted twice at Booz Allen Hamilton (from Data Scientist II to III to Lead), eventually transitioning to Lead AI Engineer in 2026.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1 states all of it: GS-07 to GS-09 to GS-11 at TACOM, II to III to Lead at Booz Allen, Lead AI Engineer in 2026. First person; 'TAC OM' is a typo."
+    },
+    {
+      "case": "leadership",
+      "text": "I lead the technical development for most of my projects, creating solution architectures, breaking them into components, and delegating work to junior staff.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: leads technical development, creates the solution architecture, breaks it into components, delegates to junior staff."
+    },
+    {
+      "case": "remote-work",
+      "text": "David prefers remote work and is open to a hybrid schedule, but he is not willing to work full‑time on‑site.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: 'I would prefer remote work. I'm open to a hybrid schedule ... I am not open to full-time in office.'"
+    },
+    {
+      "case": "defense-industry",
+      "text": "David has worked exclusively in the defense industry—first as an Army civilian at TACOM and later as a Data Science consultant at Booz Allen Hamilton.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: 'defense industry since college; first as an army civilian at TACOM, and then as a Data Science consultant at Booz Allen'. 'Exclusively' is inferred from 'since college'."
+    },
+    {
+      "case": "vector-search",
+      "text": "In evaluations, plain keyword search consistently outperformed the semantic components for the specific corpus he was using, so the production system was simplified to keyword‑only search, reducing dependencies and container size.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 4: keyword search beat the hybrid pipeline on every metric; production runs keyword search only, 87 to 40 dependencies, 17.2GB to 544MB image."
+    },
+    {
+      "case": "nietzsche-project",
+      "text": "It uses Retrieval‑Augmented Generation (RAG) over the complete corpus of Nietzsche’s 18 works, so every answer can be traced back to the original text with source citations.",
+      "label": "contradicted",
+      "compound": true,
+      "note": "Chunk 4: 'traced back to real text from the 19 works in the corpus'. The answer says 18."
+    },
+    {
+      "case": "nietzsche-project",
+      "text": "Evaluation – Each deployment includes an automated evaluation pipeline that records performance metrics and logs code changes, ensuring responses remain faithful to the source material.",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "No chunk describes an evaluation pipeline in each Nietzsche deployment. Chunk 5 is about the portfolio chatbot's evaluation."
+    },
+    {
+      "case": "music-gpu",
+      "text": "Serverless deployment – I added GPU‑deployment support to the ACE‑Step 1.5 repository, using CRIU‑based GPU memory snapshotting so that a cold‑start GPU can be pre‑warmed instantly and then scaled‑to‑zero when idle.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 2: added serverless GPU deployment support to ACE-Step, CRIU-based GPU memory snapshotting, rapid cold starts, scale-to-zero; chunk 3 names ACE-Step 1.5. 'Pre-warmed instantly' loosely paraphrases 'rapid cold starts'; call it says_nothing if you read strictly."
+    },
+    {
+      "case": "conceptual-microservice-separation",
+      "text": "David builds his full‑stack AI systems as a cleanly decoupled stack: Separate ML inference workers – Heavy models run in isolated containers or serverless GPU workers (e.g., Modal, Groq, or GPU containers on Railway).",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "Modal is in chunks 2 and 5, and chunk 1 has LLM inference on Groq, but Railway hosts the lightweight proxy (chunks 2 and 5): no chunk puts GPU containers on Railway."
+    },
+    {
+      "case": "conceptual-microservice-separation",
+      "text": "David builds his full‑stack AI systems as a cleanly decoupled stack: Containerization & image sizing – Production images are kept lightweight (≈ 550 MB) by splitting heavy ML dependencies into a separate “inference” image, ensuring fast deployments and low latency.",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "Chunk 1: heavy ML dependencies separated so the image stays under 550MB. No chunk mentions a separate 'inference' image or claims fast deployments and low latency from it."
+    },
+    {
+      "case": "conceptual-sql-guardrail-architecture",
+      "text": "The system enforces several safeguards: Resource limits – Execution is sandboxed with a hard 5‑second timeout and a 1 MB memory cap.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: '5-second deadline and 1 MB memory cap'."
+    },
+    {
+      "case": "diamonds-project",
+      "text": "Modeling – Compared a simple linear regression to a random‑forest model.",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 3: 'between a linear model and a random forest was a few lines'."
+    },
+    {
+      "case": "conceptual-technical-leadership-mentorship",
+      "text": "At Booz Allen (Data Scientist, Lead, Jan – Dec 2025) he designed and shipped the trademarked Data ReconnAIssance™ capability, integrated a government‑approved LLM (AWS GovCloud Claude 3.5 Sonnet), managed the GitHub repository, reviewed pull requests and produced a technical roadmap for future growth.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 3 (Data Scientist, Lead, January-December 2025): leads Data ReconnAIssance, integrates AWS GovCloud Claude 3.5 Sonnet, manages the GitHub repository, reviews pull requests, develops the technical roadmap."
+    },
+    {
+      "case": "paraphrase-cemetery-project",
+      "text": "The project was for Arlington National Cemetery, where over 260 k burial records were processed and audited automatically.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: Arlington National Cemetery, over 260k records processed, an automated quality check of their database."
+    },
+    {
+      "case": "stakeholder-comms",
+      "text": "He uses analogies or metaphors to make technical concepts easy to grasp and often supports his narrative with interactive dashboards (e.g., Streamlit, Shiny, Quarto) that visualize the insights.",
+      "label": "supported",
+      "compound": true,
+      "note": "Split across chunks: chunk 1 analogies or metaphors; chunk 3 interactive dashboards (Streamlit, Shiny, Quarto) for non-technical stakeholders."
+    },
+    {
+      "case": "conceptual-forecast-uncertainty-modeling",
+      "text": "These intervals are incorporated into the deployment gate, which requires every published artifact to outperform a naive baseline across a 26‑window back‑test, ensuring that the model’s skill—and its quantified uncertainty—is consistently validated.",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "Chunk 4: the deploy gate requires beating the naive baseline across a 26-window backtest. It scores skill; no chunk says the intervals are part of the gate or validated by it."
+    },
+    {
+      "case": "conceptual-devsecops-defense-standards",
+      "text": "David follows a comprehensive DevSecOps regimen that aligns with DoD Impact‑Level 5 (IL5) and CMMC Level 2 requirements. His key practices include: Continuous monitoring – CloudWatch metrics and alerts track compliance‑related events; findings from scans are tracked and mitigated as part of the release cycle.",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "CloudWatch appears in chunk 1 as part of the serverless backend, and security findings were mitigated, but no chunk says CloudWatch alerts track compliance events."
+    }
+  ]
+}
