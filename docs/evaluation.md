@@ -22,9 +22,20 @@ hiring manager, or technical interviewer would actually ask, spanning employment
 skills, projects, education, and logistics.
 
 **Relevance labels** — each question lists `relevant_phrases`. A retrieved chunk counts as
-relevant if its text contains any of them (case- and whitespace-insensitive). Labelling by
-phrase rather than by chunk ID means the golden set stays valid when the corpus is
-re-chunked or re-indexed, which chunk IDs would not survive.
+relevant if any of them appears in its text beginning at the start of a word (case- and
+whitespace-insensitive). A phrase may end mid-word, so `mentor` matches "mentoring" and
+`rate limit` matches "rate limiting", but `no` does not match "know" and `R:` does not
+match "ER:". Labelling by phrase rather than by chunk ID means the golden set stays valid
+when the corpus is re-chunked or re-indexed, which chunk IDs would not survive.
+
+**Breadth lint** — a phrase that marks a large share of the corpus relevant hands every arm
+a hit whatever it retrieved, so it is a labelling defect rather than a label.
+`test_the_committed_golden_set_has_no_overbroad_phrase` fails when any phrase matches more
+than 15% of corpus chunks (`MAX_PHRASE_SHARE` in `run_eval.py`). The fix is to narrow the
+phrase to what the question and corpus text justify. A phrase that is broad but correct,
+such as the current employer's name, goes on `breadthAllowList` in `golden_set.json` with
+its reason instead. A held-out case's phrases may be repaired only for reasons independent
+of any arm's results, such as this lint, and never with those results in view.
 
 **Arms** — each arm is one retrieval configuration. Arms are defined in
 `backend/eval/publish.py` (`ARM_SPECS`), which owns their identity, both registers of

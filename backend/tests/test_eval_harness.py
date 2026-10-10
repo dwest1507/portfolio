@@ -27,6 +27,7 @@ from run_eval import (
     check_thresholds,
     evaluate_arm,
     is_relevant,
+    overbroad_phrases,
     retrievers_for_arms,
     select_cases,
 )
@@ -260,6 +261,44 @@ class TestWordStartMatching:
         assert is_relevant(
             "time series data (Prognostic and Predictive Maintenance).", ["Predictive Maintenance"]
         )
+
+
+def _corpus(n_matching: int, size: int = 20) -> list[dict]:
+    """A corpus of `size` chunks, the first `n_matching` of which mention FastAPI."""
+    return [
+        {"text": "Built with FastAPI." if i < n_matching else f"Unrelated chunk {i}."}
+        for i in range(size)
+    ]
+
+
+def _case(*phrases: str) -> dict:
+    return {"id": "c", "relevant_phrases": list(phrases)}
+
+
+class TestBreadthLint:
+    """A phrase that marks a large share of the Corpus relevant is a labelling defect, not
+    a label: it hands every arm a hit regardless of what it retrieved."""
+
+    def test_flags_a_phrase_matching_more_than_the_maximum_share(self):
+        flagged = overbroad_phrases(_corpus(4), [_case("FastAPI")], allowed=[])
+        assert [f["phrase"] for f in flagged] == ["FastAPI"]
+
+    def test_a_phrase_at_the_maximum_share_passes(self):
+        assert overbroad_phrases(_corpus(3), [_case("FastAPI")], allowed=[]) == []
+
+    def test_an_allow_listed_phrase_is_not_flagged(self):
+        assert overbroad_phrases(_corpus(20), [_case("FastAPI")], allowed=["fastapi"]) == []
+
+    def test_the_committed_golden_set_has_no_overbroad_phrase(self):
+        """The lint over the real labels and the real Corpus. A failure here means a label
+        is broad enough to make its case a free hit: narrow the phrase to what the question
+        and Corpus text justify, or, if it is broad but correct, allow-list it in
+        golden_set.json with the reason."""
+        from app.rag.pipeline import RAGPipeline
+
+        chunks = RAGPipeline().chunks
+        allowed = list(GOLDEN["breadthAllowList"]["phrases"])
+        assert overbroad_phrases(chunks, CASES, allowed) == []
 
 
 # ---------------------------------------------------------------------------

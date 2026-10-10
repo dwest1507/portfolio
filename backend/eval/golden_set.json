@@ -6,6 +6,13 @@
     "holdoutBelow": "5000000000000000000000000000000000000000000000000000000000000000",
     "holdoutShare": "0.3125 of the hash space (5/16). The 55 founding cases split 33 dev / 22 holdout; the boundary was chosen as the round hash value reproducing that draw exactly, so recording it changed no label."
   },
+  "breadthAllowList": {
+    "description": "Relevant Phrases exempt from the breadth lint. A phrase that marks more than 15% of the Corpus relevant fails the test suite, because it hands every arm a hit whatever it retrieved. A phrase listed here is broad because the Corpus genuinely mentions it everywhere, and it is still the correct answer to the cases that use it. Each entry gives that reason. Allow-listing is not a way to silence the lint: a phrase that is broad because it is generic (`no`, `not`) is repaired, not listed.",
+    "phrases": {
+      "Booz Allen Hamilton": "The current employer's name. Nearly every resume entry and many answers name it, and it is exactly what `employer-current` and `paraphrase-current-firm` ask for.",
+      "FastAPI": "The backend framework of every project write-up. It is the literal answer to `paraphrase-backend-framework` and the strongest evidence for `api-experience`."
+    }
+  },
   "cases": [
     {
       "id": "employer-current",

@@ -151,6 +151,34 @@ def relevant_ids(chunks: list[dict], phrases: list[str]) -> set[int]:
     return {i for i, c in enumerate(chunks) if is_relevant(c["text"], phrases)}
 
 
+# The largest share of the Corpus a single Relevant Phrase may mark relevant. Above it
+# the phrase hands every arm a hit whatever it retrieved, which is a labelling defect
+# rather than a label. A broad phrase that is nonetheless correct (the current
+# employer's name) goes on the allow-list in golden_set.json rather than raising this.
+MAX_PHRASE_SHARE = 0.15
+
+
+def overbroad_phrases(chunks: list[dict], cases: list[dict], allowed: list[str]) -> list[dict]:
+    """Every Relevant Phrase matching more than MAX_PHRASE_SHARE of `chunks`, unless allowed.
+
+    Each finding names the phrase, its share of the Corpus, and the cases that use it.
+    """
+    allowed_normalized = {_normalize(p) for p in allowed}
+    cases_by_phrase: dict[str, list[str]] = {}
+    for case in cases:
+        for phrase in case.get("relevant_phrases", []):
+            cases_by_phrase.setdefault(phrase, []).append(case["id"])
+
+    findings = []
+    for phrase, case_ids in cases_by_phrase.items():
+        if _normalize(phrase) in allowed_normalized:
+            continue
+        share = len(relevant_ids(chunks, [phrase])) / len(chunks)
+        if share > MAX_PHRASE_SHARE:
+            findings.append({"phrase": phrase, "share": share, "cases": case_ids})
+    return findings
+
+
 # ---------------------------------------------------------------------------
 # Golden-set splits
 # ---------------------------------------------------------------------------
