@@ -24,7 +24,9 @@ from run_eval import (
     PUBLISHED_SPLIT,
     THRESHOLDS,
     VALID_CATEGORIES,
+    answerable_cases,
     check_thresholds,
+    describe_cases,
     evaluate_arm,
     is_relevant,
     overbroad_phrases,
@@ -36,6 +38,7 @@ from eval.publish import ARMS, shipped_arm_id
 
 GOLDEN = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
 CASES = GOLDEN["cases"]
+ANSWERABLE = answerable_cases(CASES)
 
 
 def _drawn_into_holdout(case_id: str) -> bool:
@@ -195,19 +198,19 @@ class TestCategories:
         assert len(direct) == 55
         assert 15 <= len(paraphrase) <= 20
         assert 15 <= len(conceptual) <= 20
-        assert len(CASES) == len(direct) + len(paraphrase) + len(conceptual)
+        assert len(ANSWERABLE) == len(direct) + len(paraphrase) + len(conceptual)
 
-    def test_every_case_has_a_valid_category(self):
-        for case in CASES:
+    def test_every_answerable_case_has_a_valid_category(self):
+        for case in ANSWERABLE:
             assert case.get("category") in VALID_CATEGORIES
 
-    def test_every_case_relevant_phrases_match_at_least_one_chunk(self):
+    def test_every_answerable_case_relevant_phrases_match_at_least_one_chunk(self):
         from run_eval import relevant_ids
 
         from app.rag.pipeline import RAGPipeline
 
         pipeline = RAGPipeline()
-        for case in CASES:
+        for case in ANSWERABLE:
             matched = relevant_ids(pipeline.chunks, case["relevant_phrases"])
             assert len(matched) > 0, f"Case {case['id']} matches no chunks in corpus"
 
@@ -358,3 +361,108 @@ class TestEvaluateArm:
 
         # individual case records preserve category
         assert [c["category"] for c in result["cases"]] == ["direct", "paraphrase"]
+
+
+# ---------------------------------------------------------------------------
+# Out-of-Scope Cases
+# ---------------------------------------------------------------------------
+
+
+def _answerable(case_id: str, *phrases: str) -> dict:
+    return {
+        "id": case_id,
+        "split": "dev",
+        "category": "direct",
+        "question": f"question {case_id}",
+        "relevant_phrases": list(phrases),
+    }
+
+
+def _out_of_scope(case_id: str) -> dict:
+    return {
+        "id": case_id,
+        "split": "dev",
+        "answerable": False,
+        "question": f"question {case_id}",
+    }
+
+
+class TestOutOfScopeCases:
+    """A question the Corpus cannot answer has nothing for retrieval to find. It is left
+    out of retrieval scoring on purpose, by its own label — not by the "matches no chunk"
+    error, which must stay loud for a broken label on an answerable case."""
+
+    def _pipeline(self) -> MagicMock:
+        pipeline = MagicMock()
+        pipeline.chunks = [{"text": "Booz Allen Hamilton"}, {"text": "FastAPI backend"}]
+        pipeline.sparse_search.return_value = [0]
+        return pipeline
+
+    def test_an_out_of_scope_case_is_not_scored_for_retrieval(self):
+        pipeline = self._pipeline()
+        cases = [_answerable("employer", "Booz Allen Hamilton"), _out_of_scope("salary")]
+
+        result = evaluate_arm(pipeline, "bm25", cases, top_k=5)
+
+        assert [c["id"] for c in result["cases"]] == ["employer"]
+        assert result["summary"]["hit@5"] == 1.0
+        pipeline.sparse_search.assert_called_once_with("question employer", top_k=5)
+
+    def test_a_broken_label_on_an_answerable_case_still_fails_loudly(self):
+        cases = [_out_of_scope("salary"), _answerable("typo", "Booz Alen Hamilton")]
+
+        with pytest.raises(ValueError, match="'typo' matches no chunk"):
+            evaluate_arm(self._pipeline(), "bm25", cases, top_k=5)
+
+    def test_the_run_summary_counts_out_of_scope_cases_separately(self):
+        """Skipped on purpose is still visible: the summary says how many were skipped."""
+        cases = [_answerable("a", "x"), _answerable("b", "y"), _out_of_scope("salary")]
+        assert describe_cases(cases) == "2 answerable + 1 out-of-scope"
+
+    def test_the_committed_golden_set_has_out_of_scope_cases_in_both_splits(self):
+        """Decline accuracy needs questions to decline. They share the Split rule (checked
+        against the recorded labels above), so some land in each portion."""
+        out_of_scope = [c for c in CASES if c.get("answerable") is False]
+        assert 18 <= len(out_of_scope) <= 22
+        assert {c["split"] for c in out_of_scope} == {"dev", "holdout"}
+        select_cases(CASES, "all")  # every case, of both kinds, is well-formed
+
+
+class TestGoldenCaseValidation:
+    """`select_cases` is where a malformed case is caught, before any arm runs."""
+
+    def test_accepts_the_generation_fields_on_both_kinds_of_case(self):
+        answerable = {
+            **_answerable("employer", "Booz Allen Hamilton"),
+            "answerable": True,
+            "required_facts": ["David works at Booz Allen Hamilton."],
+            "origin": "visitor",
+        }
+        out_of_scope = {**_out_of_scope("salary"), "origin": "authored"}
+
+        assert select_cases([answerable, out_of_scope], "all") == [answerable, out_of_scope]
+
+    def test_an_out_of_scope_case_needs_no_query_category(self):
+        """A Query Category describes how a question's phrasing relates to the Corpus;
+        a question the Corpus cannot answer has no such relationship to describe."""
+        assert select_cases([_out_of_scope("salary")], "dev") == [_out_of_scope("salary")]
+
+    def test_rejects_an_answerable_case_with_no_relevant_phrases(self):
+        """Forgetting `answerable: false` must not turn a case into a silent skip, and
+        forgetting its phrases must not turn it into an Out-of-Scope Case."""
+        with pytest.raises(ValueError, match="no Relevant Phrases: forgot"):
+            select_cases([_answerable("forgot")], "all")
+
+    @pytest.mark.parametrize(
+        "field", [{"relevant_phrases": ["salary"]}, {"required_facts": ["David earns X."]}]
+    )
+    def test_rejects_an_out_of_scope_case_that_carries_labels(self, field):
+        """Labels on a question the Corpus cannot answer contradict the case itself."""
+        with pytest.raises(ValueError, match="Out-of-Scope cases carry labels: salary"):
+            select_cases([{**_out_of_scope("salary"), **field}], "all")
+
+    def test_rejects_an_unknown_case_origin(self):
+        """Visitor-origin results are reported separately, so a misspelt origin would
+        quietly move a case out of that report."""
+        with pytest.raises(ValueError, match="no valid origin: typo"):
+            select_cases([{**_out_of_scope("typo"), "origin": "vistor"}], "all")

@@ -85,6 +85,24 @@ Schema Version 3 documents publish per-category metric breakdowns (`byCategory`)
 aggregate numbers to diagnose lexical versus semantic retrieval performance. See
 [ADR-0005](adr/0005-query-categories-for-rag-evaluation.md).
 
+**Out-of-Scope Cases** — 20 cases (`answerable: false`) ask what a visitor might reasonably
+ask but the corpus cannot answer: salary expectations, languages and tools David has not
+used, hobbies. They exist for the generation eval, where the right answer is a Decline.
+They carry no `relevant_phrases`, `required_facts` or category, and share the same hash
+split rule (14 dev / 6 held-out). The retrieval harness excludes them by that label before
+scoring, so there is nothing to retrieve for them, and reports them in its summary line
+(`Golden set: 87 answerable + 20 out-of-scope questions (all)`). They are not caught by
+the "matches no chunk" error, which stays loud for a broken label on an answerable case.
+`select_cases` rejects an answerable case with no phrases and an Out-of-Scope Case that
+carries labels. Every split count, metric and published `goldenQuestions` in this document
+counts answerable cases only.
+
+**Generation fields** — each case may also carry `answerable` (default `true`),
+`required_facts` (full-sentence statements a correct answer conveys, read by the generation
+harness and populated in a later batch), and `origin` (`authored` or `visitor`, default
+`authored`) so results on real visitor questions can be reported separately. See
+[ADR-0007](adr/0007-generation-evaluation-harness.md).
+
 **Metrics**
 
 - **hit@5** — did *any* relevant chunk make the top 5? This decides whether the LLM can

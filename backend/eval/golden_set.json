@@ -1,5 +1,5 @@
 {
-  "description": "Retrieval ground truth for the portfolio chatbot. Each case is a question a recruiter, hiring manager, or technical interviewer might realistically ask. A retrieved chunk counts as relevant if ANY phrase in `relevant_phrases` appears in its text beginning at the start of a word (case-insensitive, whitespace-normalized; a phrase may end mid-word, so `mentor` matches `mentoring` but `no` does not match `know`). Matching on phrases rather than chunk IDs keeps the labels valid across re-chunking and re-indexing.",
+  "description": "Retrieval ground truth for the portfolio chatbot. Each case is a question a recruiter, hiring manager, or technical interviewer might realistically ask. A retrieved chunk counts as relevant if ANY phrase in `relevant_phrases` appears in its text beginning at the start of a word (case-insensitive, whitespace-normalized; a phrase may end mid-word, so `mentor` matches `mentoring` but `no` does not match `know`). Matching on phrases rather than chunk IDs keeps the labels valid across re-chunking and re-indexing. A case may also carry `answerable` (default true; false marks an Out-of-Scope Case the Corpus cannot answer, which carries no `relevant_phrases`, `required_facts` or `category` and is skipped by the retrieval harness), `required_facts` (full-sentence statements a correct answer conveys, read by the generation harness), and `origin` (`authored` or `visitor`, default `authored`).",
   "splits": {
     "description": "Every case belongs to exactly one split. `dev` is where parameters, weights and stage choices are decided; `holdout` is never looked at while deciding one, so the published numbers are not the numbers something was tuned against. Assignment is deterministic rather than hand-picked — a case is held out when sha256(salt + ':' + id) sorts below `holdoutBelow` — so it can be recomputed and audited, and nobody can move an inconvenient question across the line. The rule is per-case and depends on nothing but the id: adding, removing or reordering questions cannot move a case that already has a split, which is what lets the recorded labels be frozen and the rule be checked at the same time. A rank-based rule (`the first 40% by hash`) could not do both — its cutoff moves with the size of the set, so every addition would reshuffle cases across the boundary and leak held-out questions into `dev`.",
     "salt": "portfolio-golden-split-v1",
@@ -893,6 +893,126 @@
         "Manage two full-time employees, help foster career growth",
         "Lead a team of 4"
       ]
+    },
+    {
+      "id": "oos-salary-expectations",
+      "answerable": false,
+      "split": "dev",
+      "question": "What salary range is David looking for?"
+    },
+    {
+      "id": "oos-contract-rate",
+      "answerable": false,
+      "split": "dev",
+      "question": "What hourly rate does David charge for contract work?"
+    },
+    {
+      "id": "oos-travel",
+      "answerable": false,
+      "split": "dev",
+      "question": "Is David willing to travel for work, and how often?"
+    },
+    {
+      "id": "oos-rust",
+      "answerable": false,
+      "split": "dev",
+      "question": "Has David written any production code in Rust?"
+    },
+    {
+      "id": "oos-java",
+      "answerable": false,
+      "split": "dev",
+      "question": "How many years of Java experience does David have?"
+    },
+    {
+      "id": "oos-mobile-apps",
+      "answerable": false,
+      "split": "dev",
+      "question": "Has David built any mobile apps for iOS or Android?"
+    },
+    {
+      "id": "oos-spark-databricks",
+      "answerable": false,
+      "split": "holdout",
+      "question": "Has David used Spark or Databricks for big data processing?"
+    },
+    {
+      "id": "oos-tableau-power-bi",
+      "answerable": false,
+      "split": "dev",
+      "question": "Can David build dashboards in Tableau or Power BI?"
+    },
+    {
+      "id": "oos-healthcare-data",
+      "answerable": false,
+      "split": "dev",
+      "question": "Has David worked with healthcare data or HIPAA requirements?"
+    },
+    {
+      "id": "oos-blockchain",
+      "answerable": false,
+      "split": "holdout",
+      "question": "Has David worked on any blockchain or crypto projects?"
+    },
+    {
+      "id": "oos-patents",
+      "answerable": false,
+      "split": "holdout",
+      "question": "Does David hold any patents?"
+    },
+    {
+      "id": "oos-conference-talks",
+      "answerable": false,
+      "split": "dev",
+      "question": "Has David spoken at any conferences or meetups?"
+    },
+    {
+      "id": "oos-kaggle",
+      "answerable": false,
+      "split": "dev",
+      "question": "Has David competed in any Kaggle competitions?"
+    },
+    {
+      "id": "oos-ab-testing",
+      "answerable": false,
+      "split": "holdout",
+      "question": "Has David designed or run A/B tests for a product?"
+    },
+    {
+      "id": "oos-spoken-languages",
+      "answerable": false,
+      "split": "dev",
+      "question": "Does David speak any languages other than English?"
+    },
+    {
+      "id": "oos-hobbies",
+      "answerable": false,
+      "split": "holdout",
+      "question": "What does David like to do for fun outside of work?"
+    },
+    {
+      "id": "oos-pmp",
+      "answerable": false,
+      "split": "holdout",
+      "question": "Does David have a PMP certification?"
+    },
+    {
+      "id": "oos-biggest-weakness",
+      "answerable": false,
+      "split": "dev",
+      "question": "What would David say is his biggest weakness?"
+    },
+    {
+      "id": "oos-volunteering",
+      "answerable": false,
+      "split": "dev",
+      "question": "Does David do any volunteer work?"
+    },
+    {
+      "id": "oos-hackathons",
+      "answerable": false,
+      "split": "dev",
+      "question": "Has David won any hackathons?"
     }
   ]
 }

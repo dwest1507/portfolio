@@ -72,6 +72,7 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | Eval arms | Every published arm has a retriever and vice versa; `bm25+rerank` never touches the dense stage |
 | High | Eval gate | The shipped arm is what is gated; a run that gates nothing fails; a single split cannot be gated |
 | High | Golden splits | dev and holdout partition the set, and the recorded split still matches the documented hash rule |
+| High | Out-of-Scope Cases | Excluded from retrieval scoring by their `answerable: false` label and counted in the summary; a broken label on an answerable case still fails; malformed generation fields are rejected |
 | High | Published run | The published document reports the held-out split, and a changed split counts as a new measurement |
 | Medium | `GET /api/health` | Returns 200 `{ "status": "ok" }` |
 
@@ -116,16 +117,18 @@ uv run pytest tests -q \
 ## Retrieval Evaluation
 
 Unit tests check that retrieval code behaves as written; they cannot tell you
-whether retrieval is any *good*. That is measured separately by an 87-question
-golden set scored on hit@5, recall@5, MRR, and nDCG@5, and gated in CI:
+whether retrieval is any *good*. That is measured separately by the 87 answerable
+questions of the golden set scored on hit@5, recall@5, MRR, and nDCG@5, and gated in CI:
 
 ```bash
 make eval        # all arms (downloads ~500MB of models on first run)
 make eval-fast   # BM25 arm only — no model download
 ```
 
-The golden set is split 54 dev / 33 held-out across three query categories (`direct`,
-`paraphrase`, `conceptual`). Decisions are made against `dev`; the
+The answerable cases are split 54 dev / 33 held-out across three query categories
+(`direct`, `paraphrase`, `conceptual`). A further 20 Out-of-Scope Cases, which the corpus
+cannot answer, are skipped by the retrieval harness and kept for the generation eval.
+Decisions are made against `dev`; the
 published table reports `holdout`, so no number on the public page is the score of a
 configuration chosen using those same questions.
 

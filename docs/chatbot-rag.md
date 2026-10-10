@@ -172,7 +172,9 @@ discarded at zero. Rank position is scale-free and has neither problem.
 
 ## Evaluation
 
-Retrieval quality is measured against an 87-question golden set across three query
-categories (`direct`, `paraphrase`, `conceptual`) and gated in CI.
+Retrieval quality is measured against the 87 answerable questions of the golden set across
+three query categories (`direct`, `paraphrase`, `conceptual`) and gated in CI. The golden
+set also holds 20 Out-of-Scope Cases, which retrieval skips and the generation eval scores
+on whether the answer Declines.
 See [docs/evaluation.md](docs/evaluation.md) for how the harness works, the regression
 floors it enforces, and the findings that shaped the pipeline.

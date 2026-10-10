@@ -27,6 +27,10 @@ set valid when the corpus is re-chunked.
 The golden set is split into `dev` and `holdout` portions (see golden_set.json).
 Decide things on `dev`; `holdout` is what gets published, so a published number is
 never a number something was tuned against. `--split` selects which portion runs.
+
+Out-of-Scope Cases (`answerable: false`) are questions the corpus cannot answer. They
+exist for the generation eval and are skipped here by that label, then counted in the
+summary line, rather than tripping the "matches no chunk" error.
 """
 
 from __future__ import annotations
@@ -88,6 +92,10 @@ SPLITS = ("all", "dev", "holdout")
 
 # Query Categories: lexical and conceptual relationship of questions to the Corpus.
 VALID_CATEGORIES = ("direct", "paraphrase", "conceptual")
+
+# Case Origins: whether a case was written by hand or derived from a real visitor's
+# question. A case without one was authored.
+VALID_ORIGINS = ("authored", "visitor")
 
 # The two splits that are not interchangeable, and why each is what it is.
 #
@@ -184,6 +192,28 @@ def overbroad_phrases(chunks: list[dict], cases: list[dict], allowed: list[str])
 # ---------------------------------------------------------------------------
 
 
+def is_answerable(case: dict) -> bool:
+    """False for an Out-of-Scope Case: one the Corpus cannot answer. Defaults to True."""
+    return case.get("answerable", True)
+
+
+def answerable_cases(cases: list[dict]) -> list[dict]:
+    """The cases retrieval is scored on.
+
+    An Out-of-Scope Case has no Relevant Phrases, so there is nothing for retrieval to
+    find; it is scored only on whether the answer Declines (see the generation harness).
+    It is excluded here by its own label rather than by the "matches no chunk" error, so
+    that error still fails loudly when an answerable case's label is broken.
+    """
+    return [c for c in cases if is_answerable(c)]
+
+
+def describe_cases(cases: list[dict]) -> str:
+    """How many cases are scored for retrieval, and how many were skipped as out of scope."""
+    answerable = len(answerable_cases(cases))
+    return f"{answerable} answerable + {len(cases) - answerable} out-of-scope"
+
+
 def select_cases(cases: list[dict], split: str) -> list[dict]:
     """The cases belonging to `split`.
 
@@ -201,11 +231,42 @@ def select_cases(cases: list[dict], split: str) -> list[dict]:
             f"{', '.join(unlabelled)}. Every case belongs to exactly one of dev/holdout."
         )
 
-    unlabelled_category = [c["id"] for c in cases if c.get("category") not in VALID_CATEGORIES]
+    # An Out-of-Scope Case carries no category: a Query Category describes how a
+    # question's phrasing relates to the Corpus, and it has no such relationship.
+    unlabelled_category = [
+        c["id"] for c in answerable_cases(cases) if c.get("category") not in VALID_CATEGORIES
+    ]
     if unlabelled_category:
         raise ValueError(
             "Golden cases carry no valid category: "
             f"{', '.join(unlabelled_category)}. Every case belongs to one of {', '.join(VALID_CATEGORIES)}."
+        )
+
+    unknown_origin = [c["id"] for c in cases if c.get("origin", "authored") not in VALID_ORIGINS]
+    if unknown_origin:
+        raise ValueError(
+            "Golden cases carry no valid origin: "
+            f"{', '.join(unknown_origin)}. Expected one of {', '.join(VALID_ORIGINS)}."
+        )
+
+    unlabelled_phrases = [c["id"] for c in answerable_cases(cases) if not c.get("relevant_phrases")]
+    if unlabelled_phrases:
+        raise ValueError(
+            "Answerable golden cases carry no Relevant Phrases: "
+            f"{', '.join(unlabelled_phrases)}. Label them, or mark a question the Corpus "
+            "cannot answer `answerable: false`."
+        )
+
+    labelled_out_of_scope = [
+        c["id"]
+        for c in cases
+        if not is_answerable(c) and (c.get("relevant_phrases") or c.get("required_facts"))
+    ]
+    if labelled_out_of_scope:
+        raise ValueError(
+            "Out-of-Scope cases carry labels: "
+            f"{', '.join(labelled_out_of_scope)}. A question the Corpus cannot answer has "
+            "no Relevant Phrases or Required Facts."
         )
 
     if split == "all":
@@ -318,7 +379,7 @@ def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
 
     per_case = []
 
-    for case in cases:
+    for case in answerable_cases(cases):
         relevant = relevant_ids(pipeline.chunks, case["relevant_phrases"])
         if not relevant:
             raise ValueError(
@@ -498,7 +559,7 @@ def main() -> int:
     pipeline = build_pipeline()
     print(
         f"Corpus: {len(pipeline.chunks)} chunks | "
-        f"Golden set: {len(cases)} questions ({args.split})\n"
+        f"Golden set: {describe_cases(cases)} questions ({args.split})\n"
     )
 
     results = [evaluate_arm(pipeline, arm, cases, args.top_k) for arm in args.arms]
@@ -558,7 +619,7 @@ def main() -> int:
         document = build_results_document(
             results,
             corpus_chunks=len(pipeline.chunks),
-            golden_questions=len(cases),
+            golden_questions=len(answerable_cases(cases)),
             top_k=args.top_k,
             gating_metric=GATING_METRIC,
             split=args.split,
