@@ -9,6 +9,6 @@ export GROQ_API_KEY="${GROQ_API_KEY:-test_key}"
 export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000}"
 
 echo "==> Pytest"
-uv run pytest tests/ -v
+uv run --frozen pytest tests/ -v
 
 echo "backend-test: OK"

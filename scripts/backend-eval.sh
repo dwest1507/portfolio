@@ -36,8 +36,11 @@ else
 fi
 
 # The gate runs over the whole golden set, where the floors are calibrated.
+# --frozen: measure the committed uv.lock and never rewrite it. A re-lock here left the
+# tree dirty and broke the publish job's `git pull --rebase`; a stale lockfile is
+# caught instead by `uv lock --check` in scripts/backend-lint.sh.
 echo "==> Retrieval eval (arms: ${DESCRIBED}; gating the full golden set)"
-uv run python eval/run_eval.py ${ARM_ARGS[@]+"${ARM_ARGS[@]}"} --check --failures
+uv run --frozen python eval/run_eval.py ${ARM_ARGS[@]+"${ARM_ARGS[@]}"} --check --failures
 
 # Publishing is a SECOND invocation, and not only because an empty array expanded under
 # `set -u` is the bash 3.2 trap documented above. It measures a different sample: the
@@ -46,7 +49,7 @@ uv run python eval/run_eval.py ${ARM_ARGS[@]+"${ARM_ARGS[@]}"} --check --failure
 # and refuses a partial run, so nothing here needs to accumulate flags.
 if [ "${PUBLISH_EVAL:-0}" = "1" ]; then
   echo "==> Retrieval eval (held-out split; publishing results)"
-  uv run python eval/run_eval.py --split holdout --publish
+  uv run --frozen python eval/run_eval.py --split holdout --publish
 fi
 
 echo "backend-eval: OK"

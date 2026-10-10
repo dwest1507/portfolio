@@ -100,8 +100,9 @@ automated versioning and changelog generation.
    `CHANGELOG.md`.
 3. **Merge:** merging that PR creates the git tag and GitHub Release.
 
-Frontend (`frontend/package.json`) and backend (`backend/pyproject.toml`) share one
-synchronized version, tracked in `.release-please-manifest.json`.
+Frontend (`frontend/package.json`) and backend (`backend/pyproject.toml`, plus its entry
+in `backend/uv.lock`) share one synchronized version, tracked in
+`.release-please-manifest.json`.
 
 ---
 

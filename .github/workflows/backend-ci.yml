@@ -26,6 +26,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # Pinned so CI writes and checks the same uv.lock revision as local development; an
+  # unpinned uv can disagree on the lockfile format and fail `uv lock --check` on that
+  # alone. Bump it together with the uv that last wrote backend/uv.lock.
+  UV_VERSION: "0.12.23"
+
 concurrency:
   group: backend-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -41,6 +47,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
@@ -61,6 +68,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
@@ -84,6 +92,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 

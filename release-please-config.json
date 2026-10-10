@@ -6,7 +6,12 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         "frontend/package.json",
-        "backend/pyproject.toml"
+        "backend/pyproject.toml",
+        {
+          "type": "toml",
+          "path": "backend/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='backend')].version"
+        }
       ]
     }
   },

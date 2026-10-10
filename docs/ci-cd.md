@@ -38,7 +38,7 @@ analyses inside `security.yml`. Everything else is script-for-script identical.
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
 | `frontend-ci.yml` | PRs and pushes to `main` touching `frontend/**`; manual dispatch | `scripts/frontend-quality.sh` (ESLint, Prettier, tsc), `frontend-test.sh` (Vitest), `frontend-build.sh` |
-| `backend-ci.yml` | PRs and pushes to `main` touching `backend/**`; manual dispatch | `scripts/backend-lint.sh` (ruff check + format), `backend-test.sh` (pytest, ML models mocked) |
+| `backend-ci.yml` | PRs and pushes to `main` touching `backend/**`; manual dispatch | `scripts/backend-lint.sh` (`uv lock --check`, ruff check + format), `backend-test.sh` (pytest, ML models mocked), `backend-eval.sh` (retrieval gate; publishes the held-out Measured Run on `main`) |
 | `security.yml` | PRs, pushes to `main`, weekly cron | CodeQL (TS + Python), gitleaks secret scan, `scripts/security-audit.sh` (npm audit prod/high+, pip-audit), dependency review on PRs |
 | `lighthouse.yml` | PRs touching `frontend/**` | `scripts/lighthouse.sh` — Lighthouse CI against the production build; asserts ≥ 0.9 on accessibility / best-practices / SEO (performance warns) per `frontend/lighthouserc.json` |
 | `release.yml` | Pushes to `main` | [Release Please](https://github.com/googleapis/release-please) — maintains the release PR, then tags and publishes the GitHub Release when it merges |
@@ -46,6 +46,17 @@ analyses inside `security.yml`. Everything else is script-for-script identical.
 Node is pinned by `frontend/.nvmrc` and read via `node-version-file:` in every
 workflow — CI must resolve `package-lock.json` with the same npm major that generated
 it, or `npm ci` fails on peer dependencies.
+
+uv is pinned the same way, for the same reason: `UV_VERSION` in `backend-ci.yml` (and the
+`setup-uv` step in `security.yml`) matches the uv that last wrote `backend/uv.lock`, so CI
+and local development agree on the lockfile's format `revision`. Bump them together when
+you upgrade uv locally and re-lock.
+
+**The backend lockfile is never modified in CI.** Every backend script runs
+`uv run --frozen`, so a job measures exactly the committed `uv.lock`. A stale lockfile —
+one that no longer matches `pyproject.toml` — fails `uv lock --check` in the lint job on
+the PR that caused it. Before this, `uv run` silently re-locked during the eval, and the
+dirty `uv.lock` broke the publish step's `git pull --rebase` on every push to `main`.
 
 ## Making CI block deploys
 
@@ -80,12 +91,16 @@ release. Merging that PR is what cuts a release:
 
 - bumps the version in `frontend/package.json` and `backend/pyproject.toml`
   (the `# x-release-please-version` comment marks the line release-please rewrites)
+- bumps the `backend` package's own version inside `backend/uv.lock`, so the release PR
+  passes `uv lock --check`. This uses the `toml` extra-file updater with the JSONPath
+  `$.package[?(@.name.value=='backend')].version` — the `.value` is required, because
+  release-please's TOML parser wraps each value; `@.name=='backend'` silently matches nothing
 - writes the entry into `CHANGELOG.md`
 - updates `.release-please-manifest.json`
 - creates the `v<version>` tag and the GitHub Release
 
 Frontend and backend are versioned together as one unit — `release-type: simple` with
-both version files listed under `extra-files`. Commits that aren't conventional
+the version files listed under `extra-files`. Commits that aren't conventional
 (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:`, …) are ignored, so they never appear in
 the changelog and never trigger a bump. To force a specific version, add a
 `Release-As: X.Y.Z` footer to a commit on `main`.
