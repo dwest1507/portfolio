@@ -403,8 +403,8 @@
       "split": "dev",
       "question": "Has David built models that predict equipment failure?",
       "relevant_phrases": [
-        "no",
-        "not"
+        "Predictive Maintenance",
+        "predicts when parts will fail"
       ]
     },
     {
