@@ -125,6 +125,9 @@ I have worked with OpenAI's GPT models, Anthropic's Claude models, Google's Gemi
 **What is David's experience with Groq?**
 I have used Groq's API to serve a few of my own models. I've found it to be a great platform for serving LLMs on a budget.
 
+**Has David worked with decision models?**
+Yes. I'm implementing TypeSafe's Jev, a decision model, as the LLM judge for this portfolio chatbot's generation evaluation. Jev judges whether each statement in the chatbot's answer is supported by the retrieved context, whether the answer conveys the facts a correct answer should, and whether the chatbot declines questions it can't answer. I pin Jev to an exact version, because a judge that changes silently makes evaluation runs incomparable.
+
 **Has David done any fine-tuning of LLMs?**
 Not yet, but it's something I'm interested in learning more about.
 

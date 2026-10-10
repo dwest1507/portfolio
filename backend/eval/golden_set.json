@@ -205,6 +205,8 @@
       "required_facts": [
         "David has used Amazon Bedrock and AWS Textract.",
         "David has used AWS Lambda, SQS, SNS, DynamoDB, and S3.",
+        "David has used AWS EKS.",
+        "David has used AWS EC2.",
         "Most of David's AWS experience is in AWS GovCloud."
       ]
     },
@@ -219,7 +221,8 @@
       ],
       "required_facts": [
         "David has extensive experience with AWS GovCloud.",
-        "David has deployed to environments authorized at Impact Level 5 (IL5)."
+        "David has deployed to environments authorized at Impact Level 5 (IL5).",
+        "David has deployed to environments authorized at Cybersecurity Maturity Model Certification (CMMC) Level 2."
       ]
     },
     {
@@ -276,7 +279,8 @@
       ],
       "required_facts": [
         "David has worked with large language models since 2025.",
-        "David has built applications using LLMs for both personal and professional work."
+        "David has built applications using LLMs for both personal and professional work.",
+        "David uses LLMs to assist with coding."
       ]
     },
     {
@@ -293,7 +297,8 @@
         "David has used OpenAI's GPT models.",
         "David has used Anthropic's Claude models.",
         "David has used Google's Gemini models.",
-        "David has used Meta's Llama models."
+        "David has used Meta's Llama models.",
+        "David has used TypeSafe's Jev models."
       ]
     },
     {
@@ -453,7 +458,7 @@
       ],
       "required_facts": [
         "David mentors junior staff on his projects.",
-        "David has mentored a data analyst intern."
+        "David has mentored interns."
       ]
     },
     {
