@@ -1024,6 +1024,201 @@
       ]
     },
     {
+      "id": "paraphrase-work-authorization",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Would David need visa sponsorship to work for us?",
+      "relevant_phrases": [
+        "US citizen"
+      ],
+      "required_facts": [
+        "David is a US citizen and is authorized to work in the US."
+      ]
+    },
+    {
+      "id": "paraphrase-job-search-motivation",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "What's prompting him to look for a new job right now?",
+      "relevant_phrases": [
+        "3-day in-office work week",
+        "increase my pay"
+      ],
+      "required_facts": [
+        "David is looking for higher pay to offset a planned drop in his household income.",
+        "David is also looking because his current job is mandating a 3-day in-office work week and he wants remote work."
+      ]
+    },
+    {
+      "id": "paraphrase-startup-fit",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Could he keep up at a small, early-stage company where everyone does a bit of everything?",
+      "relevant_phrases": [
+        "feels like startup",
+        "wear mutliple hats"
+      ],
+      "required_facts": [
+        "David has never worked in a startup.",
+        "David says his small local Booz Allen team feels like a startup because it has to sell to local customers and win its own work.",
+        "David works on multiple projects at once and moves between roles such as AI engineer, data scientist, data engineer, and cloud engineer."
+      ]
+    },
+    {
+      "id": "paraphrase-explaining-to-clients",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "How does he explain his work to a client who isn't technical?",
+      "relevant_phrases": [
+        "analogies or metaphors",
+        "value it brings to the customer"
+      ],
+      "required_facts": [
+        "When communicating with non-technical stakeholders, David starts with a clear problem statement and what the solution does to solve it.",
+        "David focuses on why the work matters and the value it brings to the customer.",
+        "David uses analogies or metaphors to explain technical concepts."
+      ]
+    },
+    {
+      "id": "paraphrase-ill-defined-problems",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "How does he get started when the problem he's handed is vague?",
+      "relevant_phrases": [
+        "well-defined problem statement",
+        "minimal solution that I know how to build"
+      ],
+      "required_facts": [
+        "David starts on an open-ended problem by refining it into a well-defined problem statement.",
+        "David defines what success looks like and how it could be measured.",
+        "David starts with a minimal solution he knows how to build and iterates based on what he learns."
+      ]
+    },
+    {
+      "id": "paraphrase-bradley-cost-model",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Did he ever forecast what it would cost to build a combat vehicle?",
+      "relevant_phrases": [
+        "Bradley A4 Acquisition Program Baseline",
+        "cost model that forecasts"
+      ],
+      "required_facts": [
+        "At TACOM, David maintained a self-made Excel cost model forecasting the cost of producing Bradley A4s.",
+        "David's cost model was the basis for the Bradley A4 Acquisition Program Baseline and for President's Budget Request estimates."
+      ]
+    },
+    {
+      "id": "paraphrase-professional-association",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Is he active in any professional groups outside his day job?",
+      "relevant_phrases": [
+        "International Cost Estimating and Analysis Association",
+        "Data Analytics Working Group"
+      ],
+      "required_facts": [
+        "David is Head of the Data Analytics Working Group for the Detroit Chapter of the International Cost Estimating and Analysis Association (ICEAA)."
+      ]
+    },
+    {
+      "id": "paraphrase-nietzsche-follow-ups",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "How does the Nietzsche bot handle follow-up messages that only make sense in light of the earlier conversation?",
+      "relevant_phrases": [
+        "Question condensing",
+        "standalone question"
+      ],
+      "required_facts": [
+        "When there is conversation history, David's Nietzsche chatbot uses an LLM call to rewrite a follow-up into a standalone question.",
+        "David's Nietzsche chatbot uses the rewritten question only for retrieval and responds to the user's original message."
+      ]
+    },
+    {
+      "id": "paraphrase-forecast-growth-cap",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "What stops the baby names forecasts from projecting absurd growth for rare names?",
+      "relevant_phrases": [
+        "Growth capping",
+        "99.9th percentile"
+      ],
+      "required_facts": [
+        "Baby Names Explorer clips forecast log-growth at the empirical 99.9th percentile of historical 5-year moves.",
+        "Baby Names Explorer's growth cap prevents unbounded extrapolation on volatile low-volume names."
+      ]
+    },
+    {
+      "id": "paraphrase-gpu-cold-start",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "What did he do to make the music model boot faster on serverless GPUs?",
+      "relevant_phrases": [
+        "CRIU-based GPU memory snapshotting",
+        "memory snapshotting"
+      ],
+      "required_facts": [
+        "David's open-source ACE-Step deployment on Modal uses CRIU-based GPU memory snapshotting for rapid cold starts."
+      ]
+    },
+    {
+      "id": "paraphrase-diamond-cut-confounding",
+      "category": "paraphrase",
+      "split": "dev",
+      "question": "Why didn't better-cut diamonds look pricier in his data?",
+      "relevant_phrases": [
+        "confounding",
+        "carat swamps the effect"
+      ],
+      "required_facts": [
+        "In David's diamond price analysis, Ideal-cut diamonds showed no obvious price premium over Fair-cut ones when price was plotted against cut alone.",
+        "David explained this as confounding: buyers chasing large stones trade away cut quality, so the poorly cut diamonds were also the biggest.",
+        "David concluded that carat weight swamps the effect of other features until it is controlled for."
+      ]
+    },
+    {
+      "id": "paraphrase-answer-judge",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "What does he use to grade whether the portfolio chatbot's answers are right?",
+      "relevant_phrases": [
+        "TypeSafe's Jev"
+      ],
+      "required_facts": [
+        "David uses TypeSafe's Jev, a decision model, as the LLM judge for his portfolio chatbot's generation evaluation.",
+        "David pins Jev to an exact version so evaluation runs stay comparable."
+      ]
+    },
+    {
+      "id": "paraphrase-local-open-model",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "Is he running any open-weight models himself at work?",
+      "relevant_phrases": [
+        "Ollama and Gemma4"
+      ],
+      "required_facts": [
+        "David is evaluating an open-source LLM approach using Ollama and Gemma4 on his Arlington National Cemetery project.",
+        "In the Arlington National Cemetery project, the Ollama and Gemma4 approach normalizes extracted names into first, middle, and last names."
+      ]
+    },
+    {
+      "id": "paraphrase-names-database-hosting",
+      "category": "paraphrase",
+      "split": "holdout",
+      "question": "Where does the baby names app keep its database, since it isn't in the repo?",
+      "relevant_phrases": [
+        "published build artifact",
+        "Hugging Face Hub"
+      ],
+      "required_facts": [
+        "Baby Names Explorer treats its database as a published build artifact rather than checking it into git.",
+        "At runtime, the Baby Names Explorer backend uses a local copy of the database or downloads it from Hugging Face Hub.",
+        "The Baby Names Explorer backend opens all database connections in read-only mode."
+      ]
+    },
+    {
       "id": "conceptual-model-complexity-tradeoff",
       "category": "conceptual",
       "split": "dev",
@@ -1271,6 +1466,154 @@
         "David has led technical teams, including a team of four on the additive manufacturing automation project.",
         "David designs solution architectures, delegates components to junior staff, and mentors them.",
         "David has managed timelines, client engagements, and task delegation for his teams."
+      ]
+    },
+    {
+      "id": "conceptual-nontraditional-background",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "He studied biochemistry, not computer science. What makes him credible as an AI engineer?",
+      "relevant_phrases": [
+        "I'm a quick learner",
+        "temporary rotation with the Data Science team"
+      ],
+      "required_facts": [
+        "David's degree is a Bachelor of Science in Biochemistry, which is not a programming-focused degree.",
+        "David has worked with AI/ML since 2020, starting with a temporary rotation on the Data Science team at TACOM.",
+        "David considers being a quick learner his greatest strength as an AI engineer, because the field is evolving rapidly."
+      ]
+    },
+    {
+      "id": "conceptual-llm-confidence",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "How does he know when an LLM extraction can be trusted, if the model can't say how sure it is?",
+      "relevant_phrases": [
+        "confidence scores are not reliable",
+        "benchmark LLM extraction accuracy"
+      ],
+      "required_facts": [
+        "David found that LLM-based OCR is more accurate than traditional OCR but its confidence scores are not reliable.",
+        "David trained classification models (logistic regression, random forest, and histogram gradient boosting) on a human-validated dataset to predict the accuracy of LLM extractions.",
+        "David has used TF-IDF and cosine similarity to benchmark LLM extraction accuracy against human-validated ground truth."
+      ]
+    },
+    {
+      "id": "conceptual-data-preparation-share",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "Where does he think most of the effort in a modeling project actually goes?",
+      "relevant_phrases": [
+        "fitting the model is the small part"
+      ],
+      "required_facts": [
+        "David learned from his diamond price project that fitting the model is the small part and most of the work comes before it.",
+        "In the diamond price project, that upstream work meant deciding what a zero-length diamond means, putting the ordinal grades in a consistent order, and choosing which features each model should see.",
+        "David says that ratio of preparation to modeling has held on every project since."
+      ]
+    },
+    {
+      "id": "conceptual-pii-protection",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he keep a chatbot from leaking personal details that are in its source documents?",
+      "relevant_phrases": [
+        "home address and phone number",
+        "deliberately asymmetric"
+      ],
+      "required_facts": [
+        "David's resume, a source document for his chatbot's index, once carried his home address and phone number.",
+        "David strips contact details at the source, redacts them during the index build, and keeps a regression test that fails the build if a phone number or street address appears in the committed index.",
+        "David made the redactor precise and the test guard broad, because a false positive in the redactor silently destroys content while one in the test only fails a build."
+      ]
+    },
+    {
+      "id": "conceptual-evaluation-limits",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "By his own account, where is his chatbot evaluation weakest?",
+      "relevant_phrases": [
+        "favours keyword matching over semantic search",
+        "I'd rather name those gaps"
+      ],
+      "required_facts": [
+        "David says his corpus is small and mostly written as anticipated questions and answers, which favours keyword matching over semantic search.",
+        "David says his relevance labels use exact phrase presence, which is close to what keyword ranking measures.",
+        "David says conclusions from his evaluation apply to his own corpus rather than to retrieval in general.",
+        "David names generation faithfulness, refusal behaviour on out-of-scope questions, and adversarial robustness as gaps his evaluation does not yet cover."
+      ]
+    },
+    {
+      "id": "conceptual-honest-reporting",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "Why does he publish evaluation results even when they make his own design look bad?",
+      "relevant_phrases": [
+        "cannot flatter the architecture",
+        "including the ones that were unflattering"
+      ],
+      "required_facts": [
+        "David's evaluation results are written by CI and committed, and his project page renders them rather than hand-written numbers.",
+        "David generates the verdict sentence from the data so the page cannot flatter the architecture he built.",
+        "David publishes his evaluation results including the unflattering ones."
+      ]
+    },
+    {
+      "id": "conceptual-choosing-a-gate-metric",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "How does he decide which metric should be allowed to block a merge?",
+      "relevant_phrases": [
+        "A metric you cannot set a fair threshold on",
+        "deliberately not gated"
+      ],
+      "required_facts": [
+        "David gates his retrieval evaluation on hit@5 because it determines whether the model can answer at all.",
+        "David reports recall@5 but does not gate on it, because questions with more than five relevant passages cannot reach 1.0.",
+        "David holds that a metric you cannot set a fair threshold on should not be gated."
+      ]
+    },
+    {
+      "id": "conceptual-build-vs-framework",
+      "category": "conceptual",
+      "split": "dev",
+      "question": "When does he skip frameworks and wire the retrieval pieces together himself?",
+      "relevant_phrases": [
+        "abstractions cost more than they save",
+        "from first principles"
+      ],
+      "required_facts": [
+        "In his Nietzsche chatbot, David drives FAISS and BM25 directly rather than through an orchestration framework, because the pipeline is specific enough that a framework's abstractions cost more than they save.",
+        "David built the Nietzsche chatbot's RAG pipeline from first principles, with no managed vector database or off-the-shelf retrieval API."
+      ]
+    },
+    {
+      "id": "conceptual-hiding-gpu-latency",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "How does he keep users from staring at a spinner while a GPU model wakes up and runs?",
+      "relevant_phrases": [
+        "Speculative GPU prewarm",
+        "returns a task ID immediately"
+      ],
+      "required_facts": [
+        "David's AI music app starts warming the serverless GPU on the visitor's first form interaction, hiding 30+ seconds of cold-start latency.",
+        "David's AI music app's GPU worker returns a task ID immediately and the frontend polls for progress, avoiding long-lived blocking HTTP connections."
+      ]
+    },
+    {
+      "id": "conceptual-replacing-a-working-model",
+      "category": "conceptual",
+      "split": "holdout",
+      "question": "What convinced him to throw out a forecasting approach that was already in place?",
+      "relevant_phrases": [
+        "negative skill",
+        "beats the naive baseline"
+      ],
+      "required_facts": [
+        "Rolling-origin backtesting showed David's per-name ARIMA forecasts had negative skill outside the top 1,000 names, worse than a flat-line naive baseline.",
+        "David replaced per-name ARIMA with a pooled LightGBM model trained across every eligible name's history.",
+        "Baby Names Explorer's deploy gate requires every published forecast artifact to beat the naive baseline across a 26-window backtest."
       ]
     },
     {

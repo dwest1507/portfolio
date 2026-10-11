@@ -179,7 +179,7 @@ discarded at zero. Rank position is scale-free and has neither problem.
 
 ## Evaluation
 
-Retrieval quality is measured against the 87 answerable questions of the golden set across
+Retrieval quality is measured against the 111 answerable questions of the golden set across
 three query categories (`direct`, `paraphrase`, `conceptual`) and gated in CI. The golden
 set also holds 20 Out-of-Scope Cases, which retrieval skips and the generation eval scores
 on whether the answer Declines.

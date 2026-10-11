@@ -185,22 +185,23 @@ class TestCategories:
         direct_cases = [c for c in CASES if c.get("category") == "direct"]
         assert len(direct_cases) == 55
 
-    def test_paraphrase_batch_is_present(self):
+    # Paraphrase and conceptual cases grow toward ~50 each in reviewed batches, because
+    # only questions Arms disagree on can tell them apart (ADR-0005, 2026-10-09
+    # amendment). Floors, not ranges: a batch adds cases and none silently disappear.
+    def test_paraphrase_batches_are_present(self):
         paraphrase_cases = [c for c in CASES if c.get("category") == "paraphrase"]
-        assert 15 <= len(paraphrase_cases) <= 20
+        assert len(paraphrase_cases) >= 30
 
-    def test_conceptual_batch_is_present(self):
+    def test_conceptual_batches_are_present(self):
         conceptual_cases = [c for c in CASES if c.get("category") == "conceptual"]
-        assert 15 <= len(conceptual_cases) <= 20
+        assert len(conceptual_cases) >= 26
 
-    def test_categories_have_balanced_representation(self):
+    def test_every_answerable_case_is_in_exactly_one_category(self):
         direct = [c for c in CASES if c.get("category") == "direct"]
         paraphrase = [c for c in CASES if c.get("category") == "paraphrase"]
         conceptual = [c for c in CASES if c.get("category") == "conceptual"]
 
         assert len(direct) == 55
-        assert 15 <= len(paraphrase) <= 20
-        assert 15 <= len(conceptual) <= 20
         assert len(ANSWERABLE) == len(direct) + len(paraphrase) + len(conceptual)
 
     def test_every_answerable_case_has_a_valid_category(self):
@@ -216,6 +217,35 @@ class TestCategories:
         for case in ANSWERABLE:
             matched = relevant_ids(pipeline.chunks, case["relevant_phrases"])
             assert len(matched) > 0, f"Case {case['id']} matches no chunks in corpus"
+
+    def test_no_two_hard_cases_hinge_on_the_same_chunks(self):
+        """Ten questions about one chunk are one sample, not ten (ADR-0005, 2026-10-09
+        amendment). Two paraphrase or conceptual cases whose phrases mark exactly the
+        same chunks relevant are hit or missed together by every arm, so the second adds
+        a question without adding a disagreement the comparison can count."""
+        from collections import defaultdict
+
+        from run_eval import relevant_ids
+
+        from app.rag.pipeline import RAGPipeline
+
+        # A known collision that predates this check, left for a label repair rather than
+        # fixed here: `serverless-scaling-patterns` is held out, and its bare `Modal`
+        # phrase covers every chunk its other phrases match (`serverless reverse proxy`
+        # matches none), so it is effectively labelled the same as `music-gpu-infra`.
+        known_collisions = [
+            ["paraphrase-music-gpu-infra", "conceptual-serverless-scaling-patterns"]
+        ]
+
+        chunks = RAGPipeline().chunks
+        by_chunks = defaultdict(list)
+        for case in ANSWERABLE:
+            if case["category"] in ("paraphrase", "conceptual"):
+                by_chunks[frozenset(relevant_ids(chunks, case["relevant_phrases"]))].append(
+                    case["id"]
+                )
+        collisions = [ids for ids in by_chunks.values() if len(ids) > 1]
+        assert [ids for ids in collisions if ids not in known_collisions] == []
 
     def test_an_unlabelled_case_category_is_an_error(self):
         with pytest.raises(ValueError, match="no valid category"):

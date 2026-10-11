@@ -126,7 +126,7 @@ uv run pytest tests -q \
 ## Retrieval Evaluation
 
 Unit tests check that retrieval code behaves as written; they cannot tell you
-whether retrieval is any *good*. That is measured separately by the 87 answerable
+whether retrieval is any *good*. That is measured separately by the 111 answerable
 questions of the golden set scored on hit@5, recall@5, MRR, and nDCG@5, and gated in CI:
 
 ```bash
@@ -134,7 +134,7 @@ make eval        # all arms (downloads ~500MB of models on first run)
 make eval-fast   # BM25 arm only — no model download
 ```
 
-The answerable cases are split 54 dev / 33 held-out across three query categories
+The answerable cases are split 68 dev / 43 held-out across three query categories
 (`direct`, `paraphrase`, `conceptual`). A further 20 Out-of-Scope Cases, which the corpus
 cannot answer, are skipped by the retrieval harness and kept for the generation eval.
 Decisions are made against `dev`; the

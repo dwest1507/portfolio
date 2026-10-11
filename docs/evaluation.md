@@ -72,20 +72,27 @@ check meant to prevent exactly that. The boundary in the file (`0x5…`, 5/16 of
 space) is the round value that reproduces the original 33/22 draw exactly, so recording it
 moved no question.
 
-The trade is sample size. 33 questions move hit@5 in steps of about 0.030, so the
-published numbers are coarser than a run over all 87 would be. That is the price of them
+The trade is sample size. 43 questions move hit@5 in steps of about 0.023, so the
+published numbers are coarser than a run over all 111 would be. That is the price of them
 measuring something rather than scoring the winner of their own selection.
 
 **Query categories** — cases are classified by their lexical and conceptual relationship to
 the corpus into `direct` (in-vocabulary questions matching corpus wording), `paraphrase`
-(out-of-vocabulary factual questions deliberately avoiding corpus keywords), and `conceptual`
+(factual questions asked in words other than the corpus's own), and `conceptual`
 (thematic or cross-project synthesis queries). The 55 founding cases are all `direct`,
-complemented by 16 `paraphrase` and 16 `conceptual` questions.
+complemented by 30 `paraphrase` and 26 `conceptual` questions. Only questions Arms disagree
+on can tell them apart, and those are almost all paraphrase and conceptual, so these two
+categories grow toward ~50 each in reviewed batches while `direct` grows only to cover new
+corpus content. Since the 2026-10-09 amendment to ADR-0005, new cases are phrased as a
+recruiter or engineer would actually ask rather than by avoiding corpus keywords, are
+written without any Arm's results in view, and each targets a different part of the corpus:
+a test fails if two paraphrase or conceptual cases mark exactly the same chunks relevant,
+since every Arm would hit or miss them together.
 Schema Version 3 documents publish per-category metric breakdowns (`byCategory`) alongside
 aggregate numbers to diagnose lexical versus semantic retrieval performance. See
 [ADR-0005](adr/0005-query-categories-for-rag-evaluation.md).
 
-**Noise-aware verdict** — a gap of one or two questions out of 33 is sampling noise, so the
+**Noise-aware verdict** — a gap of one or two questions out of 43 is sampling noise, so the
 Verdict Line no longer names whichever arm scores highest. Each arm is compared with the
 shipped arm on the gating metric, question by question: `won` counts the questions only
 that arm hit, `lost` the questions only the shipped arm hit, and questions both hit or both
@@ -121,7 +128,7 @@ used, hobbies. They exist for the generation eval, where the right answer is a D
 They carry no `relevant_phrases`, `required_facts` or category, and share the same hash
 split rule (14 dev / 6 held-out). The retrieval harness excludes them by that label before
 scoring, so there is nothing to retrieve for them, and reports them in its summary line
-(`Golden set: 87 answerable + 20 out-of-scope questions (all)`). They are not caught by
+(`Golden set: 111 answerable + 20 out-of-scope questions (all)`). They are not caught by
 the "matches no chunk" error, which stays loud for a broken label on an answerable case.
 `select_cases` rejects an answerable case with no phrases and an Out-of-Scope Case that
 carries labels. Every split count, metric and published `goldenQuestions` in this document
@@ -225,8 +232,8 @@ alternatives.
 push to main
    │
    └─ Backend CI · Retrieval eval
-        ├─ run_eval.py --check              (all 87 questions — the gate)
-        ├─ run_eval.py --split holdout --publish   (the 33 held-out — the report)
+        ├─ run_eval.py --check              (all 111 questions — the gate)
+        ├─ run_eval.py --split holdout --publish   (the 43 held-out — the report)
         │    ├─ writes frontend/data/evalResults.json
         │    └─ rewrites the marked block above
         └─ commits both back to main
