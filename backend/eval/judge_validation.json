@@ -1,6 +1,6 @@
 {
   "description": "Hand-labelled sentences for validating the Judge (ADR-0007). Each is a sentence the harness judges, taken from a stored answer, labelled against the chunks that answer was written from. Chunk numbers in notes count from 1 in the record's order. See docs/evaluation.md.",
-  "status": "draft",
+  "status": "reviewed",
   "record": "backend/eval/baselines/groq.json",
   "labels": {
     "filler": "States nothing about David: a pleasantry, heading, transition, or a remark about the context.",
@@ -91,7 +91,7 @@
       "text": "He has experience with DoD‑approved LLMs such as Claude 3.5 Sonnet and OpenAI GPT‑4, among others.",
       "label": "supported",
       "compound": false,
-      "note": "Chunk 3: 'DoD-approved Large Language Models (LLMs); Claude 3.5 Sonnet, OpenAI GPT4'. 'Among others' is a slight stretch."
+      "note": "Chunk 3: 'DoD-approved Large Language Models (LLMs); Claude 3.5 Sonnet, OpenAI GPT4'."
     },
     {
       "case": "llm-providers",
