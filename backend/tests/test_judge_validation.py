@@ -12,10 +12,12 @@ import json
 from eval.generation import split_sentences
 from eval.run_generation import BASELINE_PATH
 from eval.validate_judge import (
+    FINAL_RUNS,
     HAND_LABELS,
     VALIDATION_PATH,
     compare,
     load_validation_set,
+    median_of,
     missed_bar,
 )
 from tests.test_generation_harness import FakeJudge
@@ -239,6 +241,22 @@ def test_each_share_below_the_bar_is_named():
     report = report_with(heldOutUnsupportedCaught=9 / 12, supportedKept=19 / 22)
 
     assert missed_bar(report) == ["heldOutUnsupportedCaught", "supportedKept"]
+
+
+def test_the_final_measurement_checks_the_bar_against_the_median_of_its_runs():
+    """Splits and Jev's borderline judgments vary, so one run could pass or fail on noise."""
+    runs = [
+        report_with(supportedKept=19 / 22, heldOutUnsupportedCaught=12 / 12),
+        report_with(supportedKept=22 / 22, heldOutUnsupportedCaught=9 / 12),
+        report_with(supportedKept=20 / 22, heldOutUnsupportedCaught=10 / 12),
+    ]
+
+    median = median_of(runs)
+
+    assert median["supportedKept"] == 20 / 22
+    assert median["heldOutUnsupportedCaught"] == 10 / 12
+    assert missed_bar(median) == []
+    assert FINAL_RUNS == 3
 
 
 def test_a_run_without_held_out_sentences_cannot_meet_the_bar():

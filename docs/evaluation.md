@@ -613,8 +613,11 @@ several together, are marked `"acrossChunks": true`.
 
 ### The pass bar
 
-David set this bar before the final run. Faithfulness may gate (#71) only once a
-`--final` run meets every line:
+David set this bar before the final run. Faithfulness may gate (#71) only once the
+final measurement meets every line. The final measurement is three `--final` runs, each
+line checked against the median of the three. Claim splits and Jev's borderline judgments
+vary from run to run, so one run could pass or fail on noise. David chose this protocol
+before the final run too.
 
 | Measure | Bar | Over |
 |---|---|---|
@@ -629,8 +632,8 @@ means 10 caught: the fewest that shows, at 95% confidence (Wilson interval), tha
 catches more than half of unsupported sentences. The two "kept" lines guard against the
 easy fix of calling more sentences unsupported. The across-chunks line covers the
 sentences a strict `supports`, asked one chunk at a time, would fail. Contradictions
-are reported but have no bar, since they are not gated. `--final` prints each measure
-against its bar and exits non-zero if any is missed.
+are reported but have no bar, since they are not gated. `--final` prints each measure for
+each run and its median against the bar, and exits non-zero if any median misses.
 
 ### Result: Jev is not yet fit to gate Faithfulness
 

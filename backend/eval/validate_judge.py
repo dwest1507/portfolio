@@ -8,7 +8,8 @@ whether the sentence makes one claim or several:
     uv run --frozen python eval/validate_judge.py --output validation-run.json
 
 Held-out sentences are left out, so tuning the Judge's questions never sees Jev's
-judgments of them. The final measurement judges them too, and checks the pass bar:
+judgments of them. The final measurement judges them too, three times, and checks the
+pass bar against the median:
 
     uv run --frozen python eval/validate_judge.py --final --output validation-run.json
 
@@ -22,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import statistics
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -143,6 +145,21 @@ PASS_BAR = {
 }
 
 
+#: The final measurement runs this many times and checks the bar against the median of
+#: each measure, as David decided (#81): splits and Jev's borderline judgments vary from
+#: run to run, so one run could pass or fail on noise. Three, as in the spread study.
+FINAL_RUNS = 3
+
+
+def median_of(reports: list[dict]) -> dict:
+    """Each measure of the bar, as its median over `reports`; None if any run lacks it."""
+    medians = {}
+    for measure in PASS_BAR:
+        values = [report[measure] for report in reports]
+        medians[measure] = None if None in values else statistics.median(values)
+    return medians
+
+
 def missed_bar(report: dict) -> list[str]:
     """The measures in `report` below the bar. A measure with no sentences misses it."""
     return [
@@ -198,13 +215,49 @@ def main() -> int:
     load_dotenv(BACKEND_ROOT / ".env")
     splitter = OpenAISplitter(OpenAI(api_key=os.environ["OPENAI_CI_API_KEY"], max_retries=6))
     judge = JevJudge(os.environ["JEV_API_KEY"], splitter)
-    report = compare(load_validation_set(held_out=args.final), judge)
+    items = load_validation_set(held_out=args.final)
 
     scope = "with" if args.final else "without"
     print(
         f"Judge: {judge.model}, claims split by {splitter.model} | "
-        f"{report['sentences']} {status} hand labels, {scope} held-out\n"
+        f"{len(items)} {status} hand labels, {scope} held-out\n"
     )
+    reports = []
+    for run in range(FINAL_RUNS if args.final else 1):
+        if args.final:
+            print(f"Run {run + 1} of {FINAL_RUNS}")
+        reports.append(compare(items, judge))
+        print_report(reports[-1])
+    print(f"\nJudge usage: {judge.usage}")
+    print(f"Splitter usage: {splitter.usage}")
+
+    median = median_of(reports) if args.final else None
+    if median is not None:
+        print("\nPass bar, against the median of the runs:")
+        for measure, bar in PASS_BAR.items():
+            runs = "  ".join(shown(report[measure]) for report in reports)
+            print(f"  {measure:<26} runs {runs}  median {shown(median[measure])}  (bar {bar:.0%})")
+    if args.output:
+        document = {
+            "judge": judge.model,
+            "splitter": splitter.model,
+            "labels": status,
+            "commit": _git_commit(),
+            "judgedAt": datetime.now(UTC).isoformat(timespec="seconds"),
+            **({"runs": reports, "median": median} if args.final else reports[0]),
+        }
+        args.output.write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        print(f"Wrote {args.output}")
+    if median is not None:
+        missed = missed_bar(median)
+        print(f"\n{'FAIL — below the bar: ' + ', '.join(missed) if missed else 'PASS'}")
+        return 1 if missed else 0
+    return 0
+
+
+def print_report(report: dict) -> None:
     print(f"  Faithfulness agreement   {report['faithfulnessAgreement']:.3f}")
     print(f"  Contradiction agreement  {report['contradictionAgreement']:.3f}")
     for group in ("compound", "single"):
@@ -219,32 +272,11 @@ def main() -> int:
         for claim in d["claims"] or []:
             mark = "supported" if claim["supported"] else "unsupported"
             print(f"      {mark:<11} {claim['claim']}  {claim['relations']}")
-    if args.final:
-        print("\nPass bar:")
-        for measure, bar in PASS_BAR.items():
-            value = report[measure]
-            shown = "none" if value is None else f"{value:.3f}"
-            print(f"  {measure:<26} {shown:>6}  (bar {bar:.0%})")
-    print(f"\nJudge usage: {judge.usage}")
-    print(f"Splitter usage: {splitter.usage}")
-    if args.output:
-        document = {
-            "judge": judge.model,
-            "splitter": splitter.model,
-            "labels": status,
-            "commit": _git_commit(),
-            "judgedAt": datetime.now(UTC).isoformat(timespec="seconds"),
-            **report,
-        }
-        args.output.write_text(
-            json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-        )
-        print(f"Wrote {args.output}")
-    if args.final:
-        missed = missed_bar(report)
-        print(f"\n{'FAIL — below the bar: ' + ', '.join(missed) if missed else 'PASS'}")
-        return 1 if missed else 0
-    return 0
+    print()
+
+
+def shown(value: float | None) -> str:
+    return "none" if value is None else f"{value:.3f}"
 
 
 if __name__ == "__main__":
