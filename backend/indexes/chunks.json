@@ -348,7 +348,7 @@
     "source": "qa"
   },
   {
-    "text": "Has David done evaluation work on AI systems?\nYes — the chatbot you're talking to is the example I'd point at. I built a retrieval evaluation suite for it: a golden set of labelled questions split into development and held-out portions, five retrieval configurations scored against identical labels, and a CI gate that fails the build if retrieval quality regresses. The results are published on the portfolio project page, including the ones that were unflattering. The evaluation is also what chose the configuration that ships.",
+    "text": "Has David done evaluation work on AI systems?\nYes — the chatbot you're talking to is the example I'd point at. I built a retrieval evaluation suite for it: a golden set of labelled questions split into development and held-out portions, a mix of shippable and baseline-only retrieval configurations scored against identical labels, and a CI gate that fails the build if retrieval quality regresses. The results are published on the portfolio project page, including the ones that were unflattering. The evaluation is also what chose the configuration that ships.",
     "source": "qa"
   },
   {
