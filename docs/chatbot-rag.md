@@ -149,6 +149,12 @@ question still counts when the model call fails. A request turned away by the da
 not logged: nothing was retrieved for it, and a record would count as an Empty Context.
 `backend/app/visitor_log.py` writes it; the chat tests pin its contents.
 
+**Production runs uvicorn with `--no-access-log`** (the `CMD` in `backend/Dockerfile`).
+Uvicorn's access log prints a `POST /api/chat` line with the client's address right after
+each `visitor_query` line, which would link a logged question to an IP despite the record
+itself carrying none. Errors and startup messages are still logged. `make dev-backend`
+keeps the access log; nothing local is collected.
+
 ### Empty Context rate
 
 The share of logged questions with `chunks_retrieved` of 0: production's Empty Context
@@ -164,7 +170,7 @@ grep -o '{"event": "visitor_query".*}' visitor-log.txt \
 ```
 
 `grep -o` pulls the record out of any prefix the log viewer adds (a timestamp, a level)
-and drops everything else, uvicorn's access lines included. Railway keeps logs only for its
+and drops everything else. Railway keeps logs only for its
 plan's retention window, so export them before they age out if a longer period is wanted.
 
 ### Promoting a logged question into the Golden Set

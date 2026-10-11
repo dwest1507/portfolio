@@ -76,7 +76,9 @@ Do the backend first: the frontend needs the backend's URL.
      `backend/Dockerfile`; if Railway reports it can't find it, try `backend/Dockerfile`
      instead (the field's base directory has changed across Railway versions).
    - Leave build and start commands empty — the Dockerfile's `CMD` starts uvicorn
-     on `$PORT`.
+     on `$PORT` with `--no-access-log`. A custom start command here would replace it and,
+     unless it keeps that flag, put client IPs back next to the visitor query log
+     ([ADR-0010](adr/0010-visitor-queries-logged-with-notice.md)).
    - **Set the healthcheck timeout explicitly.** It is generous rather than necessary
      now — the image carries no model weights, so first boot only reads a pickled BM25
      index — but a short default timeout is still the most likely cause of a deploy

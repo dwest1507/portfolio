@@ -21,3 +21,11 @@ visitor text enters the repository unreviewed.
 
 - **No logging; hand-write colloquial cases** — rejected as the only source: it is still a
   guess at what visitors type. It remains the source until logs accumulate.
+
+## Amendment (2026-10-11): no access log in production
+
+"No IP address" has to hold for the service logs as a whole, not just the record. Uvicorn's
+access log wrote a `POST /api/chat` line with the client's address immediately after each
+`visitor_query` line, so the two could be paired by order and timestamp. Production now
+starts uvicorn with `--no-access-log` (`backend/Dockerfile`); errors and startup messages
+are still logged. Local development keeps the access log, since nothing local is collected.
