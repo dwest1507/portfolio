@@ -573,10 +573,72 @@ cd backend
 uv run --frozen python eval/validate_judge.py --output validation-run.json
 ```
 
-The labels are drafts, written before any of Jev's judgments of these sentences were
-looked at, and are being reviewed by David. Until the file's `status` is `reviewed`, the
-CLI refuses to measure against them (`--draft` overrides). The agreement rate is recorded
-here once they are reviewed.
+The labels were drafted before any of Jev's judgments of these sentences were looked at,
+then reviewed by David. The CLI refuses to measure against labels whose `status` is not
+`reviewed` (`--draft` overrides).
+
+### Result: Jev is not yet fit to gate Faithfulness
+
+Measured 2026-10-10 with `jev-1.13.0` at `14ba262`:
+
+| | Agreement |
+|---|---|
+| Faithfulness | **0.750** (24 of 32) |
+| Contradictions | 0.906 (29 of 32) |
+
+The headline rate hides where the errors fall. Jev's Faithfulness verdict against the
+hand labels:
+
+| Hand label | Jev: filler | Jev: supported | Jev: unsupported |
+|---|---|---|---|
+| filler (3) | 3 | 0 | 0 |
+| supported (22) | 1 | 21 | 0 |
+| unsupported (7: 6 says nothing, 1 contradicted) | 3 | **4** | **0** |
+
+Jev agrees on nearly every supported and filler sentence, and calls **none** of the seven
+unsupported sentences unsupported. Each error makes Faithfulness look better than it is,
+so a Faithfulness gate built on it would not fire when answers start inventing things.
+(If Jev caught half of unsupported sentences, seeing 0 of 7 would happen less than 1% of
+the time, so 32 sentences are enough to show this.) The 8 Faithfulness disagreements
+have two causes:
+
+1. **Factual sentences dropped as filler (4).** "It uses RAG over the complete corpus of
+   Nietzsche's 18 works…", "Each deployment includes an automated evaluation pipeline…",
+   "The system enforces several safeguards: … a hard 5-second timeout…", "These intervals
+   are incorporated into the deployment gate…". Each states a fact about a project or
+   system without naming David, and the filler question asks about "a fact about
+   David". A dropped sentence is never checked against a chunk. This hid the set's one
+   real contradiction (18 works, where the chunk says 19). This is a wording problem in
+   `FACTUAL_QUESTION`, not a compound-sentence problem.
+2. **Partly supported sentences judged supported (4).** "SQS, SNS, EventBridge", "Modal,
+   Groq, or GPU containers on Railway", the separate "inference" image, and "CloudWatch
+   alerts track compliance-related events". In each, a chunk supports part of the
+   sentence, and Jev calls the whole sentence supported. All four are compound.
+
+**Do disagreements cluster on compound sentences?** All 8 Faithfulness disagreements are
+on compound sentences (8 of 23, against 0 of 9 single). The comparison is confounded,
+though: every unsupported sentence in the set is compound, and the four filler errors
+have nothing to do with how many claims a sentence makes. The four partly supported
+sentences are the real compound-sentence failure. They count as a reason to revisit LLM
+claim splitting (ADR-0007), for this reason. Asking "supports" strictly (every part)
+would fix them, but it would also fail the sentences whose claims are each supported by
+a different chunk. Jev now judges all five of those correctly as supported, so the current
+leniency may be what gets them right. Only splitting a sentence into claims, each checked
+against every chunk, handles both.
+
+**Contradictions.** Jev listed two that aren't there, the same two seen when the Groq
+baseline was first judged. A chunk naming a *different* item of the same kind is taken
+to contradict: a Security+-only list "contradicts" the DataCamp certificate, and the
+chatbot's "hosted on Groq" "contradicts" David having used Claude. It missed the one real
+contradiction because it dropped that sentence as filler. Contradictions are not gated.
+
+**What follows.** Faithfulness should not gate (#71) until Jev's questions are fixed
+and revalidated against these labels: the filler question widened to facts about
+David's projects and systems; `contradicts` limited to incompatible statements about the
+same thing; and the partly supported failure fixed by a stricter `supports` criterion or
+by claim splitting. Changing a Judge question is a new measurement, so the run-to-run
+spread below is rerun after any of these. Decline accuracy uses a separate judgment that
+this set does not test.
 
 ## Run-to-run spread
 
@@ -621,7 +683,10 @@ changing verdict. Derived from the end-to-end runs, which include the Judge's no
 | Faithfulness Floor | **0.96** | 0.992 − max(2 × 0.000, 0.02) = 0.972, rounded down to 0.96 |
 | Decline accuracy Floor | **0.92** | 0.944 − max(2 × 0.009, 0.02) = 0.924, rounded down to 0.92 |
 
-The Judge-only runs give the same three numbers. On full-set ranges this small, the
+The Judge-only runs give the same three numbers. These Floors were measured with Judge
+questions that [validation](#result-jev-is-not-yet-fit-to-gate-faithfulness) found blind
+to unsupported sentences. They stand only until those questions change, at which point
+the study is rerun. On full-set ranges this small, the
 one-step minimum headroom sets both Floors. A change to the Judge's questions, the
 generation model or its reasoning effort is a new measurement, and the study is rerun:
 
@@ -641,6 +706,6 @@ tokens; judging one costs Jev ~590k input tokens.
 ## Not yet measured
 
 Retrieval quality is only half of a RAG system's behaviour. Generation can now be
-judged, but nothing published or gated relies on it yet. Still open: the Judge's
-agreement with the reviewed hand labels, the generation gate and published results, and
-adversarial/prompt-injection robustness.
+judged, but nothing published or gated relies on it yet. Still open: fixing the Judge's
+questions that validation found blind to unsupported sentences, then the generation gate
+and published results, and adversarial/prompt-injection robustness.
