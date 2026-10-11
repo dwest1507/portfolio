@@ -20,6 +20,13 @@ spread of the generation metrics is measured: three records of one commit, each 
 with judge_generation.py (ADR-0007). Needs OPENAI_CI_API_KEY:
 
     uv run --frozen python eval/run_generation.py --provider openai --record runs/luna-1.json
+
+With `--contexts` it answers from the chunks a stored record's model was shown instead of
+retrieving: comparing OpenAI candidates with the Groq baseline this way compares the
+models alone, whatever retrieval over today's Corpus would return (ADR-0008):
+
+    uv run --frozen python eval/run_generation.py --provider openai --model gpt-6.1-sol \
+        --contexts eval/baselines/groq.json --record runs/sol.json
 """
 
 from __future__ import annotations
@@ -39,6 +46,7 @@ from eval.generation import (  # (needs the sys.path line above)
     groq_generator,
     openai_generator,
     run_generation,
+    stored_contexts,
     throttled,
     total_usage,
 )
@@ -69,6 +77,7 @@ MEASURED = (
     "temperature",
     "maxTokens",
     "corpusChunks",
+    "contexts",
 )
 
 
@@ -96,6 +105,13 @@ def save_record(path: Path, record: dict, order: list[str]) -> None:
     path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def repo_path(path: Path) -> str:
+    """`path` relative to the repository when it is inside it, as a committed record is."""
+    path = path.resolve()
+    root = BACKEND_ROOT.parent
+    return str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -116,6 +132,11 @@ def main() -> int:
         type=Path,
         help="Where to write the record (default: the Groq baseline; required for OpenAI).",
     )
+    parser.add_argument(
+        "--contexts",
+        type=Path,
+        help="Answer from the chunks this stored record holds, instead of retrieving.",
+    )
     args = parser.parse_args()
     if args.provider == "openai" and args.record is None:
         parser.error("--provider openai needs --record: the Groq baseline is not to be replaced.")
@@ -127,7 +148,15 @@ def main() -> int:
 
     golden = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
     cases = select_cases(golden["cases"], "all")
-    pipeline = RAGPipeline()
+    if args.contexts:
+        # The Arm and Corpus are the ones the stored contexts were retrieved with.
+        contexts = json.loads(args.contexts.read_text(encoding="utf-8"))
+        retrieve = stored_contexts(contexts)
+        arm, corpus_chunks = contexts["arm"], contexts["corpusChunks"]
+    else:
+        pipeline = RAGPipeline()
+        retrieve = pipeline.retrieve
+        arm, corpus_chunks = shipped_arm_id(), len(pipeline.chunks)
 
     openai = args.provider == "openai"
     model = (args.model or OPENAI_MODEL) if openai else GROQ_MODEL
@@ -140,11 +169,12 @@ def main() -> int:
         "provider": args.provider,
         "requestedModel": model,
         "reasoningEffort": args.reasoning_effort if openai else None,
-        "arm": shipped_arm_id(),
+        "arm": arm,
         # OpenAI's reasoning models are sent no temperature: they accept only the default.
         "temperature": None if openai else TEMPERATURE,
         "maxTokens": MAX_TOKENS,
-        "corpusChunks": len(pipeline.chunks),
+        "corpusChunks": corpus_chunks,
+        "contexts": repo_path(args.contexts) if args.contexts else None,
         "commit": _git_commit(),
         "measuredAt": datetime.now(UTC).isoformat(timespec="seconds"),
     }
@@ -185,7 +215,7 @@ def main() -> int:
         )
 
     try:
-        run_generation(pending, pipeline.retrieve, generate, on_case=on_case)
+        run_generation(pending, retrieve, generate, on_case=on_case)
     except TokenBudgetExhausted as exc:
         print(f"\nStopped: {exc}\nRerun tomorrow to resume.")
         return 1

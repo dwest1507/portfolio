@@ -151,6 +151,31 @@ def replay(record: dict) -> tuple[Retriever, Generator]:
     Judging the Groq baseline this way calls no model but the Judge, and judges the exact
     chunks the model was shown, not what retrieval would return over today's Corpus.
     """
+    lookup = _stored_cases(record)
+
+    def generate(question: str, chunks: list[str]) -> Generation:
+        case = lookup(question)
+        return Generation(text=case["answer"], usage=case["usage"], model=case["model"])
+
+    return stored_contexts(record), generate
+
+
+def stored_contexts(record: dict) -> Retriever:
+    """A retriever that returns the chunks a stored record's model was shown.
+
+    Pairing it with a new generator answers the record's questions from identical
+    contexts, so comparing the two runs compares the models alone (ADR-0008), whatever
+    retrieval over today's Corpus would return.
+    """
+    lookup = _stored_cases(record)
+
+    def retrieve(question: str) -> list[str]:
+        return lookup(question)["chunks"]
+
+    return retrieve
+
+
+def _stored_cases(record: dict) -> Callable[[str], dict]:
     stored = {case["question"]: case for case in record["cases"]}
 
     def lookup(question: str) -> dict:
@@ -158,14 +183,7 @@ def replay(record: dict) -> tuple[Retriever, Generator]:
             raise KeyError(f"The record holds no answer to {question!r}.")
         return stored[question]
 
-    def retrieve(question: str) -> list[str]:
-        return lookup(question)["chunks"]
-
-    def generate(question: str, chunks: list[str]) -> Generation:
-        case = lookup(question)
-        return Generation(text=case["answer"], usage=case["usage"], model=case["model"])
-
-    return retrieve, generate
+    return lookup
 
 
 class TokenBudgetExhausted(RuntimeError):

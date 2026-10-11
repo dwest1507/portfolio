@@ -19,6 +19,7 @@ from eval.generation import (
     gate_failures,
     replay,
     run_generation,
+    stored_contexts,
     throttled,
 )
 
@@ -742,3 +743,19 @@ def test_a_gated_metric_with_nothing_to_measure_fails_rather_than_passes():
     assert gate_failures({"faithfulness": None, "declineAccuracy": 1.0}) == [
         "faithfulness was not measured"
     ]
+
+
+def test_a_candidate_model_answers_from_the_contexts_the_baseline_stored():
+    """Replaying the baseline's chunks to an OpenAI candidate leaves the model as the only
+    variable (ADR-0008), even after the Corpus has been re-chunked."""
+    shown = []
+
+    def candidate(question, chunks):
+        shown.append(chunks)
+        return fake_generate(question, chunks)
+
+    run = run_generation([EMPLOYER_CASE], stored_contexts(STORED_RECORD), candidate)
+
+    assert shown == [STORED_RECORD["cases"][0]["chunks"]]
+    assert run["cases"][0]["chunks"] == STORED_RECORD["cases"][0]["chunks"]
+    assert run["cases"][0]["model"] == "fake-model-1"

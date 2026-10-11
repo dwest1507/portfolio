@@ -31,7 +31,7 @@ from eval.generation import format_report, replay, run_generation
 from eval.judge import JevJudge
 from eval.publish import _git_commit
 from eval.run_eval import GOLDEN_SET_PATH, SPLITS, select_cases
-from eval.run_generation import BASELINE_PATH
+from eval.run_generation import BASELINE_PATH, repo_path
 from eval.splitter import OpenAISplitter
 
 #: What a judged run carries over from the record it judged: what was measured, and when.
@@ -43,6 +43,7 @@ RECORD_KEYS = (
     "temperature",
     "maxTokens",
     "corpusChunks",
+    "contexts",
 )
 
 
@@ -101,13 +102,6 @@ def main() -> int:
         )
         print(f"Wrote {args.output}")
     return 0
-
-
-def repo_path(path: Path) -> str:
-    """`path` relative to the repository when it is inside it, as a committed record is."""
-    path = path.resolve()
-    root = BACKEND_ROOT.parent
-    return str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
 
 
 if __name__ == "__main__":

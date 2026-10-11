@@ -986,6 +986,106 @@ make generation-gate                              # gate only; needs backend/.en
 PUBLISH_EVAL=1 ./scripts/backend-generation-gate.sh   # gate, then publish if it passes
 ```
 
+## Choosing the generation model
+
+Generation moves from Groq to OpenAI by [ADR-0008](adr/0008-generation-moves-to-openai.md)'s
+rule: `gpt-6-luna` replaces Groq unless it is distinguishably worse on Faithfulness or
+Decline accuracy, and `gpt-6.1-sol` (about 20× the price) replaces Luna only if it is
+distinguishably better on either. Fact Recall breaks ties only. "Distinguishably" is
+[ADR-0006](adr/0006-noise-aware-verdict-line.md)'s exact sign test at p < 0.05, run on the
+pairs where two models disagree:
+
+- **Faithfulness**, per case: faithful when every factual sentence of the answer is
+  supported. Cases that either model declined, and Out-of-Scope Cases, are left out.
+- **Decline accuracy**, per case: correct or not.
+- **Fact Recall**, per Required Fact.
+
+The pairing choices are recorded in the ADR-0008 amendment. The decision is made on `dev`
+and confirmed on `holdout`.
+
+Luna and Sol answered the 107 cases the Groq baseline holds from the chunks stored in it,
+not from retrieval over today's Corpus, so the model is the only variable. These were the
+whole Golden Set when the baseline was captured. The 24 cases added since were not
+measured here, and none of the 107 changed. Each ran once,
+with reasoning effort `low` and no temperature (ADR-0007 amendment). All three records
+were judged on 2026-10-11 by `jev-1.13.0`, with claims split by `gpt-6-luna`, using the
+judging code of `94a7b95` (the same as the [run-to-run spread](#run-to-run-spread)).
+
+| | Fact Recall | Faithfulness | Decline accuracy | Unsupported / factual sentences | Cost per answer |
+|---|---|---|---|---|---|
+| **`dev`** (68 cases) | | | | | |
+| Groq `openai/gpt-oss-120b` | 0.754 | 0.758 | 0.912 | 37 / 153 | $0 (free tier) |
+| `gpt-6-luna` | 0.720 | **0.981** | 0.912 | 2 / 106 | $0.00012 |
+| `gpt-6.1-sol` | 0.780 | 0.945 | 0.926 | 9 / 163 | $0.0027 |
+| **`holdout`** (39 cases) | | | | | |
+| Groq `openai/gpt-oss-120b` | 0.736 | 0.762 | 1.000 | 25 / 105 | $0 (free tier) |
+| `gpt-6-luna` | 0.701 | **0.986** | 1.000 | 1 / 70 | $0.00012 |
+| `gpt-6.1-sol` | 0.782 | 0.963 | 1.000 | 4 / 107 | $0.0028 |
+
+Pairs won and lost, with the sign test's outcome:
+
+| Comparison | Split | Faithfulness | Decline accuracy | Fact Recall |
+|---|---|---|---|---|
+| Luna vs Groq | `dev` | 15–0 **ahead** | 0–0 | 3–7 |
+| Luna vs Groq | `holdout` | 10–0 **ahead** | 0–0 | 3–6 |
+| Sol vs Luna | `dev` | 1–7 | 1–0 | 8–1 **ahead** |
+| Sol vs Luna | `holdout` | 1–4 | 0–0 | 8–1 **ahead** |
+
+**Result: `gpt-6-luna`.** On `dev`, Luna is not worse than Groq on either gated metric, so
+it replaces Groq. It is distinguishably *more* faithful: Groq wrote an unsupported
+sentence in 15 answers where Luna wrote none, and the reverse never happened. Sol is
+indistinguishable from Luna on both gated metrics, so it does not replace Luna. Its
+Fact Recall lead (8–1) is real, but by the rule it never justifies an upgrade alone.
+`holdout` gives the same choice on every step.
+
+What to keep in mind when reading this:
+
+- **Length is not the explanation.** Over all cases, Groq's answers state 258 factual
+  sentences, Luna's 176 and Sol's 270. Sol says as much as Groq and leaves 13 unsupported
+  where Groq leaves 62. Luna's answers are the shortest, which fits its lowest Fact
+  Recall.
+- **The Judge was tuned on Groq's sentences.** The 32 tuned validation sentences
+  ([Validating the Judge](#validating-the-judge)) came from Groq baseline answers. Jev may
+  be better at catching Groq's kind of unsupported sentence. The held-out sentences were
+  hand-written, not Groq's.
+- **Luna splits its own answers into claims.** ADR-0007 accepts this self-preference risk:
+  Jev, a different model, still judges every claim, and the held-out validation bar would
+  show a splitter that smoothed claims into supportable ones.
+- **Sol was nearly behind Luna on `dev` Faithfulness** (1–7, p = 0.07). Paying 22× more
+  would not have bought fewer unsupported sentences.
+- **Decline accuracy did not separate the models.** None answered an Out-of-Scope Case.
+  The `dev` misses are 6 answerable cases (5 for Sol) declined because the stored
+  contexts lacked the answer. Retrieval misses those, not the model.
+- **Contradictions** (not gated) are 84 for Groq, 17 for Luna and 53 for Sol over all
+  cases. As [noted above](#result-jev-meets-the-bar), Jev still lists chunks that name a
+  different item of the same kind, so these counts need reading entry by entry.
+
+Cost per answer is billed `usage` at OpenAI's standard list price on 2026-10-11 (Luna
+$0.10 / $0.50, Sol $2.00 / $10.00 per 1M input / output tokens), with every input token
+priced as uncached, an upper bound. Groq's free tier has no price, and its paid tier is
+no longer offered. The run-to-run spread and Floors [above](#run-to-run-spread) were
+already measured on Luna, so the choice needs no new spread study. Switching production
+to Luna is #73.
+
+```bash
+cd backend
+uv run --frozen python eval/run_generation.py --provider openai --model gpt-6-luna \
+    --contexts eval/baselines/groq.json --record runs/luna.json
+uv run --frozen python eval/run_generation.py --provider openai --model gpt-6.1-sol \
+    --contexts eval/baselines/groq.json --record runs/sol.json
+uv run --frozen python eval/judge_generation.py --output runs/judged-groq.json
+uv run --frozen python eval/judge_generation.py --record runs/luna.json --output runs/judged-luna.json
+uv run --frozen python eval/judge_generation.py --record runs/sol.json --output runs/judged-sol.json
+uv run --frozen python eval/select_model.py runs/judged-groq.json runs/judged-luna.json runs/judged-sol.json
+```
+
+`--contexts` answers from a stored record's chunks instead of retrieving, and records
+the Arm and Corpus size those chunks came from. Replaying refuses a Golden Set case the
+record never answered, so these commands reproduce the comparison only with the Golden Set
+of `94a7b95`, before the cases the baseline lacks were added. The two generations billed 109k (Luna)
+and 113k (Sol) tokens. Judging billed Jev 3.5M (Groq), 1.9M (Luna) and 3.1M (Sol) input
+tokens, since longer answers have more claims to check.
+
 ## Not yet measured
 
 Retrieval quality is only half of a RAG system's behaviour, and generation is now gated

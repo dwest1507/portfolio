@@ -45,6 +45,30 @@ export interface Finding {
 /** Newest first. */
 export const findings: Finding[] = [
   {
+    id: 'generation-model-chosen',
+    date: '2026-10-11',
+    title: 'The cheapest OpenAI model answered more faithfully than the Groq model it replaces',
+    observed:
+      'Given the exact chunks the Groq baseline answered from, gpt-6-luna and Groq differed ' +
+      'on 10 held-out answers where only one of them wrote an unsupported sentence. Every ' +
+      'one was Groq’s, a split a sign test rules out as chance (Faithfulness 0.762 → 0.986). ' +
+      'gpt-6.1-sol conveyed more Required Facts (Fact Recall 0.782 vs 0.701) but was ' +
+      'indistinguishable from Luna on Faithfulness and Decline accuracy, at about 22× the ' +
+      'cost per answer ($0.0028 vs $0.00012). The decision was made on dev, and held-out gave ' +
+      'the same answer.',
+    changed:
+      'Chose gpt-6-luna as the production generation model under the written rule ' +
+      '(cheapest unless distinguishably worse; Fact Recall alone never justifies an ' +
+      'upgrade), and added a replay mode so candidate models answer from stored contexts.',
+    move: {
+      metric: 'Faithfulness',
+      before: 0.762,
+      after: 0.986,
+      arm: 'Groq gpt-oss-120b → gpt-6-luna, Keyword only, held-out (39 questions)',
+    },
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#choosing-the-generation-model',
+  },
+  {
     id: 'structure-aware-chunking',
     date: '2026-10-11',
     title: 'Cutting the corpus along its sources’ structure moved no arm beyond noise',

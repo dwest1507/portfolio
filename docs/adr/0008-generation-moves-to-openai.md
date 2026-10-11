@@ -37,3 +37,29 @@ Prefer the cheapest model; pay only for a difference the data can see.
   Band.
 - Changing the model is changing what is served; any future model change goes through the
   same rule.
+
+## Amendment (2026-10-11): how the rule is applied
+
+ADR-0006's test pairs the two models' outcomes on the same questions. Applying it to
+generation needed choices this ADR did not make (#72, `eval/select_model.py`):
+
+- **Same contexts.** Candidates answer from the chunks stored in the Groq baseline
+  (`run_generation.py --contexts`), not from retrieval over today's Corpus, so the model
+  is the only variable. All three runs are judged by the same pinned Judge and splitter.
+- **Faithfulness is paired per case.** It pools sentences, and two models' answers have
+  different sentences. So a case counts as faithful when every factual sentence of its
+  answer is supported. A case that either model declined, and every Out-of-Scope Case, has
+  no Faithfulness outcome and is left out of the pairing. David chose this definition.
+- **Decline accuracy is paired per case:** correct or not, over every case.
+- **Fact Recall is paired per Required Fact,** since both models are asked the same facts.
+- **A tie** is a candidate distinguishably better on one gated metric and worse on the
+  other. Fact Recall breaks it: Sol replaces Luna only if it is also distinguishably ahead
+  on Fact Recall.
+- **The rule says nothing of Sol if Luna is rejected.** That case is left to David.
+- **Cost per answer** is billed usage at OpenAI's list price, with every input token
+  priced as uncached (an upper bound). The Groq baseline ran on the free tier and costs
+  nothing.
+- **One generation per model.** OpenAI's candidates vary from run to run (ADR-0007
+  amendment), and one run of each is compared. Their run-to-run noise adds disagreements in
+  both directions. That makes a real difference harder to call, while the test's false
+  alarm rate stays at 5%.
