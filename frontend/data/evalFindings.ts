@@ -45,6 +45,34 @@ export interface Finding {
 /** Newest first. */
 export const findings: Finding[] = [
   {
+    id: 'structure-aware-chunking',
+    date: '2026-10-11',
+    title: 'Cutting the corpus along its sources’ structure moved no arm beyond noise',
+    observed:
+      'Re-chunking the corpus from ~1,000-character packs into one chunk per question and ' +
+      'answer, project section and resume role (123 chunks to 157) was measured on the 54 ' +
+      'development questions. Keyword search gained four questions and lost one, including ' +
+      '“Where is David based?”, which had missed although its answer chunk contained the ' +
+      'question. No arm’s gains and losses were lopsided enough to rule out chance (exact sign ' +
+      'test, p ≥ 0.375). Its five remaining misses are vocabulary gaps — “study in college” ' +
+      'against “Major: Biochemistry”, “national defense vetting” against “security clearance” — ' +
+      'that no stemmer bridges.',
+    changed:
+      'The index build has one chunking entry point with one rule per source, every chunk ' +
+      'carries the heading that says what it is about, and a source that stops parsing into ' +
+      'its structure now fails the build instead of indexing as one block. The tokenizer was ' +
+      'left alone: no miss that survived re-chunking is a tokenizer problem. The floors were ' +
+      're-checked, not edited — over the whole golden set keyword search cleared them at ' +
+      'hit@5 0.885 and MRR 0.752, against 0.85 and 0.75.',
+    move: {
+      metric: 'hit@5',
+      before: 0.852,
+      after: 0.907,
+      arm: 'Keyword only (development questions, all 54)',
+    },
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#chunks-cut-along-source-structure-moved-no-arm-beyond-noise',
+  },
+  {
     id: 'query-categories-evaluated',
     date: '2026-09-13',
     title: 'Query categories revealed where dense and re-ranking models beat keyword search',

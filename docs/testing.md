@@ -63,7 +63,7 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | Eval publish | A tie on the gating metric is rendered and worded as a tie, not a lead for production |
 | High | Eval publish | A CI-attested run replaces a locally published one; the takeover happens only once |
 | Medium | Rate limiting | Exceeding 30 req/min → 429 |
-| Medium | Chunking | Correct chunk sizes with overlap |
+| High | Chunking | Each source format yields one chunk per Q&A pair, project section and resume role, with its heading; an over-long unit splits by sentence with the heading repeated; the committed sources still parse into their structure, and a source that loses it fails the build |
 | High | PII guard | No phone number or street address in the committed index or any indexed source, including the project MDX |
 | High | PII asymmetry | Broad detector catches bare digit runs; precise redactor leaves metrics and IDs untouched |
 | High | Tokenizer | Stemming unifies "engineer"/"engineering"; stopwords dropped; "R" survives |

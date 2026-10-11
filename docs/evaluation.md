@@ -274,7 +274,53 @@ build-breaking.
 
 The first two were in code that looked perfectly reasonable, and neither was visible to any
 test. The third was not a bug at all — it was the architecture. The fourth was empirical bias
-in the evaluation set itself. They are summarised on the project page; the full accounts are here.
+in the evaluation set itself. The fifth measured a change to the Corpus itself. They are
+summarised on the project page; the full accounts are here.
+
+### Chunks cut along source structure moved no Arm beyond noise
+
+The index build packed paragraphs into ~1,000-character windows with an overlap, so one
+Chunk held several unrelated question-and-answer pairs and others were split across two.
+"Where is David based?" missed even though its answer chunk contained the question. The
+Corpus is now cut along each source's structure — one Chunk per question-and-answer pair,
+per project section and per resume role, each headed with what it is about
+([ADR-0011](adr/0011-structure-aware-chunking.md)). That took the Corpus from 123 to 157
+Chunks.
+
+Measured on the 54 development questions, before and after:
+
+| Arm | hit@5 | MRR | recall@5 | Questions won / lost |
+|-----|------:|----:|---------:|---------------------:|
+| `bm25` (shipped) | 0.852 → 0.907 | 0.762 → 0.753 | 0.534 → 0.566 | 4 / 1 |
+| `dense` | 0.741 → 0.796 | 0.581 → 0.698 | 0.388 → 0.439 | 5 / 2 |
+| `hybrid` | 0.889 → 0.852 | 0.644 → 0.724 | 0.497 → 0.496 | 1 / 3 |
+| `rerank` | 0.870 → 0.852 | 0.774 → 0.773 | 0.503 → 0.543 | 2 / 3 |
+| `bm25+rerank` | 0.889 → 0.833 | 0.797 → 0.757 | 0.490 → 0.507 | 2 / 5 |
+
+"Won / lost" counts the questions each Arm hit only after, or only before, re-chunking. No
+Arm moved beyond sampling noise: the most lopsided split, BM25's 4 to 1, has an exact
+two-sided sign test p of 0.375. Keyword search gained `location`, `paraphrase-undergrad-field`,
+`paraphrase-philosophical-corpus` and `conceptual-production-regression-defense`, and lost
+`predictive-maintenance`, whose answer is now one of three pieces of a long resume role.
+
+**BM25's remaining misses.** The spec deferred any tokenizer change until re-chunking, and
+then only for misses that survive it. Five did, and none is a tokenizer problem:
+
+| Case | What the question says | What the Corpus says | First relevant rank |
+|------|------------------------|----------------------|--------------------:|
+| `education` | "study in college" | "Major: Biochemistry", "graduated" | 14 |
+| `predictive-maintenance` | "predict equipment failure" | "predicts when parts will fail" | 26 |
+| `paraphrase-security-clearance` | "national defense vetting" | "security clearance" | 14 |
+| `conceptual-pipeline-simplification` | "discard complex machine learning stages" | "lost to plain keyword search" | 52 |
+| `conceptual-query-context-alignment` | "genuinely grounding context" | "relevant context rather than relying on" | 21 |
+
+Each is a vocabulary gap that no stemmer bridges. The only stemming mismatch,
+`failure`/`fail`, lifts the `predictive-maintenance` answer only to rank 6 when conflated.
+So the tokenizer was left alone. These are the questions the semantic Arms exist for.
+
+The Floors were re-checked, not edited. Over the whole Golden Set, BM25 went from hit@5
+0.862 to 0.885 and MRR 0.786 to 0.752, against Floors of 0.85 and 0.75. MRR now clears its
+Floor by 0.002.
 
 ### Query categories expose where semantic retrieval excels
 

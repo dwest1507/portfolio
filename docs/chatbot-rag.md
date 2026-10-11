@@ -40,7 +40,14 @@ make build-index
    not silently redacted, it fails the test, and the source gets fixed. That is
    the stated order of operations — the sources should be clean to begin with,
    and redaction is only the backstop.
-2. **Chunk** — ~200–300 token chunks with overlap snapped outward to word boundaries; paragraph-based splitting to preserve complete thoughts without mid-word word truncation
+2. **Chunk** — cut along each source's structure by `chunk_document`: one chunk per
+   question-and-answer pair in `docs/chatbot-questions.md`, one per `##` section of each
+   project write-up headed `<project title> — <section>` (titles from
+   `frontend/data/projects.ts`), and one per resume section or role headed
+   `<employer> — <role>`. A unit over 1,000 characters is split at line and sentence
+   boundaries with its heading repeated on every piece. A source that no longer parses
+   into its structure fails the build. See
+   [ADR-0011](adr/0011-structure-aware-chunking.md).
 3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk
 4. **Index** — Builds a FAISS index (vector search) and a BM25 index (keyword search).
    BM25 terms are lowercased, stopword-filtered, and Snowball-stemmed by

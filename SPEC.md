@@ -293,7 +293,7 @@ components/
 #### Build Time (Pre-processing)
 
 1. **Input:** David's resume (`resume.txt`) + project descriptions (from MDX content or project data)
-2. **Chunking:** Split resume into ~200-300 token chunks with overlap. Project descriptions become their own chunks. Use paragraph-based splitting to preserve complete thoughts.
+2. **Chunking:** Cut each source along its structure — one chunk per Q&A pair, per project section, and per resume section or role, each headed with what it is about (superseded the original fixed-size packing with overlap; see `docs/adr/0011-structure-aware-chunking.md`).
 3. **Embedding:** Use `sentence-transformers` (`all-mpnet-base-v2`) to generate embeddings for each chunk
 4. **Indexing:** Build a FAISS index + BM25 index from the chunks
 5. **Output:** FAISS index files + pickled BM25 index + chunks JSON, committed to the backend repo
@@ -597,7 +597,7 @@ Focus testing effort on business logic, interactive components, and API behavior
 | High | RAG pipeline | Cross-encoder re-ranking improves result order |
 | High | RAG pipeline | Prompt construction includes context and history |
 | Medium | Rate limiting | Exceeding rate limit returns 429 |
-| Medium | Chunking | Produces correct chunk sizes with overlap |
+| High | Chunking | One chunk per Q&A pair, project section and resume role, each headed; a source that loses its structure fails the build |
 | Medium | Health check | `GET /api/health` returns 200 |
 
 ### Running Tests

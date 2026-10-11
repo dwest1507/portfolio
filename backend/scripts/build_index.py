@@ -5,8 +5,15 @@ Run once before deploying:
     python scripts/build_index.py
 
 Reads:
-  - ../../docs/resume.txt         David's resume
+  - ../../docs/resume.txt                   David's resume
+  - ../../docs/chatbot-questions.md         The question document
   - ../../frontend/content/projects/*.mdx   Project write-ups
+  - ../../frontend/data/projects.ts         Project titles, which head their sections
+
+Each source is cut into Chunks along its own structure (see chunk_document): one per
+question-and-answer pair, one per project section headed `<project title> — <section>`,
+and one per resume section or role headed `<employer> — <role>`. A unit over CHUNK_SIZE
+is split at line and sentence boundaries with its heading repeated on every piece.
 
 Writes to indexes/:
   - chunks.json     List of {"text": str, "source": str}
@@ -34,9 +41,9 @@ INDEXES_DIR = BACKEND_ROOT / "indexes"
 RESUME_PATH = REPO_ROOT / "docs" / "resume.txt"
 QA_PATH = REPO_ROOT / "docs" / "chatbot-questions.md"
 MDX_DIR = REPO_ROOT / "frontend" / "content" / "projects"
+PROJECTS_DATA_PATH = REPO_ROOT / "frontend" / "data" / "projects.ts"
 
-CHUNK_SIZE = 1000  # characters (~250-300 tokens)
-CHUNK_OVERLAP = 100
+CHUNK_SIZE = 1000  # characters (~250-300 tokens); an over-long unit is split, see _headed
 
 
 # ---------------------------------------------------------------------------
@@ -141,90 +148,140 @@ def _strip_mdx(text: str) -> str:
     return text.strip()
 
 
-def _snap_overlap_to_word_boundary(
-    prev_text: str, overlap_chars: int = CHUNK_OVERLAP, max_lookback: int = 40
-) -> str:
-    """Extract trailing overlap text from prev_text snapped to a word boundary.
+# ---------------------------------------------------------------------------
+# Structure-aware chunking
+# ---------------------------------------------------------------------------
 
-    Snaps backward to include the full word if the cut lands mid-word.
-    If no whitespace is found within max_lookback characters (e.g. unbroken URL),
-    falls back to snapping forward to the next whitespace boundary.
+# A bold line on its own is a question in docs/chatbot-questions.md. Everything up to the
+# next question, section heading or rule is its answer.
+_QUESTION_LINE = re.compile(r"^\*\*(?P<question>[^*]+)\*\*\s*$", re.MULTILINE)
+_ANSWER_END = re.compile(r"^(?:---+\s*|#{1,6}\s.*)$", re.MULTILINE)
+
+
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+
+
+def _lines(text: str) -> list[str]:
+    """Non-blank lines, stripped."""
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _headed(heading: str, lines: list[str], source: str) -> list[dict]:
+    """One Chunk of `heading` over `lines`, or several when that exceeds CHUNK_SIZE.
+
+    An over-long unit is split at line and then sentence boundaries, never inside a
+    sentence, and every piece starts with the heading so it still says what it is about.
+    A single sentence longer than the limit is kept whole rather than cut.
     """
-    if len(prev_text) <= overlap_chars:
-        return prev_text
+    budget = CHUNK_SIZE - len(heading) - 1
+    # (separator from the previous segment, segment)
+    segments: list[tuple[str, str]] = []
+    for line in lines:
+        parts = [line] if len(line) <= budget else _SENTENCE_END.split(line)
+        segments.extend(("\n" if i == 0 else " ", part) for i, part in enumerate(parts))
 
-    start = len(prev_text) - overlap_chars
-
-    # If already at a word boundary, return clean slice
-    if start == 0 or prev_text[start - 1].isspace() or prev_text[start].isspace():
-        return prev_text[start:].lstrip()
-
-    # Step backward up to max_lookback chars to find whitespace
-    bound = max(0, start - max_lookback)
-    curr = start - 1
-    while curr >= bound:
-        if prev_text[curr].isspace():
-            return prev_text[curr + 1 :].lstrip()
-        curr -= 1
-
-    # Fallback if unbroken string exceeds max_lookback: snap forward to next whitespace
-    for idx in range(start + 1, len(prev_text)):
-        if prev_text[idx].isspace():
-            return prev_text[idx + 1 :].lstrip()
-
-    return ""
-
-
-def _chunk_text(text: str, source: str) -> list[dict]:
-    """Split text into overlapping chunks, preferring paragraph boundaries."""
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    chunks: list[dict] = []
+    pieces: list[str] = []
     current = ""
-
-    for para in paragraphs:
-        # If adding this paragraph stays within limit, accumulate
-        candidate = (current + "\n\n" + para).strip() if current else para
-        if len(candidate) <= CHUNK_SIZE:
-            current = candidate
-        else:
-            # Flush current buffer (if any)
-            if current:
-                chunks.append({"text": current, "source": source})
-            # If the paragraph itself is too long, split by sentence
-            if len(para) > CHUNK_SIZE:
-                sentences = re.split(r"(?<=[.!?])\s+", para)
-                sub_current = ""
-                for sent in sentences:
-                    candidate = (sub_current + " " + sent).strip() if sub_current else sent
-                    if len(candidate) <= CHUNK_SIZE:
-                        sub_current = candidate
-                    else:
-                        if sub_current:
-                            chunks.append({"text": sub_current, "source": source})
-                        sub_current = sent
-                if sub_current:
-                    chunks.append({"text": sub_current, "source": source})
-                current = ""
-            else:
-                current = para
-
+    for separator, segment in segments:
+        if current and len(current) + len(separator) + len(segment) > budget:
+            pieces.append(current)
+            current = ""
+        current = current + separator + segment if current else segment
     if current:
-        chunks.append({"text": current, "source": source})
+        pieces.append(current)
+    return [{"text": f"{heading}\n{piece}", "source": source} for piece in pieces]
 
-    # Add overlap: prepend tail of previous chunk to next chunk, snapped to word boundaries
-    overlapped: list[dict] = []
-    for i, chunk in enumerate(chunks):
-        if i > 0:
-            prev_text = chunks[i - 1]["text"]
-            overlap_text = _snap_overlap_to_word_boundary(prev_text)
-            if overlap_text:
-                merged = (overlap_text + " " + chunk["text"]).strip()
-                if len(merged) <= CHUNK_SIZE * 1.3:
-                    overlapped.append({"text": merged, "source": chunk["source"]})
-                    continue
-        overlapped.append(chunk)
 
-    return overlapped
+def _chunk_questions(text: str, source: str) -> list[dict]:
+    questions = list(_QUESTION_LINE.finditer(text))
+    chunks = []
+    for match, following in zip(questions, questions[1:] + [None]):
+        body = text[match.end() : following.start() if following else len(text)]
+        end = _ANSWER_END.search(body)
+        answer = _lines(_strip_mdx(body[: end.start()] if end else body))
+        # A question not yet answered is not a pair. Indexed alone it would match its own
+        # paraphrases and hand the model a Chunk with nothing in it.
+        if answer:
+            chunks.extend(_headed(match["question"].strip(), answer, source))
+    return chunks
+
+
+_SECTION_HEADING = re.compile(r"^##\s+(?P<heading>.+?)\s*$", re.MULTILINE)
+
+
+def _chunk_sections(text: str, source: str, title: str) -> list[dict]:
+    sections = list(_SECTION_HEADING.finditer(text))
+    chunks = []
+    for match, following in zip(sections, sections[1:] + [None]):
+        body = _lines(_strip_mdx(text[match.end() : following.start() if following else None]))
+        chunks.extend(_headed(f"{title} — {match['heading']}", body, source))
+    return chunks
+
+
+# The resume is plain text: a section starts at an all-capitals line, and a role starts at
+# the line before its date range ("May 2020 – January 2021"), with the employer after it.
+_RESUME_SECTION = re.compile(r"^[A-Z][A-Z /&]*[A-Z]$")
+_MONTH = (
+    r"(?:January|February|March|April|May|June|July|August|September|October|November|December)"
+)
+_ROLE_DATES = re.compile(rf"^{_MONTH} \d{{4}}\s*[–-]\s*(?:Present|{_MONTH} \d{{4}})")
+_EXPERIENCE = "EXPERIENCE"
+
+
+def _chunk_roles(lines: list[str], source: str) -> list[dict]:
+    starts = [i for i, line in enumerate(lines) if _ROLE_DATES.match(line)]
+    if not starts or starts[0] != 1:
+        raise ValueError(
+            f"{source}: {_EXPERIENCE} must be a list of roles, each title, dates, employer"
+        )
+    chunks = []
+    for dates, following in zip(starts, starts[1:] + [len(lines) + 1]):
+        role, employer = lines[dates - 1], lines[dates + 1]
+        body = [lines[dates], *lines[dates + 2 : following - 1]]
+        chunks.extend(_headed(f"{employer} — {role}", body, source))
+    return chunks
+
+
+def _chunk_resume(text: str, source: str) -> list[dict]:
+    sections: list[tuple[str, list[str]]] = []
+    for line in (line.strip() for line in text.splitlines()):
+        if _RESUME_SECTION.match(line):
+            sections.append((line, []))
+        elif line and sections:
+            sections[-1][1].append(line)
+
+    chunks = []
+    for heading, lines in sections:
+        if heading == _EXPERIENCE:
+            chunks.extend(_chunk_roles(lines, source))
+        elif lines:
+            chunks.extend(_headed(f"Resume — {heading.title()}", lines, source))
+    return chunks
+
+
+def chunk_document(text: str, source: str, title: str | None = None) -> list[dict]:
+    """Cut one Corpus document into Chunks along its own structure.
+
+    The single chunking entry point: `source` names the document's kind, and each kind
+    has one rule. A project write-up also needs its `title`, which heads every section.
+    PII redaction has already run on `text` (see load_documents).
+
+    A document its rule finds no structure in is an error, not an empty contribution: a
+    formatting change must fail the build rather than quietly drop a source.
+    """
+    if source == "qa":
+        chunks = _chunk_questions(text, source)
+    elif source == "resume":
+        chunks = _chunk_resume(text, source)
+    elif source.startswith("project:"):
+        if not title:
+            raise ValueError(f"{source} needs the project's title to head its sections")
+        chunks = _chunk_sections(text, source, title)
+    else:
+        raise ValueError(f"No chunking rule for source {source!r}")
+    if not chunks:
+        raise ValueError(f"{source}: found no structure to chunk along")
+    return chunks
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +289,20 @@ def _chunk_text(text: str, source: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
+# A project write-up's title lives with the rest of its card data in the frontend, not
+# in the MDX, so it is read from there rather than repeated.
+_PROJECT_TITLE = re.compile(r"slug:\s*'(?P<slug>[^']+)',\s*title:\s*'(?P<title>[^']+)'")
+
+
+def project_titles() -> dict[str, str]:
+    """Each project's display title, keyed by the slug its MDX file is named after."""
+    data = PROJECTS_DATA_PATH.read_text(encoding="utf-8")
+    return {m["slug"]: m["title"] for m in _PROJECT_TITLE.finditer(data)}
+
+
 def load_documents() -> list[dict]:
+    """Every Corpus source, PII-redacted but otherwise raw: its structure is what chunking
+    cuts along, so markup is stripped per Chunk rather than here."""
     docs: list[dict] = []
 
     # Resume
@@ -247,8 +317,7 @@ def load_documents() -> list[dict]:
     if not QA_PATH.exists():
         print(f"WARNING: Q&A file not found at {QA_PATH}", file=sys.stderr)
     else:
-        raw = QA_PATH.read_text(encoding="utf-8")
-        text = _redact_pii(_strip_mdx(raw))
+        text = _redact_pii(QA_PATH.read_text(encoding="utf-8"))
         docs.append({"text": text, "source": "qa"})
         print(f"  Loaded chatbot-questions.md ({len(text)} chars)")
 
@@ -256,11 +325,13 @@ def load_documents() -> list[dict]:
     mdx_files = sorted(MDX_DIR.glob("*.mdx"))
     if not mdx_files:
         print(f"WARNING: No MDX files found in {MDX_DIR}", file=sys.stderr)
+    titles = project_titles()
     for mdx_path in mdx_files:
-        raw = mdx_path.read_text(encoding="utf-8")
-        text = _redact_pii(_strip_mdx(raw))
+        text = _redact_pii(mdx_path.read_text(encoding="utf-8"))
         slug = mdx_path.stem
-        docs.append({"text": text, "source": f"project:{slug}"})
+        if slug not in titles:
+            raise ValueError(f"{mdx_path.name} has no project in {PROJECTS_DATA_PATH.name}")
+        docs.append({"text": text, "source": f"project:{slug}", "title": titles[slug]})
         print(f"  Loaded {slug} ({len(text)} chars)")
 
     return docs
@@ -280,7 +351,7 @@ def main() -> None:
     print("\nChunking documents...")
     all_chunks: list[dict] = []
     for doc in docs:
-        chunks = _chunk_text(doc["text"], doc["source"])
+        chunks = chunk_document(doc["text"], doc["source"], doc.get("title"))
         all_chunks.extend(chunks)
         print(f"  {doc['source']}: {len(chunks)} chunks")
 
