@@ -115,6 +115,22 @@ class TestArmSpecs:
     def test_arms_tuple_is_derived_from_the_specs(self):
         assert ARMS == tuple(ARM_SPEC_BY_ID)
 
+    def test_every_arm_is_a_candidate_or_a_reference(self):
+        assert {a.eligibility for a in ARM_SPECS} <= {"candidate", "reference"}
+
+    def test_the_torch_arms_are_reference_arms(self):
+        """ADR-0009: the torch-based Arms stay as baselines but cannot ship."""
+        for arm in ("dense", "hybrid", "rerank", "bm25+rerank"):
+            assert ARM_SPEC_BY_ID[arm].eligibility == "reference"
+
+    def test_the_shippable_arms_are_candidate_arms(self):
+        for arm in ("bm25", "onnx-dense", "onnx-hybrid", "bm25+onnx-rerank-20"):
+            assert ARM_SPEC_BY_ID[arm].eligibility == "candidate"
+
+    def test_the_shipped_arm_is_a_candidate_arm(self):
+        """Only Candidate Arms are eligible when the Shipped Arm is chosen."""
+        assert ARM_SPEC_BY_ID[shipped_arm_id()].eligibility == "candidate"
+
 
 # ---------------------------------------------------------------------------
 # The measured-run document
@@ -145,6 +161,13 @@ class TestResultsDocument:
         rerank = next(a for a in doc["arms"] if a["id"] == "rerank")
         assert rerank["shipped"] is False
         assert rerank["byCategory"]["direct"]["hit@5"] == 0.909
+
+    def test_each_arm_publishes_its_eligibility(self):
+        """The Scoreboard has to say which Arms could ship, or a Reference Arm's upper bound
+        reads as something on offer (ADR-0009)."""
+        doc = _document(results=[_raw("bm25", 1.0, 0.9), _raw("rerank", 0.9, 0.8)])
+        eligibility = {a["id"]: a["eligibility"] for a in doc["arms"]}
+        assert eligibility == {"bm25": "candidate", "rerank": "reference"}
 
     def test_carries_per_category_metrics_for_each_arm(self):
         bm25_cat = {
@@ -633,6 +656,15 @@ class TestMarkdown:
         assert "| 8 / 2 |" in next(line for line in md.splitlines() if "`dense`" in line)
         # The shipped arm is the reference, not a contestant against itself.
         assert "| — |" in next(line for line in md.splitlines() if "`bm25`" in line)
+
+    def test_renders_each_arms_eligibility(self):
+        md = render_markdown(_document(results=[_raw("bm25", 1.0, 0.9), _raw("rerank", 0.9, 0.8)]))
+        lines = md.splitlines()
+        assert next(line for line in lines if line.startswith("| Arm |")).startswith(
+            "| Arm | Eligibility |"
+        )
+        assert "| `bm25` _(shipped)_ | Candidate |" in md
+        assert "| `rerank` | Reference |" in md
 
     def test_renders_each_arms_latency_bands(self):
         md = render_markdown(

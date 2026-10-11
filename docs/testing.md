@@ -69,7 +69,8 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | Tokenizer | Stemming unifies "engineer"/"engineering"; stopwords dropped; "R" survives |
 | High | RRF fusion | Agreement between retrievers wins; weights shift order; no item zeroed; a BM25-only hit reaches the candidate set |
 | Medium | Eval metrics | recall@k, hit@k, MRR, nDCG@k computed correctly |
-| High | Eval arms | Every published arm has a retriever and vice versa; `bm25+rerank` never touches the dense stage |
+| High | Eval arms | Every published arm has a retriever and vice versa; `bm25+rerank` never touches the dense stage; `bm25+onnx-rerank-20` hands the ONNX cross-encoder 20 candidates whatever the cutoff; every arm is a Candidate or Reference Arm, the torch arms are Reference Arms, and no Candidate Arm loads a torch model |
+| High | ONNX retrieval | ONNX dense search ranks by inner product with the precomputed Corpus embeddings and needs no torch model or FAISS index; ONNX hybrid fuses BM25 as `hybrid` does; ONNX re-ranking orders by the ONNX cross-encoder; the embedder mean-pools real tokens only; stale ONNX embeddings raise; the served path imports neither onnxruntime nor tokenizers |
 | High | Eval gate | The shipped arm is what is gated; a run that gates nothing fails; a single split cannot be gated |
 | High | Golden splits | dev and holdout partition the set, and the recorded split still matches the documented hash rule |
 | High | Out-of-Scope Cases | Excluded from retrieval scoring by their `answerable: false` label and counted in the summary; a broken label on an answerable case still fails; malformed generation fields are rejected |

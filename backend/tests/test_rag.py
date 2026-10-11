@@ -372,6 +372,94 @@ def test_reranking_orders_by_cross_encoder_score(fake_indexes):
     assert reranked[0] == 2
 
 
+# ---------------------------------------------------------------------------
+# ONNX Runtime retrieval (the Candidate Arms)
+# ---------------------------------------------------------------------------
+
+
+def _onnx_pipeline(indexes_dir, embeddings, query_vector=None, scores=None):
+    """A pipeline whose ONNX models are fakes and whose ONNX corpus embeddings are given."""
+    from app.rag.pipeline import RAGPipeline
+
+    np.save(indexes_dir / "onnx_embeddings.npy", np.asarray(embeddings, dtype=np.float32))
+    embedder = MagicMock()
+    embedder.encode.return_value = np.asarray([query_vector or [1.0, 0.0]], dtype=np.float32)
+    cross_encoder = MagicMock()
+    cross_encoder.predict.return_value = np.asarray(scores or [], dtype=np.float32)
+    return RAGPipeline(
+        indexes_dir=indexes_dir, onnx_embedder=embedder, onnx_cross_encoder=cross_encoder
+    )
+
+
+def test_onnx_dense_search_ranks_chunks_by_similarity_to_the_query(fake_indexes):
+    indexes_dir, _chunks = fake_indexes
+    pipeline = _onnx_pipeline(indexes_dir, [[0.0, 1.0], [0.6, 0.8], [1.0, 0.0]])
+
+    assert pipeline.onnx_dense_search("q", top_k=2) == [2, 1]
+
+
+def test_onnx_dense_search_needs_no_torch_model_or_faiss_index(fake_indexes):
+    """A Candidate Arm must run with neither: that is what makes it shippable."""
+    indexes_dir, _chunks = fake_indexes
+    (indexes_dir / "faiss.index").unlink()
+    pipeline = _onnx_pipeline(indexes_dir, [[0.0, 1.0], [0.6, 0.8], [1.0, 0.0]])
+
+    assert pipeline.onnx_dense_search("q", top_k=3) == [2, 1, 0]
+    assert pipeline._embedder is None and pipeline._cross_encoder is None
+
+
+def test_onnx_hybrid_search_fuses_the_keyword_ranking_into_the_dense_one(fake_indexes):
+    """The same fusion as `hybrid`: BM25 lifts a chunk the dense ranking put last."""
+    indexes_dir, _chunks = fake_indexes
+    # Dense ranks chunk 1 ("...FAISS and BM25.") last; only BM25 matches "FAISS".
+    pipeline = _onnx_pipeline(indexes_dir, [[1.0, 0.0], [0.0, 1.0], [0.9, 0.1]])
+    assert pipeline.onnx_dense_search("FAISS", top_k=3) == [0, 2, 1]
+
+    assert pipeline.onnx_hybrid_search("FAISS", top_k=3) == [0, 1, 2]
+
+
+def test_onnx_rerank_orders_candidates_by_the_onnx_cross_encoder(fake_indexes):
+    indexes_dir, _chunks = fake_indexes
+    pipeline = _onnx_pipeline(indexes_dir, [[1.0, 0.0]] * 3, scores=[0.1, 2.5, -1.0])
+
+    assert pipeline.onnx_rerank("q", [0, 1, 2], top_k=2) == [1, 0]
+    assert pipeline._cross_encoder is None, "the torch cross-encoder is never loaded"
+
+
+def test_stale_onnx_embeddings_raise_for_the_harness(fake_indexes):
+    indexes_dir, chunks = fake_indexes
+    pipeline = _onnx_pipeline(indexes_dir, [[1.0, 0.0]] * (len(chunks) + 1))
+
+    with pytest.raises(ValueError, match="Index mismatch"):
+        _ = pipeline.onnx_embeddings
+
+
+def test_the_onnx_embedder_mean_pools_real_tokens_and_normalizes():
+    """Padding positions carry hidden states too; averaging them in would make a short
+    text's embedding depend on the longest text in its batch."""
+    from types import SimpleNamespace
+
+    from app.rag.onnx_models import OnnxEmbedder
+
+    tokenizer = MagicMock()
+    tokenizer.encode_batch.return_value = [
+        SimpleNamespace(ids=[5, 6, 0], attention_mask=[1, 1, 0], type_ids=[0, 0, 0]),
+    ]
+    session = MagicMock()
+    session.get_inputs.return_value = [
+        SimpleNamespace(name="input_ids"),
+        SimpleNamespace(name="attention_mask"),
+    ]
+    # Two real tokens averaging to (3, 4); the padding state would drag it elsewhere.
+    session.run.return_value = [np.array([[[2.0, 4.0], [4.0, 4.0], [100.0, -100.0]]])]
+
+    embedding = OnnxEmbedder(tokenizer, session).encode(["short text"])
+
+    np.testing.assert_allclose(embedding, [[0.6, 0.8]], rtol=1e-6)
+    sent = session.run.call_args.args[1]
+    assert set(sent) == {"input_ids", "attention_mask"}, "only the inputs the model declares"
+
+
 def test_retrieve_returns_top_k(fake_indexes):
     indexes_dir, _chunks = fake_indexes
 
@@ -549,7 +637,9 @@ import sys
 
 class Guard:
     def find_spec(self, name, path=None, target=None):
-        if name.split(".")[0] in {"faiss", "sentence_transformers", "torch", "transformers"}:
+        if name.split(".")[0] in {
+            "faiss", "sentence_transformers", "torch", "transformers", "onnxruntime", "tokenizers"
+        }:
             raise AssertionError(f"{name} must not be imported to serve a request")
         return None
 

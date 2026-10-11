@@ -18,6 +18,8 @@ is split at line and sentence boundaries with its heading repeated on every piec
 Writes to indexes/:
   - chunks.json     List of {"text": str, "source": str}
   - faiss.index     FAISS inner-product index (cosine sim on normalised vecs)
+  - onnx_embeddings.npy  The same embeddings computed on ONNX Runtime, for the
+                         Candidate Arms (normalised float32, one row per chunk)
   - bm25.pkl        BM25Okapi index
 """
 
@@ -33,6 +35,7 @@ from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.rag.onnx_models import OnnxEmbedder
 from app.rag.tokenize import tokenize
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -379,6 +382,14 @@ def main() -> None:
     index.add(embeddings)
     faiss.write_index(index, str(INDEXES_DIR / "faiss.index"))
     print(f"Saved faiss.index ({index.ntotal} vectors, dim={dim})")
+
+    # The same model on ONNX Runtime, for the Candidate Arms (ADR-0009). Embedded here, not
+    # at query time, so their load band counts loading the model and not embedding the
+    # Corpus — the cost a production image would actually pay.
+    print("\nGenerating embeddings (all-mpnet-base-v2 on ONNX Runtime)...")
+    onnx_embeddings = OnnxEmbedder().encode(texts)
+    np.save(INDEXES_DIR / "onnx_embeddings.npy", onnx_embeddings)
+    print(f"Saved onnx_embeddings.npy ({onnx_embeddings.shape[0]} vectors)")
 
     # Build BM25 index
     tokenized_corpus = [tokenize(c["text"]) for c in all_chunks]

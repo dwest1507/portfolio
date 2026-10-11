@@ -49,12 +49,15 @@ make build-index
    boundaries with its heading repeated on every piece. A source that no longer parses
    into its structure fails the build. See
    [ADR-0011](adr/0011-structure-aware-chunking.md).
-3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk
+3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk,
+   and the same model's ONNX export, run on ONNX Runtime, generates a second set for the
+   Candidate Arms
 4. **Index** — Builds a FAISS index (vector search) and a BM25 index (keyword search).
    BM25 terms are lowercased, stopword-filtered, and Snowball-stemmed by
    `app/rag/tokenize.py` — the same tokenizer the query path uses, so index and
    query terms always agree.
-5. **Save** — Writes `backend/indexes/faiss.index`, `bm25.pkl`, and `chunks.json`
+5. **Save** — Writes `backend/indexes/faiss.index`, `onnx_embeddings.npy`, `bm25.pkl`,
+   and `chunks.json`
 
 The indexes are committed to the repo. `chunks.json` and `bm25.pkl` are loaded into memory
 at FastAPI startup; `faiss.index` is not, because the served pipeline does not use it —
@@ -203,11 +206,14 @@ one is a manual, reviewed act:
 | Purpose | Model | Where it runs |
 |---------|-------|---------------|
 | LLM | `gpt-6-luna` via OpenAI (chosen by [ADR-0008](adr/0008-generation-moves-to-openai.md)'s rule), overridable with `OPENAI_MODEL` | Production |
-| Embedding | `sentence-transformers/all-mpnet-base-v2` | Index build + eval only |
-| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Eval only |
+| Embedding | `sentence-transformers/all-mpnet-base-v2`, on torch and on ONNX Runtime | Index build + eval only |
+| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2`, on torch and on ONNX Runtime | Eval only |
 
-Neither model is installed in the production image: `faiss-cpu` and `sentence-transformers`
-live in the `dev` dependency group, which the Dockerfile's `uv sync --no-dev` skips.
+Neither model is installed in the production image: `faiss-cpu`, `sentence-transformers`,
+`onnxruntime`, `tokenizers` and `huggingface-hub` live in the `dev` dependency group, which
+the Dockerfile's `uv sync --no-dev` skips. The ONNX Runtime versions back the Candidate
+Arms, which could ship without torch if one is ever chosen
+([ADR-0009](adr/0009-shipped-arm-selection-rule.md)).
 
 ## Environment Variables
 

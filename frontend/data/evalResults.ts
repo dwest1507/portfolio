@@ -27,6 +27,8 @@ export interface VsShipped {
   outcome: 'ahead' | 'behind' | 'indistinguishable'
 }
 
+export type Eligibility = 'candidate' | 'reference'
+
 export interface EvalArm {
   /** Harness arm name, matching `--arms` in eval/run_eval.py. */
   id: string
@@ -37,6 +39,12 @@ export interface EvalArm {
   technical: string
   /** True for the one arm mirroring what production actually runs. */
   shipped: boolean
+  /**
+   * `candidate` for an arm production could run without a GPU-oriented ML runtime in the
+   * image; `reference` for a baseline kept for comparison that cannot ship. Only Candidate
+   * Arms are eligible when the shipped arm is chosen (ADR-0009).
+   */
+  eligibility: Eligibility
   /** Keyed by metric name, e.g. `hit@5`. Names come from `metricNames`. */
   metrics: Record<string, number>
   /** Per-category metrics, keyed by category (e.g. `direct`). */

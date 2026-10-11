@@ -1,10 +1,10 @@
 {
   "schemaVersion": 4,
-  "generatedAt": "2026-10-11T17:37:10+00:00",
-  "commit": "94a7b95",
+  "generatedAt": "2026-10-11T20:19:45+00:00",
+  "commit": "7b1e5aa",
   "runUrl": null,
-  "corpusChunks": 123,
-  "goldenQuestions": 33,
+  "corpusChunks": 158,
+  "goldenQuestions": 43,
   "split": "holdout",
   "topK": 5,
   "gatingMetric": "hit@5",
@@ -15,8 +15,8 @@
   ],
   "categoryCounts": {
     "direct": 22,
-    "paraphrase": 5,
-    "conceptual": 6
+    "paraphrase": 11,
+    "conceptual": 10
   },
   "metricNames": [
     "recall@5",
@@ -31,35 +31,36 @@
       "description": "Matches the words in the question against the words in the document, with no machine learning involved.",
       "technical": "BM25 over stemmed, stopword-filtered terms. Needs no embedding model, which is why the production image ships none. Matches RAGPipeline.retrieve.",
       "shipped": true,
+      "eligibility": "candidate",
       "metrics": {
-        "recall@5": 0.5527,
-        "hit@5": 0.8788,
-        "mrr": 0.8258,
-        "ndcg@5": 0.6902
+        "recall@5": 0.5719,
+        "hit@5": 0.814,
+        "mrr": 0.7074,
+        "ndcg@5": 0.6285
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.1333,
-          "hit@5": 0.3333,
+          "recall@5": 0.2417,
+          "hit@5": 0.4,
           "mrr": 0.3333,
-          "ndcg@5": 0.2007
+          "ndcg@5": 0.234
         },
         "direct": {
-          "recall@5": 0.6253,
-          "hit@5": 1.0,
-          "mrr": 0.9659,
-          "ndcg@5": 0.8103
+          "recall@5": 0.6428,
+          "hit@5": 0.9545,
+          "mrr": 0.875,
+          "ndcg@5": 0.7829
         },
         "paraphrase": {
-          "recall@5": 0.7364,
-          "hit@5": 1.0,
-          "mrr": 0.8,
-          "ndcg@5": 0.749
+          "recall@5": 0.7303,
+          "hit@5": 0.9091,
+          "mrr": 0.7121,
+          "ndcg@5": 0.6784
         }
       },
       "mrrInterval": [
-        0.697,
-        0.9394
+        0.5814,
+        0.8275
       ],
       "vsShipped": null,
       "vsShippedByCategory": null,
@@ -74,50 +75,51 @@
       "description": "Matches on meaning rather than wording, so it can find a passage that answers the question without repeating any of its words.",
       "technical": "FAISS inner-product search over normalized all-mpnet-base-v2 embeddings.",
       "shipped": false,
+      "eligibility": "reference",
       "metrics": {
-        "recall@5": 0.418,
-        "hit@5": 0.8182,
-        "mrr": 0.6247,
-        "ndcg@5": 0.4808
+        "recall@5": 0.4963,
+        "hit@5": 0.7442,
+        "mrr": 0.6062,
+        "ndcg@5": 0.514
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.25,
-          "hit@5": 0.6667,
-          "mrr": 0.5556,
-          "ndcg@5": 0.3412
+          "recall@5": 0.3333,
+          "hit@5": 0.6,
+          "mrr": 0.37,
+          "ndcg@5": 0.284
         },
         "direct": {
-          "recall@5": 0.4827,
-          "hit@5": 0.8636,
-          "mrr": 0.6909,
-          "ndcg@5": 0.5676
+          "recall@5": 0.476,
+          "hit@5": 0.7727,
+          "mrr": 0.7083,
+          "ndcg@5": 0.5708
         },
         "paraphrase": {
-          "recall@5": 0.3348,
-          "hit@5": 0.8,
-          "mrr": 0.4167,
-          "ndcg@5": 0.2665
+          "recall@5": 0.6848,
+          "hit@5": 0.8182,
+          "mrr": 0.6167,
+          "ndcg@5": 0.6095
         }
       },
       "mrrInterval": [
-        0.4768,
-        0.7626
+        0.4717,
+        0.7314
       ],
       "vsShipped": {
-        "won": 2,
-        "lost": 4,
+        "won": 4,
+        "lost": 7,
         "outcome": "indistinguishable"
       },
       "vsShippedByCategory": {
         "conceptual": {
-          "won": 2,
-          "lost": 0,
+          "won": 3,
+          "lost": 1,
           "outcome": "indistinguishable"
         },
         "direct": {
-          "won": 0,
-          "lost": 3,
+          "won": 1,
+          "lost": 5,
           "outcome": "indistinguishable"
         },
         "paraphrase": {
@@ -128,7 +130,7 @@
       },
       "latencyBand": {
         "warm": "~10ms",
-        "load": "~1s"
+        "load": "~100ms"
       }
     },
     {
@@ -137,49 +139,50 @@
       "description": "Runs both of the above and merges their rankings into one list.",
       "technical": "Weighted reciprocal-rank fusion of the sparse and dense rankings.",
       "shipped": false,
+      "eligibility": "reference",
       "metrics": {
-        "recall@5": 0.4837,
-        "hit@5": 0.9091,
-        "mrr": 0.6869,
-        "ndcg@5": 0.551
+        "recall@5": 0.5542,
+        "hit@5": 0.8837,
+        "mrr": 0.638,
+        "ndcg@5": 0.5472
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.25,
-          "hit@5": 0.6667,
-          "mrr": 0.4722,
-          "ndcg@5": 0.3203
+          "recall@5": 0.3583,
+          "hit@5": 0.7,
+          "mrr": 0.3733,
+          "ndcg@5": 0.2903
         },
         "direct": {
-          "recall@5": 0.5433,
+          "recall@5": 0.537,
           "hit@5": 0.9545,
-          "mrr": 0.7841,
-          "ndcg@5": 0.6504
+          "mrr": 0.7614,
+          "ndcg@5": 0.6144
         },
         "paraphrase": {
-          "recall@5": 0.5015,
-          "hit@5": 1.0,
-          "mrr": 0.5167,
-          "ndcg@5": 0.3906
+          "recall@5": 0.7667,
+          "hit@5": 0.9091,
+          "mrr": 0.6318,
+          "ndcg@5": 0.6464
         }
       },
       "mrrInterval": [
-        0.5556,
-        0.8081
+        0.5194,
+        0.7519
       ],
       "vsShipped": {
-        "won": 2,
+        "won": 4,
         "lost": 1,
         "outcome": "indistinguishable"
       },
       "vsShippedByCategory": {
         "conceptual": {
-          "won": 2,
+          "won": 3,
           "lost": 0,
           "outcome": "indistinguishable"
         },
         "direct": {
-          "won": 0,
+          "won": 1,
           "lost": 1,
           "outcome": "indistinguishable"
         },
@@ -191,7 +194,7 @@
       },
       "latencyBand": {
         "warm": "~10ms",
-        "load": "~1s"
+        "load": "~100ms"
       }
     },
     {
@@ -200,38 +203,39 @@
       "description": "Takes the merged list and has a second, slower model re-read each candidate against the question to put the best one first.",
       "technical": "Cross-encoder re-ranking of the fused candidates: hybrid_search over 2×k candidates → cross-encoder narrows to k. Shipped until the harness measured it against the keyword arm.",
       "shipped": false,
+      "eligibility": "reference",
       "metrics": {
-        "recall@5": 0.5066,
-        "hit@5": 0.9091,
-        "mrr": 0.8091,
-        "ndcg@5": 0.6289
+        "recall@5": 0.5882,
+        "hit@5": 0.8605,
+        "mrr": 0.7636,
+        "ndcg@5": 0.6473
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.2333,
-          "hit@5": 0.6667,
-          "mrr": 0.45,
-          "ndcg@5": 0.286
+          "recall@5": 0.4083,
+          "hit@5": 0.6,
+          "mrr": 0.4,
+          "ndcg@5": 0.3403
         },
         "direct": {
-          "recall@5": 0.5438,
+          "recall@5": 0.5564,
           "hit@5": 0.9545,
-          "mrr": 0.9091,
-          "ndcg@5": 0.7034
+          "mrr": 0.9015,
+          "ndcg@5": 0.7144
         },
         "paraphrase": {
-          "recall@5": 0.6712,
-          "hit@5": 1.0,
-          "mrr": 0.8,
-          "ndcg@5": 0.7129
+          "recall@5": 0.8152,
+          "hit@5": 0.9091,
+          "mrr": 0.8182,
+          "ndcg@5": 0.7923
         }
       },
       "mrrInterval": [
-        0.6879,
-        0.9152
+        0.6395,
+        0.8682
       ],
       "vsShipped": {
-        "won": 2,
+        "won": 3,
         "lost": 1,
         "outcome": "indistinguishable"
       },
@@ -242,7 +246,7 @@
           "outcome": "indistinguishable"
         },
         "direct": {
-          "won": 0,
+          "won": 1,
           "lost": 1,
           "outcome": "indistinguishable"
         },
@@ -254,7 +258,7 @@
       },
       "latencyBand": {
         "warm": "~100ms",
-        "load": "~10s"
+        "load": "~100ms"
       }
     },
     {
@@ -263,45 +267,46 @@
       "description": "Takes the keyword results alone and has the slower second model re-read them against the question, with no meaning-based search involved at all.",
       "technical": "Cross-encoder re-ranking of BM25 candidates. The arm that answers whether the dense stage contributes anything the re-ranker cannot recover on its own.",
       "shipped": false,
+      "eligibility": "reference",
       "metrics": {
-        "recall@5": 0.5272,
-        "hit@5": 0.9091,
-        "mrr": 0.7955,
-        "ndcg@5": 0.6472
+        "recall@5": 0.5897,
+        "hit@5": 0.8372,
+        "mrr": 0.7566,
+        "ndcg@5": 0.6507
       },
       "byCategory": {
         "conceptual": {
-          "recall@5": 0.1667,
+          "recall@5": 0.4167,
           "hit@5": 0.5,
-          "mrr": 0.4167,
-          "ndcg@5": 0.226
+          "mrr": 0.3833,
+          "ndcg@5": 0.3459
         },
         "direct": {
-          "recall@5": 0.578,
-          "hit@5": 1.0,
-          "mrr": 0.8977,
-          "ndcg@5": 0.7421
+          "recall@5": 0.5752,
+          "hit@5": 0.9545,
+          "mrr": 0.8955,
+          "ndcg@5": 0.7346
         },
         "paraphrase": {
-          "recall@5": 0.7364,
-          "hit@5": 1.0,
-          "mrr": 0.8,
-          "ndcg@5": 0.735
+          "recall@5": 0.7758,
+          "hit@5": 0.9091,
+          "mrr": 0.8182,
+          "ndcg@5": 0.7601
         }
       },
       "mrrInterval": [
-        0.6742,
-        0.8939
+        0.6279,
+        0.8682
       ],
       "vsShipped": {
-        "won": 1,
-        "lost": 0,
+        "won": 2,
+        "lost": 1,
         "outcome": "indistinguishable"
       },
       "vsShippedByCategory": {
         "conceptual": {
-          "won": 1,
-          "lost": 0,
+          "won": 2,
+          "lost": 1,
           "outcome": "indistinguishable"
         },
         "direct": {
@@ -317,7 +322,199 @@
       },
       "latencyBand": {
         "warm": "~10ms",
+        "load": "~100ms"
+      }
+    },
+    {
+      "id": "onnx-dense",
+      "label": "Meaning only, shippable",
+      "description": "The meaning-based search above, run on a lightweight engine small enough to go into production.",
+      "technical": "Inner-product search over normalized all-mpnet-base-v2 embeddings, computed with ONNX Runtime instead of torch. Same model as `dense`, so the two measure the runtime and nothing else.",
+      "shipped": false,
+      "eligibility": "candidate",
+      "metrics": {
+        "recall@5": 0.4963,
+        "hit@5": 0.7442,
+        "mrr": 0.6062,
+        "ndcg@5": 0.514
+      },
+      "byCategory": {
+        "conceptual": {
+          "recall@5": 0.3333,
+          "hit@5": 0.6,
+          "mrr": 0.37,
+          "ndcg@5": 0.284
+        },
+        "direct": {
+          "recall@5": 0.476,
+          "hit@5": 0.7727,
+          "mrr": 0.7083,
+          "ndcg@5": 0.5708
+        },
+        "paraphrase": {
+          "recall@5": 0.6848,
+          "hit@5": 0.8182,
+          "mrr": 0.6167,
+          "ndcg@5": 0.6095
+        }
+      },
+      "mrrInterval": [
+        0.4717,
+        0.7314
+      ],
+      "vsShipped": {
+        "won": 4,
+        "lost": 7,
+        "outcome": "indistinguishable"
+      },
+      "vsShippedByCategory": {
+        "conceptual": {
+          "won": 3,
+          "lost": 1,
+          "outcome": "indistinguishable"
+        },
+        "direct": {
+          "won": 1,
+          "lost": 5,
+          "outcome": "indistinguishable"
+        },
+        "paraphrase": {
+          "won": 0,
+          "lost": 1,
+          "outcome": "indistinguishable"
+        }
+      },
+      "latencyBand": {
+        "warm": "~10ms",
         "load": "~1s"
+      }
+    },
+    {
+      "id": "onnx-hybrid",
+      "label": "Both combined, shippable",
+      "description": "Merges the keyword ranking with the shippable meaning-based ranking into one list.",
+      "technical": "Weighted reciprocal-rank fusion of the BM25 ranking and the `onnx-dense` ranking, with the same weights and damping as `hybrid`.",
+      "shipped": false,
+      "eligibility": "candidate",
+      "metrics": {
+        "recall@5": 0.5542,
+        "hit@5": 0.8837,
+        "mrr": 0.638,
+        "ndcg@5": 0.5472
+      },
+      "byCategory": {
+        "conceptual": {
+          "recall@5": 0.3583,
+          "hit@5": 0.7,
+          "mrr": 0.3733,
+          "ndcg@5": 0.2903
+        },
+        "direct": {
+          "recall@5": 0.537,
+          "hit@5": 0.9545,
+          "mrr": 0.7614,
+          "ndcg@5": 0.6144
+        },
+        "paraphrase": {
+          "recall@5": 0.7667,
+          "hit@5": 0.9091,
+          "mrr": 0.6318,
+          "ndcg@5": 0.6464
+        }
+      },
+      "mrrInterval": [
+        0.5194,
+        0.7519
+      ],
+      "vsShipped": {
+        "won": 4,
+        "lost": 1,
+        "outcome": "indistinguishable"
+      },
+      "vsShippedByCategory": {
+        "conceptual": {
+          "won": 3,
+          "lost": 0,
+          "outcome": "indistinguishable"
+        },
+        "direct": {
+          "won": 1,
+          "lost": 1,
+          "outcome": "indistinguishable"
+        },
+        "paraphrase": {
+          "won": 0,
+          "lost": 0,
+          "outcome": "indistinguishable"
+        }
+      },
+      "latencyBand": {
+        "warm": "~10ms",
+        "load": "~1s"
+      }
+    },
+    {
+      "id": "bm25+onnx-rerank-20",
+      "label": "Keyword, then re-ranked from 20, shippable",
+      "description": "Takes the top 20 keyword results and has a lightweight second model re-read them against the question to pick the best few.",
+      "technical": "BM25 over 20 candidates → ms-marco-MiniLM-L-6-v2 cross-encoder on ONNX Runtime narrows to k. A new Arm rather than a change to `bm25+rerank`, whose 2×k pool can recover only the top 10.",
+      "shipped": false,
+      "eligibility": "candidate",
+      "metrics": {
+        "recall@5": 0.5838,
+        "hit@5": 0.8605,
+        "mrr": 0.7624,
+        "ndcg@5": 0.6443
+      },
+      "byCategory": {
+        "conceptual": {
+          "recall@5": 0.425,
+          "hit@5": 0.7,
+          "mrr": 0.4283,
+          "ndcg@5": 0.3548
+        },
+        "direct": {
+          "recall@5": 0.56,
+          "hit@5": 0.9091,
+          "mrr": 0.8864,
+          "ndcg@5": 0.7192
+        },
+        "paraphrase": {
+          "recall@5": 0.7758,
+          "hit@5": 0.9091,
+          "mrr": 0.8182,
+          "ndcg@5": 0.7576
+        }
+      },
+      "mrrInterval": [
+        0.6391,
+        0.8721
+      ],
+      "vsShipped": {
+        "won": 3,
+        "lost": 1,
+        "outcome": "indistinguishable"
+      },
+      "vsShippedByCategory": {
+        "conceptual": {
+          "won": 3,
+          "lost": 0,
+          "outcome": "indistinguishable"
+        },
+        "direct": {
+          "won": 0,
+          "lost": 1,
+          "outcome": "indistinguishable"
+        },
+        "paraphrase": {
+          "won": 0,
+          "lost": 0,
+          "outcome": "indistinguishable"
+        }
+      },
+      "latencyBand": {
+        "warm": "~1s",
+        "load": "~100ms"
       }
     }
   ]

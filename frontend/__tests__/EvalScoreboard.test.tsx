@@ -34,6 +34,7 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
         description: 'Word matching.',
         technical: 'BM25.',
         shipped: false,
+        eligibility: 'reference',
         metrics: { 'hit@5': 1.0, mrr: 0.5 },
         byCategory: {
           direct: { 'hit@5': 1.0, mrr: 0.5 },
@@ -53,6 +54,7 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
         description: 'Two-stage.',
         technical: 'Cross-encoder.',
         shipped: true,
+        eligibility: 'candidate',
         metrics: { 'hit@5': 0.9, mrr: 0.8 },
         byCategory: {
           direct: { 'hit@5': 0.9, mrr: 0.8 },
@@ -236,6 +238,31 @@ describe('EvalScoreboard Latency Band columns', () => {
     const rerank = within(screen.getByText('Two-stage.').closest('tr')!)
     expect(rerank.getByText('~100ms')).toBeInTheDocument()
     expect(rerank.getByText('~10s')).toBeInTheDocument()
+  })
+})
+
+describe('EvalScoreboard eligibility', () => {
+  it('marks each arm as a Candidate Arm or a Reference Arm', () => {
+    render(<EvalScoreboard run={makeRun()} />)
+
+    const bm25 = within(screen.getByText('Word matching.').closest('tr')!)
+    expect(bm25.getByText('REFERENCE')).toBeInTheDocument()
+    expect(bm25.queryByText('CANDIDATE')).not.toBeInTheDocument()
+
+    const rerank = within(screen.getByText('Two-stage.').closest('tr')!)
+    expect(rerank.getByText('CANDIDATE')).toBeInTheDocument()
+  })
+
+  it('explains what each eligibility means', () => {
+    render(<EvalScoreboard run={makeRun()} />)
+    expect(screen.getByText('REFERENCE')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/baseline.*cannot ship/i)
+    )
+    expect(screen.getByText('CANDIDATE')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/could ship/i)
+    )
   })
 })
 
@@ -427,8 +454,8 @@ describe('the generated results file', () => {
   it('publishes categoryCounts matching the holdout split', () => {
     expect(evalRun.categoryCounts).toBeDefined()
     expect(evalRun.categoryCounts?.direct).toBe(22)
-    expect(evalRun.categoryCounts?.paraphrase).toBe(5)
-    expect(evalRun.categoryCounts?.conceptual).toBe(6)
+    expect(evalRun.categoryCounts?.paraphrase).toBe(11)
+    expect(evalRun.categoryCounts?.conceptual).toBe(10)
   })
 
   it('flags exactly one arm as shipped', () => {
@@ -462,6 +489,13 @@ describe('the generated results file', () => {
       expect(arm.latencyBand.load).toMatch(band)
     }
     expect(JSON.stringify(evalRun)).not.toMatch(/p50|p95/)
+  })
+
+  it('marks every arm as a Candidate or Reference Arm, and the shipped arm as a Candidate', () => {
+    for (const arm of evalRun.arms) {
+      expect(['candidate', 'reference']).toContain(arm.eligibility)
+    }
+    expect(shippedArm()?.eligibility).toBe('candidate')
   })
 
   it('carries both registers of description for every arm', () => {

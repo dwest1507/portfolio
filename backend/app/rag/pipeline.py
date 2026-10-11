@@ -11,10 +11,14 @@ as deciding it will never be worth running again. `eval/run_eval.py` measures ev
 of them on every run, so the day the corpus grows past the point where keyword matching
 suffices, the harness is what says so.
 
-They are inert until an arm asks for them: faiss and sentence-transformers are imported
-inside the lazy loaders below, not at module scope, so the production image installs
-neither and startup loads neither. Both are declared in the `dev` dependency group,
-which the Dockerfile's `uv sync --no-dev` skips.
+Each of those stages also has an ONNX Runtime twin (`onnx_dense_search`,
+`onnx_hybrid_search`, `onnx_rerank`): the same models without torch, for the Candidate
+Arms that production could actually ship (ADR-0009).
+
+They are inert until an arm asks for them: faiss, sentence-transformers and the ONNX
+models are imported inside the lazy loaders below, not at module scope, so the production
+image installs none of them and startup loads none of them. All are declared in the `dev`
+dependency group, which the Dockerfile's `uv sync --no-dev` skips.
 """
 
 from __future__ import annotations
@@ -33,6 +37,8 @@ from .tokenize import tokenize
 if TYPE_CHECKING:  # imported for typing only; see the module docstring
     import faiss
     from sentence_transformers import CrossEncoder, SentenceTransformer
+
+    from .onnx_models import OnnxCrossEncoder, OnnxEmbedder
 
 EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -113,6 +119,8 @@ class RAGPipeline:
         indexes_dir: Path = INDEXES_DIR,
         embedder: SentenceTransformer | None = None,
         cross_encoder: CrossEncoder | None = None,
+        onnx_embedder: OnnxEmbedder | None = None,
+        onnx_cross_encoder: OnnxCrossEncoder | None = None,
     ) -> None:
         self._indexes_dir = indexes_dir
 
@@ -139,6 +147,9 @@ class RAGPipeline:
         self._faiss_index: faiss.Index | None = None
         self._embedder = embedder
         self._cross_encoder = cross_encoder
+        self._onnx_embeddings: np.ndarray | None = None
+        self._onnx_embedder = onnx_embedder
+        self._onnx_cross_encoder = onnx_cross_encoder
 
     # -- Lazily loaded indexes and models ------------------------------------
 
@@ -181,6 +192,39 @@ class RAGPipeline:
             self._cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL)
         return self._cross_encoder
 
+    @property
+    def onnx_embeddings(self) -> np.ndarray:
+        """The Corpus embedded by the ONNX embedder at index build time, read on first use.
+
+        A plain matrix rather than a FAISS index: an exact inner-product search over a few
+        hundred rows is one matrix product, and numpy is already on the serving path.
+        """
+        if self._onnx_embeddings is None:
+            embeddings = np.load(self._indexes_dir / "onnx_embeddings.npy")
+            if len(embeddings) != len(self.chunks):
+                raise ValueError(
+                    f"Index mismatch: onnx_embeddings.npy has {len(embeddings)} rows but "
+                    f"chunks.json has {len(self.chunks)} chunks. Run `make build-index`."
+                )
+            self._onnx_embeddings = embeddings
+        return self._onnx_embeddings
+
+    @property
+    def onnx_embedder(self) -> OnnxEmbedder:
+        if self._onnx_embedder is None:
+            from .onnx_models import OnnxEmbedder
+
+            self._onnx_embedder = OnnxEmbedder()
+        return self._onnx_embedder
+
+    @property
+    def onnx_cross_encoder(self) -> OnnxCrossEncoder:
+        if self._onnx_cross_encoder is None:
+            from .onnx_models import OnnxCrossEncoder
+
+            self._onnx_cross_encoder = OnnxCrossEncoder()
+        return self._onnx_cross_encoder
+
     # -- Retrieval -----------------------------------------------------------
 
     def retrieve(self, query: str, top_k: int = 5) -> list[str]:
@@ -218,10 +262,7 @@ class RAGPipeline:
 
         Returns chunk IDs, best first. Measured, not shipped.
         """
-        dense = self.dense_search(query, top_k=top_k)
-        sparse = self.sparse_search(query, top_k=top_k)
-        fused = reciprocal_rank_fusion([dense, sparse], [DENSE_WEIGHT, SPARSE_WEIGHT])
-        return [doc_id for doc_id, _ in fused[:top_k]]
+        return self._fused(self.dense_search(query, top_k=top_k), query, top_k)
 
     def rerank(self, query: str, candidate_ids: list[int], top_k: int = 5) -> list[int]:
         """Cross-encoder re-ranking. Returns chunk IDs, best first.
@@ -230,8 +271,35 @@ class RAGPipeline:
         """
         if len(candidate_ids) <= 1:
             return candidate_ids[:top_k]
+        return self._reranked(self.cross_encoder, query, candidate_ids, top_k)
+
+    # The ONNX Runtime versions of the three stages above, for the Candidate Arms. Same
+    # models, same fusion; only the runtime differs, so they could ship (ADR-0009).
+
+    def onnx_dense_search(self, query: str, top_k: int = 10) -> list[int]:
+        """Semantic search with the ONNX embedder. Returns chunk IDs, best first."""
+        query_vec = self.onnx_embedder.encode([query])[0]
+        scores = self.onnx_embeddings @ query_vec
+        return [int(i) for i in np.argsort(-scores, kind="stable")[:top_k]]
+
+    def onnx_hybrid_search(self, query: str, top_k: int = 10) -> list[int]:
+        """`hybrid_search` with `onnx_dense_search` as its dense stage."""
+        return self._fused(self.onnx_dense_search(query, top_k=top_k), query, top_k)
+
+    def onnx_rerank(self, query: str, candidate_ids: list[int], top_k: int = 5) -> list[int]:
+        """`rerank` with the ONNX cross-encoder."""
+        if len(candidate_ids) <= 1:
+            return candidate_ids[:top_k]
+        return self._reranked(self.onnx_cross_encoder, query, candidate_ids, top_k)
+
+    def _fused(self, dense: list[int], query: str, top_k: int) -> list[int]:
+        sparse = self.sparse_search(query, top_k=top_k)
+        fused = reciprocal_rank_fusion([dense, sparse], [DENSE_WEIGHT, SPARSE_WEIGHT])
+        return [doc_id for doc_id, _ in fused[:top_k]]
+
+    def _reranked(self, model, query: str, candidate_ids: list[int], top_k: int) -> list[int]:
         pairs = [[query, self.chunks[i]["text"]] for i in candidate_ids]
-        scores = self.cross_encoder.predict(pairs)
+        scores = model.predict(pairs)
         ranked = sorted(zip(candidate_ids, scores), key=lambda x: x[1], reverse=True)
         return [doc_id for doc_id, _ in ranked[:top_k]]
 

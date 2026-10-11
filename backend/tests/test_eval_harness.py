@@ -20,6 +20,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
 from run_eval import (
+    _ARM_LOADS,
     GATED_SPLIT,
     GOLDEN_SET_PATH,
     PUBLISHED_SPLIT,
@@ -37,7 +38,7 @@ from run_eval import (
     select_cases,
 )
 
-from eval.publish import ARMS, shipped_arm_id
+from eval.publish import ARM_SPEC_BY_ID, ARMS, shipped_arm_id
 
 GOLDEN = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
 CASES = GOLDEN["cases"]
@@ -80,6 +81,44 @@ class TestArmRegistry:
         pipeline = MagicMock()
         retrievers_for_arms(pipeline, top_k=5)["rerank"]("q")
         pipeline.hybrid_search.assert_called_once_with("q", top_k=10)
+
+    def test_the_rerank_over_20_arm_hands_the_onnx_cross_encoder_20_candidates(self):
+        """A pool of 2×k can only recover the top 10; this Arm exists to recover more."""
+        pipeline = MagicMock()
+        candidates = list(range(20))
+        pipeline.sparse_search.return_value = candidates
+        pipeline.onnx_rerank.return_value = [7, 3]
+
+        assert retrievers_for_arms(pipeline, top_k=5)["bm25+onnx-rerank-20"]("q") == [7, 3]
+        pipeline.sparse_search.assert_called_once_with("q", top_k=20)
+        pipeline.onnx_rerank.assert_called_once_with("q", candidates, top_k=5)
+        pipeline.rerank.assert_not_called()
+
+    def test_the_rerank_over_20_pool_does_not_follow_the_cutoff(self):
+        """20 is the Arm's definition, not a multiple of k: a changed pool is a new Arm."""
+        pipeline = MagicMock()
+        retrievers_for_arms(pipeline, top_k=3)["bm25+onnx-rerank-20"]("q")
+        pipeline.sparse_search.assert_called_once_with("q", top_k=20)
+
+    @pytest.mark.parametrize(
+        ("arm", "method"),
+        [("onnx-dense", "onnx_dense_search"), ("onnx-hybrid", "onnx_hybrid_search")],
+    )
+    def test_the_onnx_arms_retrieve_without_touching_torch(self, arm, method):
+        pipeline = MagicMock()
+        getattr(pipeline, method).return_value = [4, 2]
+
+        assert retrievers_for_arms(pipeline, top_k=5)[arm]("q") == [4, 2]
+        getattr(pipeline, method).assert_called_once_with("q", top_k=5)
+        pipeline.dense_search.assert_not_called()
+        pipeline.hybrid_search.assert_not_called()
+
+    def test_a_candidate_arm_loads_no_torch_model(self):
+        """What makes an Arm a Candidate (ADR-0009): nothing it loads needs torch."""
+        torch_models = {"embedder", "cross_encoder", "faiss_index"}
+        for arm in ARMS:
+            if ARM_SPEC_BY_ID[arm].eligibility == "candidate":
+                assert not torch_models & set(_ARM_LOADS[arm]), arm
 
 
 # ---------------------------------------------------------------------------
@@ -484,7 +523,14 @@ class TestLatencyTable:
 class _LazyPipeline:
     """Loads cost what a real pipeline's do: construction is cheap, each model is not."""
 
-    COSTS: ClassVar[dict[str, float]] = {"faiss_index": 0.1, "embedder": 2.0, "cross_encoder": 3.0}
+    COSTS: ClassVar[dict[str, float]] = {
+        "faiss_index": 0.1,
+        "embedder": 2.0,
+        "cross_encoder": 3.0,
+        "onnx_embeddings": 0.01,
+        "onnx_embedder": 1.0,
+        "onnx_cross_encoder": 0.5,
+    }
 
     def __init__(self, clock: _FakeClock) -> None:
         self._clock = clock
@@ -506,6 +552,9 @@ class TestLoadTime:
             ("hybrid", 2.102),
             ("rerank", 5.102),
             ("bm25+rerank", 3.002),
+            ("onnx-dense", 1.012),
+            ("onnx-hybrid", 1.012),
+            ("bm25+onnx-rerank-20", 0.502),
         ],
     )
     def test_is_what_the_arm_loads_before_its_first_answer(self, arm, seconds):

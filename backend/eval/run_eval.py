@@ -12,6 +12,13 @@ MRR, and nDCG@k so the arms can be compared directly:
     rerank       hybrid candidates re-ordered by the cross-encoder
     bm25+rerank  keyword candidates re-ordered by the cross-encoder, no dense stage
 
+and three Candidate Arms that run their models on ONNX Runtime instead of torch, so
+production could ship them (ADR-0009). The five above are Reference Arms:
+
+    onnx-dense           `dense` with the same embedding model on ONNX Runtime
+    onnx-hybrid          `hybrid` with onnx-dense as its dense stage
+    bm25+onnx-rerank-20  20 keyword candidates re-ordered by an ONNX cross-encoder
+
 Usage:
     uv run python eval/run_eval.py                      # all arms
     uv run python eval/run_eval.py --arms bm25          # no model download
@@ -339,6 +346,12 @@ def ndcg_at_k(retrieved: list[int], relevant: set[int], k: int) -> float:
 # ---------------------------------------------------------------------------
 
 
+#: The candidate pool of `bm25+onnx-rerank-20`: fixed, not a multiple of the cutoff. The
+#: 2×k pool of the older re-ranking arms can only recover chunks BM25 already put in its
+#: top 10, and widening it is a new Arm rather than an edit to theirs (ADR-0009).
+RERANK_POOL = 20
+
+
 def _retrievers(pipeline, top_k: int) -> dict:
     """How each arm retrieves, keyed by the same IDs as ARM_SPECS.
 
@@ -357,12 +370,19 @@ def _retrievers(pipeline, top_k: int) -> dict:
 
         return run
 
+    def onnx_reranked_from_pool(question: str) -> list[int]:
+        candidates = pipeline.sparse_search(question, top_k=RERANK_POOL)
+        return pipeline.onnx_rerank(question, candidates, top_k=top_k)
+
     return {
         "bm25": lambda q: pipeline.sparse_search(q, top_k=top_k),
         "dense": lambda q: pipeline.dense_search(q, top_k=top_k),
         "hybrid": lambda q: pipeline.hybrid_search(q, top_k=top_k),
         "rerank": reranked(pipeline.hybrid_search),
         "bm25+rerank": reranked(pipeline.sparse_search),
+        "onnx-dense": lambda q: pipeline.onnx_dense_search(q, top_k=top_k),
+        "onnx-hybrid": lambda q: pipeline.onnx_hybrid_search(q, top_k=top_k),
+        "bm25+onnx-rerank-20": onnx_reranked_from_pool,
     }
 
 
@@ -394,6 +414,9 @@ _ARM_LOADS: dict[str, tuple[str, ...]] = {
     "hybrid": ("faiss_index", "embedder"),
     "rerank": ("faiss_index", "embedder", "cross_encoder"),
     "bm25+rerank": ("cross_encoder",),
+    "onnx-dense": ("onnx_embeddings", "onnx_embedder"),
+    "onnx-hybrid": ("onnx_embeddings", "onnx_embedder"),
+    "bm25+onnx-rerank-20": ("onnx_cross_encoder",),
 }
 
 

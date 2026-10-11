@@ -7,6 +7,7 @@ import {
   metricLabel,
   sampleLabel,
   verdictLine,
+  type Eligibility,
   type EvalArm,
   type EvalRun,
 } from '@/data/evalResults'
@@ -19,6 +20,12 @@ function format(value: number | undefined): string {
 function wonLost(arm: EvalArm, category: string): string {
   const vs = category === 'all' ? arm.vsShipped : arm.vsShippedByCategory?.[category]
   return vs ? `${vs.won} won · ${vs.lost} lost` : '—'
+}
+
+/** What each eligibility means, for the badge's tooltip (ADR-0009). */
+const ELIGIBILITY_TITLE: Record<Eligibility, string> = {
+  candidate: 'Candidate: could ship, since it needs no heavyweight ML runtime in production',
+  reference: 'Reference: a baseline for comparison that cannot ship as built',
 }
 
 function categoryLabel(cat: string): string {
@@ -160,6 +167,12 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
                           IN PRODUCTION
                         </span>
                       )}
+                      <span
+                        title={ELIGIBILITY_TITLE[arm.eligibility]}
+                        className="rounded-full border border-white/[0.08] px-2 py-px font-mono text-[8px] tracking-widest text-[#8a8f98]"
+                      >
+                        {arm.eligibility.toUpperCase()}
+                      </span>
                     </span>
                     <span className="mt-0.5 block text-xs leading-relaxed text-[#8a8f98]">
                       {arm.description}
@@ -207,7 +220,8 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
       </div>
 
       <figcaption className="mt-3 text-xs leading-relaxed text-[#8a8f98]">
-        Best score per column in blue. This table and the sentence above it are generated from the
+        Best score per column in blue. Candidate configurations could ship; reference ones are
+        baselines that cannot. This table and the sentence above it are generated from the
         evaluation harness.{' '}
         {/* Only claimed when the run actually measured the held-out portion — which portion
             gets published is the harness's call, not this component's. */}

@@ -31,7 +31,7 @@ and none of them won, so they were removed from production. They are still imple
 | Project Content | MDX (`@next/mdx`) |
 | Backend Framework | Python FastAPI |
 | RAG Pipeline (served) | BM25 over a stemmed, stopword-filtered index. No model weights. |
-| RAG Pipeline (measured) | Also FAISS + sentence-transformers, weighted reciprocal-rank fusion, and cross-encoder re-ranking — eval-only, `dev` dependency group |
+| RAG Pipeline (measured) | Also FAISS + sentence-transformers, weighted reciprocal-rank fusion, and cross-encoder re-ranking (Reference Arms), and the same models on ONNX Runtime (Candidate Arms) — eval-only, `dev` dependency group |
 | Retrieval Eval | 111 answerable golden questions split 68 dev / 43 held-out (plus 20 Out-of-Scope Cases the harness skips) across three query categories (`direct`, `paraphrase`, `conceptual`); hit@5 / recall@5 / MRR / nDCG@5, gated in CI on the shipped arm |
 | LLM API | OpenAI (`OPENAI_MODEL`, default `gpt-6-luna`) |
 | Streaming | Vercel AI SDK (`useChat` hook) |

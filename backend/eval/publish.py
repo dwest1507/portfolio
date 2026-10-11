@@ -29,11 +29,19 @@ from pathlib import Path
 # Bumped to 4 when each arm gained `vsShipped` — questions won and lost against the
 # shipped arm and the sign-test outcome (ADR-0006) — and `mrrInterval`. A v3 verdict named
 # whichever arm scored highest; a v4 verdict names only differences beyond sampling noise.
-# v4 also carries each arm's `latencyBand`; no v4 document was published without it.
+# v4 also carries each arm's `latencyBand` and `eligibility` (Candidate or Reference Arm,
+# ADR-0009). A v4 document without `eligibility` predates the Candidate Arms and was
+# replaced by the first run that measured them.
 SCHEMA_VERSION = 4
 
 BEGIN_MARKER = "<!-- eval:begin -->"
 END_MARKER = "<!-- eval:end -->"
+
+
+#: An Arm that could become the Shipped Arm within production's constraints.
+CANDIDATE = "candidate"
+#: An Arm kept as a baseline but not eligible to ship. No new ones are added (ADR-0009).
+REFERENCE = "reference"
 
 
 @dataclass(frozen=True)
@@ -51,6 +59,10 @@ class Arm:
     description: str
     #: The implementation detail that description deliberately leaves out.
     technical: str
+    #: CANDIDATE for an arm production could run without a GPU-oriented ML runtime in the
+    #: image, REFERENCE for a baseline kept for comparison only (ADR-0009). Required, so a
+    #: new arm has to say which it is.
+    eligibility: str
     #: True for the one arm that mirrors what RAGPipeline.retrieve actually runs.
     shipped: bool = False
 
@@ -67,6 +79,7 @@ ARM_SPECS: tuple[Arm, ...] = (
             "BM25 over stemmed, stopword-filtered terms. Needs no embedding model, which "
             "is why the production image ships none. Matches RAGPipeline.retrieve."
         ),
+        eligibility=CANDIDATE,
         shipped=True,
     ),
     Arm(
@@ -77,12 +90,14 @@ ARM_SPECS: tuple[Arm, ...] = (
             "the question without repeating any of its words."
         ),
         technical="FAISS inner-product search over normalized all-mpnet-base-v2 embeddings.",
+        eligibility=REFERENCE,
     ),
     Arm(
         id="hybrid",
         label="Both combined",
         description="Runs both of the above and merges their rankings into one list.",
         technical="Weighted reciprocal-rank fusion of the sparse and dense rankings.",
+        eligibility=REFERENCE,
     ),
     Arm(
         id="rerank",
@@ -96,6 +111,7 @@ ARM_SPECS: tuple[Arm, ...] = (
             "candidates → cross-encoder narrows to k. Shipped until the harness measured "
             "it against the keyword arm."
         ),
+        eligibility=REFERENCE,
     ),
     Arm(
         id="bm25+rerank",
@@ -108,6 +124,49 @@ ARM_SPECS: tuple[Arm, ...] = (
             "Cross-encoder re-ranking of BM25 candidates. The arm that answers whether the "
             "dense stage contributes anything the re-ranker cannot recover on its own."
         ),
+        eligibility=REFERENCE,
+    ),
+    # The Candidate Arms below run their models on ONNX Runtime rather than torch, so any
+    # of them could ship without returning a GPU-oriented runtime to the image (ADR-0009).
+    Arm(
+        id="onnx-dense",
+        label="Meaning only, shippable",
+        description=(
+            "The meaning-based search above, run on a lightweight engine small enough to go "
+            "into production."
+        ),
+        technical=(
+            "Inner-product search over normalized all-mpnet-base-v2 embeddings, computed with "
+            "ONNX Runtime instead of torch. Same model as `dense`, so the two measure the "
+            "runtime and nothing else."
+        ),
+        eligibility=CANDIDATE,
+    ),
+    Arm(
+        id="onnx-hybrid",
+        label="Both combined, shippable",
+        description=(
+            "Merges the keyword ranking with the shippable meaning-based ranking into one list."
+        ),
+        technical=(
+            "Weighted reciprocal-rank fusion of the BM25 ranking and the `onnx-dense` ranking, "
+            "with the same weights and damping as `hybrid`."
+        ),
+        eligibility=CANDIDATE,
+    ),
+    Arm(
+        id="bm25+onnx-rerank-20",
+        label="Keyword, then re-ranked from 20, shippable",
+        description=(
+            "Takes the top 20 keyword results and has a lightweight second model re-read them "
+            "against the question to pick the best few."
+        ),
+        technical=(
+            "BM25 over 20 candidates → ms-marco-MiniLM-L-6-v2 cross-encoder on ONNX Runtime "
+            "narrows to k. A new Arm rather than a change to `bm25+rerank`, whose 2×k pool "
+            "can recover only the top 10."
+        ),
+        eligibility=CANDIDATE,
     ),
 )
 
@@ -317,6 +376,7 @@ def build_results_document(
                 "description": spec.description,
                 "technical": spec.technical,
                 "shipped": spec.shipped,
+                "eligibility": spec.eligibility,
                 "metrics": {m: round(r["summary"][m], 4) for m in metric_names},
                 "byCategory": by_category,
                 "mrrInterval": bootstrap_interval([c["mrr"] for c in r.get("cases", [])]),
@@ -514,11 +574,11 @@ def render_markdown(document: dict) -> str:
     """The generated block for docs/evaluation.md: provenance, table, verdict."""
     metrics = document["metricNames"]
     header = (
-        "| Arm | "
+        "| Arm | Eligibility | "
         + " | ".join(metric_label(m) for m in metrics)
         + " | MRR 95% CI | vs shipped (won / lost) | Latency Band (warm p95) | Load band |"
     )
-    align = "|-----|" + "|".join(["---------:"] * (len(metrics) + 4)) + "|"
+    align = "|-----|-------------|" + "|".join(["---------:"] * (len(metrics) + 4)) + "|"
 
     # Every arm tied for a column's best is bolded, not just the first one listed —
     # "Best score per column in bold" has to mean it.
@@ -536,7 +596,8 @@ def render_markdown(document: dict) -> str:
         cells.append(f"{vs['won']} / {vs['lost']}" if vs else "—")
         cells.extend([arm["latencyBand"]["warm"], arm["latencyBand"]["load"]])
         shipped = " _(shipped)_" if arm["shipped"] else ""
-        rows.append(f"| `{arm['id']}`{shipped} | " + " | ".join(cells) + " |")
+        eligibility = arm["eligibility"].capitalize()
+        rows.append(f"| `{arm['id']}`{shipped} | {eligibility} | " + " | ".join(cells) + " |")
 
     split = document.get("split", "all")
     described = (
