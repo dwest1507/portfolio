@@ -45,6 +45,27 @@ export interface Finding {
 /** Newest first. */
 export const findings: Finding[] = [
   {
+    id: 'shipped-arm-decision',
+    date: '2026-10-11',
+    title: 'No shippable model changed the answers enough to replace keyword search',
+    observed:
+      'Each arm that could ship (keyword search, ONNX semantic search, ONNX hybrid, and ' +
+      'keyword search re-ranked by an ONNX cross-encoder) retrieved for every golden ' +
+      'question, gpt-6-luna answered from what it retrieved, and the pinned Judge scored ' +
+      'the answers. On the 82 development cases (152 Required Facts), every arm was ' +
+      'indistinguishable from keyword search on Fact Recall: the most lopsided split, ' +
+      'hybrid’s 20 facts gained to 15 lost, has a sign-test p of 0.50. They were also ' +
+      'indistinguishable on Faithfulness and Decline accuracy. The 49 held-out cases (112 ' +
+      'Required Facts) gave the same result. The re-ranking arm came closest there (12 ' +
+      'gained, 4 lost, p = 0.077), and its ~1s warm Latency Band rules it out anyway. This ' +
+      'is not a win for keyword search; with this many cases the arms cannot be told apart.',
+    changed:
+      'Keyword search stays the shipped arm by ADR-0009’s default, so the shipped flag, the ' +
+      'production dependencies and the image are unchanged. Telling these arms apart needs ' +
+      'more of the paraphrase, conceptual and visitor questions they disagree on.',
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#result-no-candidate-arm-qualifies-keyword-search-stays-shipped',
+  },
+  {
     id: 'generation-model-chosen',
     date: '2026-10-11',
     title: 'The cheapest OpenAI model answered more faithfully than the Groq model it replaces',

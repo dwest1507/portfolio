@@ -1199,6 +1199,56 @@ COMPARISON_RUN_OUTPUT=runs/comparison.json make generation-comparison   # keep t
 PUBLISH_EVAL=1 ./scripts/backend-generation-comparison.sh    # report, then publish holdout
 ```
 
+### Result: no Candidate Arm qualifies; keyword search stays shipped
+
+Measured 2026-10-11 at `6691b03`, on 158 Chunks: `gpt-6-luna` at reasoning effort `low`,
+judged by `jev-1.13.0` with claims split by `gpt-6-luna`. It was run locally with CI's keys
+(`COMPARISON_RUN_OUTPUT=… make generation-comparison`), because the workflow isn't on `main`
+yet and so can't be dispatched. Nothing was published.
+
+| | Fact Recall | Faithfulness | Decline accuracy | Warm Latency Band |
+|---|---|---|---|---|
+| **`dev`** (82 cases: 68 answerable, 152 Required Facts) | | | | |
+| `bm25` (shipped) | 0.717 | 0.946 | 0.915 | `~1ms` |
+| `onnx-dense` | 0.697 | 0.967 | 0.854 | `~10ms` |
+| `onnx-hybrid` | 0.750 | 0.952 | 0.902 | `~10ms` |
+| `bm25+onnx-rerank-20` | 0.743 | 0.961 | 0.927 | `~1s` |
+| **`holdout`** (49 cases: 43 answerable, 112 Required Facts) | | | | |
+| `bm25` (shipped) | 0.643 | 0.928 | 0.918 | |
+| `onnx-dense` | 0.598 | 0.972 | 0.878 | |
+| `onnx-hybrid` | 0.670 | 0.943 | 0.980 | |
+| `bm25+onnx-rerank-20` | 0.714 | 0.944 | 0.959 | |
+
+Won–lost against `bm25`, with the exact sign test's two-sided p. Every comparison is
+indistinguishable at p < 0.05:
+
+| Arm | Split | Fact Recall | Faithfulness | Decline accuracy |
+|---|---|---|---|---|
+| `onnx-dense` | `dev` | 20–23 (p 0.76) | 4–3 | 4–9 (p 0.27) |
+| `onnx-hybrid` | `dev` | 20–15 (p 0.50) | 4–4 | 4–5 |
+| `bm25+onnx-rerank-20` | `dev` | 17–13 (p 0.59) | 4–3 | 4–3 |
+| `onnx-dense` | `holdout` | 12–17 (p 0.46) | 4–0 (p 0.13) | 3–5 |
+| `onnx-hybrid` | `holdout` | 11–8 (p 0.65) | 5–2 | 3–0 (p 0.25) |
+| `bm25+onnx-rerank-20` | `holdout` | 12–4 (p 0.077) | 5–3 | 2–0 |
+
+**By ADR-0009's rule, no Candidate Arm qualifies, so `bm25` stays the Shipped Arm.** On
+`dev`, no Arm is distinguishably better on Fact Recall, which is the first condition.
+`bm25+onnx-rerank-20` would fail the latency condition anyway: its warm band is `~1s`
+against the rule's `~100ms`. The two ONNX embedding Arms are inside it (`~10ms` warm). The
+rule reads the warm band only, so their `~1s` load band doesn't count against them. `holdout`
+confirms the result.
+
+This is **indistinguishable, not a BM25 win**. Fact Recall is compared per Required
+Fact, so `dev`'s 152 facts give the test the most data of the three metrics. Still, each
+Arm disagreed with `bm25` on only 30 to 43 of them, and the splits were close to even. The
+largest gap, re-ranking's 12–4 on `holdout`, is the kind of difference more paraphrase,
+conceptual and visitor-origin cases could confirm or dissolve (ADR-0009's Consequences).
+Each Arm's answers were generated afresh, so some of these disagreements are model noise,
+not retrieval.
+
+The run billed `gpt-6-luna` 334k tokens for answers and 330k for claim splitting, and Jev
+8.2M input tokens.
+
 ## Not yet measured
 
 Retrieval quality is only half of a RAG system's behaviour, and generation is now gated
