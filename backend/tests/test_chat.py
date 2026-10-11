@@ -1,6 +1,7 @@
 """Tests for POST /api/chat."""
 
 import json
+import logging
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -253,6 +254,68 @@ def test_the_daily_cap_is_configured_by_environment():
     from app.routes.chat import daily_cap
 
     assert daily_cap.limit == DAILY_REQUEST_CAP
+
+
+# ---------------------------------------------------------------------------
+# Visitor query log (ADR-0010)
+# ---------------------------------------------------------------------------
+
+
+def _visitor_query_records(caplog) -> list[dict]:
+    """The visitor query records the chat route emitted, parsed from their JSON lines."""
+    return [json.loads(r.getMessage()) for r in caplog.records if r.name == "app.visitor_queries"]
+
+
+def test_each_question_is_logged_with_its_chunk_count_and_nothing_else(
+    client, mock_pipeline, caplog
+):
+    """ADR-0010: the question text and how many chunks were retrieved — no IP, no
+    history, no answer. The record is what a later Golden Set case may be drawn from."""
+    history = [
+        {"role": "user", "content": "PRIOR-QUESTION-SENTINEL"},
+        {"role": "assistant", "content": "PRIOR-ANSWER-SENTINEL"},
+    ]
+    caplog.set_level(logging.INFO, logger="app.visitor_queries")
+    with patch("app.llm.AsyncOpenAI", return_value=_mock_openai_stream(["ANSWER-SENTINEL"])):
+        client.post(
+            "/api/chat",
+            json={"message": "Where is David based?", "history": history},
+            headers={"X-Forwarded-For": "203.0.113.7"},
+        )
+
+    assert _visitor_query_records(caplog) == [
+        {"event": "visitor_query", "question": "Where is David based?", "chunks_retrieved": 3}
+    ]
+    logged = "\n".join(
+        r.getMessage() + repr(vars(r)) for r in caplog.records if r.name == "app.visitor_queries"
+    )
+    for leaked in (
+        "testclient",  # the test client's remote address
+        "203.0.113.7",
+        "PRIOR-QUESTION-SENTINEL",
+        "PRIOR-ANSWER-SENTINEL",
+        "ANSWER-SENTINEL",
+    ):
+        assert leaked not in logged
+
+
+def test_an_empty_context_is_logged_as_zero_chunks(client, mock_pipeline, caplog):
+    """A zero count is what the production Empty Context rate is computed from."""
+    mock_pipeline.retrieve.return_value = []
+    caplog.set_level(logging.INFO, logger="app.visitor_queries")
+    with patch("app.llm.AsyncOpenAI", return_value=_mock_openai_stream(["I don't know."])):
+        client.post("/api/chat", json={"message": "What is David's favourite colour?"})
+
+    assert [r["chunks_retrieved"] for r in _visitor_query_records(caplog)] == [0]
+
+
+def test_a_capped_request_is_not_logged(client, mock_pipeline, caplog):
+    """Nothing was retrieved for it, so a record would count as an Empty Context."""
+    caplog.set_level(logging.INFO, logger="app.visitor_queries")
+    with patch("app.routes.chat.daily_cap", DailyCap(limit=0)):
+        client.post("/api/chat", json={"message": "Hello"})
+
+    assert _visitor_query_records(caplog) == []
 
 
 # ---------------------------------------------------------------------------

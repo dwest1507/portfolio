@@ -10,6 +10,7 @@ The chatbot answers recruiter questions about David's experience, skills, and pr
 - Welcome message: *"Hi! I'm David's AI assistant. Ask me anything about his experience, skills, or projects."*
 - Chat history persists for the browser session (cleared on tab close)
 - Max 50 messages per session; 1 message per 3 seconds (client-side debounce)
+- A one-line notice under the input: *"Questions are logged anonymously and answered by OpenAI."* — see [Visitor Query Log](#visitor-query-log)
 
 ## Index Build (Offline)
 
@@ -132,6 +133,59 @@ Conversation history:
 | FastAPI (`slowapi`) | 30 requests/minute per IP |
 | FastAPI (global daily cap) | `DAILY_REQUEST_CAP` requests/UTC day across all visitors (default 1,000); past it the reply is a polite "resting for today" message, not an error |
 | OpenAI project budget | Hard monthly limit set in OpenAI's dashboard — the backstop ([deployment.md](deployment.md#step-2a--the-openai-project-key-and-budget)) |
+
+## Visitor Query Log
+
+Each chat request that reaches retrieval writes one JSON line to stdout, which Railway
+collects with the service logs ([ADR-0010](adr/0010-visitor-queries-logged-with-notice.md)):
+
+```json
+{"event": "visitor_query", "question": "Where is David based?", "chunks_retrieved": 5}
+```
+
+That is the whole record: the question text and the number of chunks retrieved for it. No
+IP address, no conversation history, no answer. It is written before generation, so a
+question still counts when the model call fails. A request turned away by the daily cap is
+not logged: nothing was retrieved for it, and a record would count as an Empty Context.
+`backend/app/visitor_log.py` writes it; the chat tests pin its contents.
+
+### Empty Context rate
+
+The share of logged questions with `chunks_retrieved` of 0: production's Empty Context
+rate, which BM25-only retrieval used to assume rather than measure. Save the service logs
+to a file (Railway dashboard → backend service → **Logs**, filtered on `visitor_query`, or
+`railway logs` from the Railway CLI) and run:
+
+```bash
+grep -o '{"event": "visitor_query".*}' visitor-log.txt \
+  | jq -s '{questions: length,
+            empty_context: map(select(.chunks_retrieved == 0)) | length}
+           | .rate = (if .questions > 0 then .empty_context / .questions else null end)'
+```
+
+`grep -o` pulls the record out of any prefix the log viewer adds (a timestamp, a level)
+and drops everything else, uvicorn's access lines included. Railway keeps logs only for its
+plan's retention window, so export them before they age out if a longer period is wanted.
+
+### Promoting a logged question into the Golden Set
+
+A logged question never enters the repository on its own (ADR-0010, ADR-0003). Promoting
+one is a manual, reviewed act:
+
+1. **Read it.** Pick questions that are about David or his work, or that are a fair
+   Out-of-Scope question. Skip spam, tests and anything that is not a real question.
+2. **Scrub it.** Remove anything that could identify the visitor or a third party —
+   names, employers, emails, phone numbers, locations. Rephrase only as far as scrubbing
+   requires; the point is the visitor's own phrasing.
+3. **Label it** like any other case ([evaluation.md](evaluation.md#method)): a
+   Query Category and `relevant_phrases` for an answerable question, plus
+   `required_facts` written from the question and the Corpus only; or `answerable: false`
+   with no labels for an Out-of-Scope Case. Write the labels without any Arm's results in
+   view.
+4. **Mark it** `"origin": "visitor"`, so results on real visitor questions can be reported
+   separately.
+5. **Commit it in a reviewed batch**, as for authored cases. The hash rule assigns its
+   Split; never move it by hand.
 
 ## Error Handling
 

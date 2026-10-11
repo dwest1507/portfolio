@@ -143,7 +143,11 @@ rejects one with none), each a self-contained sentence that names its subject ("
 the CompTIA Security+ certification.", not "He holds Security+."), because the Judge reads
 it beside an answer with no question in view. They are written from the question and the
 corpus only, never with any arm's answers in view, and David reviews every one: they are
-facts about him. See [ADR-0007](adr/0007-generation-evaluation-harness.md).
+facts about him. See [ADR-0007](adr/0007-generation-evaluation-harness.md). A `visitor`
+case starts as a question from production's visitor query log and is promoted only by hand,
+after it is read, scrubbed and labelled
+([chatbot-rag.md](chatbot-rag.md#promoting-a-logged-question-into-the-golden-set),
+[ADR-0010](adr/0010-visitor-queries-logged-with-notice.md)).
 
 **Metrics**
 

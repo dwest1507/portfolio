@@ -28,7 +28,7 @@ uv run pytest tests/ -v --cov=app
 | High | `FilterBar` | Filters update visible cards; "All" resets; active state styling |
 | High | `ProjectsSection` | Correct cards shown/hidden after filter selection |
 | High | `ChatbotWidget` | Open/close toggle; message display; input handling; error state |
-| High | `ChatInput` | Debounce (3s); 50-message limit enforcement; empty input prevention |
+| High | `ChatInput` | Debounce (3s); 50-message limit enforcement; empty input prevention; the logging notice renders under the input |
 | Medium | `ProjectCard` | Renders title, description, tags, and links |
 | Medium | `ChatMessage` | User vs assistant message rendering |
 | Low | `Header` | Nav links render; mobile menu works |
@@ -85,6 +85,7 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | `POST /api/chat` | Production streams the configured OpenAI model with the eval's reasoning effort and completion cap, and no temperature |
 | High | Model config | `OPENAI_MODEL` overrides the model; unset, it is `gpt-6-luna`, the model ADR-0008 chose |
 | High | Daily cap | Past `DAILY_REQUEST_CAP`, the stream is the polite "resting for today" message, OpenAI and retrieval are never called, and the count resets on the next UTC day |
+| High | Visitor query log | Each question is logged with its retrieved-chunk count and nothing else — no IP, history or answer; an Empty Context logs 0; a capped request is not logged |
 | Medium | `GET /api/health` | Returns 200 `{ "status": "ok" }` |
 
 Test files are in `backend/tests/`. Fixtures (including mock indexes) are defined

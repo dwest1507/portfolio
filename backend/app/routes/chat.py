@@ -13,6 +13,7 @@ from ..config import DAILY_REQUEST_CAP
 from ..daily_cap import RESTING_MESSAGE, DailyCap
 from ..llm import Message, build_messages, format_context, generate_stream
 from ..rag.pipeline import get_pipeline
+from ..visitor_log import log_visitor_query
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,8 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
 
     pipeline = get_pipeline()
     context_chunks = pipeline.retrieve(body.message)
+    # Before generation, so a question still counts when the model call fails (ADR-0010).
+    log_visitor_query(body.message, len(context_chunks))
     context = format_context(context_chunks)
 
     messages = build_messages(context, body.history, body.message)

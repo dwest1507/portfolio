@@ -287,6 +287,7 @@ components/
 - **Timeout handling:** If response is truncated due to timeout, append "..." rather than cutting mid-word
 - Chat history persists for the browser session (cleared on tab close)
 - Max 50 messages per session (client-side enforced)
+- A one-line notice under the input: "Questions are logged anonymously and answered by OpenAI." Each question's text and retrieved-chunk count are logged, and nothing else (`docs/adr/0010-visitor-queries-logged-with-notice.md`)
 
 ### RAG Pipeline (Python FastAPI Backend)
 

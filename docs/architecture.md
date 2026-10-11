@@ -104,7 +104,8 @@ backend/
 1. User types a message in the chatbot widget
 2. `useChat` (Vercel AI SDK) sends `POST /api/chat` to Next.js proxy
 3. Next.js proxy forwards to `POST /api/chat` on FastAPI
-4. FastAPI runs BM25 keyword search over the chunk index and takes the top 5
+4. FastAPI runs BM25 keyword search over the chunk index and takes the top 5, and logs
+   the question text with the number of chunks retrieved — nothing else (ADR-0010)
 5. Constructs a prompt with context chunks + conversation history
 6. Streams the OpenAI response back through the proxy to the browser (past the global
    daily cap, steps 4–5 are skipped and a "resting for today" message is streamed instead)
