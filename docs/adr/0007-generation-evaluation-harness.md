@@ -71,7 +71,7 @@ LLM calls" therefore stays true of the retrieval harness and does not apply to t
   and production is moving to OpenAI (ADR-0008), so Floors measured on Groq at temperature
   0 would have understated the noise and been re-measured at the switch. If the selection
   rule picks Sol, the study is rerun on Sol.
-- **Floors and the rounding step are derived by a fixed rule** (`eval/variance.py`): the
+- **Floors and the rounding step are derived by a fixed rule** (`eval/variance.py`; amended 2026-10-11 to one step per metric, below): the
   step is the smallest of 0.005 / 0.01 / 0.02 / 0.05 / 0.1 no smaller than any published
   metric's held-out range across three runs; each Floor is the lowest full-set run minus
   twice its range, at least one step, rounded down to the step. Three runs understate the
@@ -113,3 +113,18 @@ is still dropped per sentence.
 - **Support threshold.** A chunk supports a claim when Jev finds `supports` more likely
   than not (P ≥ 0.5), not merely when `supports` is its likeliest answer. A sentence is
   dropped as filler only when Jev is confident it is filler (P(factual) < 0.2).
+- **Cost.** Judging a full record now bills Jev ~1.95M input tokens, about three times
+  as much as before, plus ~68k splitter tokens. That is still cents per run.
+
+## Amendment (2026-10-11): a rounding step per metric
+
+The fixed rule above set one rounding step from the largest held-out range among the
+published metrics. Rerun with the fixed questions (#81), Fact Recall's held-out range
+was 0.080, all of it from generation: Luna reworded 95 of 107 answers. One step for every
+metric then became 0.1, and both Floors 0.80, which would fire only on a collapse.
+Fact Recall is not gated, and its noise should not loosen the gated metrics.
+
+Each published metric is now rounded to a step from its own held-out range, by the same
+rule, and each Floor uses its own metric's step. David chose this over keeping the rule,
+and over running more generations first. Measured values: Fact Recall 0.1, Faithfulness
+0.05, Decline accuracy 0.005; Floors 0.85 and 0.915 (docs/evaluation.md).

@@ -4,11 +4,11 @@ The same commit, judged or generated and judged three times, does not give the s
 numbers twice (ADR-0007). This reads judged runs, as `judge_generation.py --output`
 writes them, and derives:
 
-- the rounding step for published metrics, from the held-out spread, because held-out is
-  what is published: the smallest round step no smaller than any metric's range;
+- each published metric's rounding step, from its held-out spread, because held-out is
+  what is published: the smallest round step no smaller than that metric's range;
 - the Faithfulness and Decline accuracy Floors, from the spread over every case, because
   the gate runs on the full Golden Set: twice the range below the lowest run, and at
-  least one step, rounded down to the step.
+  least one of the metric's steps, rounded down to its step.
 
     uv run --frozen python eval/variance.py runs/judged-1.json runs/judged-2.json ...
 """
@@ -49,10 +49,9 @@ def cases_in(run: dict, split: str) -> list[dict]:
     return [case for case in run["cases"] if split == "all" or case["split"] == split]
 
 
-def step_size(ranges: dict[str, float]) -> float:
-    """The smallest round step no smaller than the largest range, or the largest step."""
-    largest = max(ranges.values())
-    return next((step for step in STEPS if step >= largest), STEPS[-1])
+def step_size(spread_range: float) -> float:
+    """The smallest round step no smaller than one metric's range, or the largest step."""
+    return next((step for step in STEPS if step >= spread_range), STEPS[-1])
 
 
 def floor(values: list[float], spread_range: float, step: float) -> float:
@@ -63,14 +62,19 @@ def floor(values: list[float], spread_range: float, step: float) -> float:
 
 
 def derive(runs: list[dict]) -> dict:
-    """The spreads, rounding step and Floors these runs support."""
+    """The spreads, each metric's rounding step, and the Floors these runs support.
+
+    Each metric's step comes from its own held-out range, so a noisy metric (Fact Recall
+    moves with every reworded answer) cannot coarsen another's step or loosen its Floor.
+    """
     holdout = spread(runs, "holdout")
     every = spread(runs, "all")
-    step = step_size({metric: holdout[metric]["range"] for metric in PUBLISHED})
+    steps = {metric: step_size(holdout[metric]["range"]) for metric in PUBLISHED}
     floors = {
-        metric: floor(every[metric]["values"], every[metric]["range"], step) for metric in GATED
+        metric: floor(every[metric]["values"], every[metric]["range"], steps[metric])
+        for metric in GATED
     }
-    return {"spread": {"holdout": holdout, "all": every}, "step": step, "floors": floors}
+    return {"spread": {"holdout": holdout, "all": every}, "steps": steps, "floors": floors}
 
 
 def main() -> int:
@@ -85,7 +89,9 @@ def main() -> int:
         for metric, measured in metrics.items():
             values = ", ".join(f"{value:.4f}" for value in measured["values"])
             print(f"  {metric:<16} {values}  (range {measured['range']:.4f})")
-    print(f"\nRounding step: {derived['step']}")
+    print()
+    for metric, step in derived["steps"].items():
+        print(f"Rounding step, {metric}: {step}")
     for metric, value in derived["floors"].items():
         print(f"Floor, {metric}: {value}")
     return 0

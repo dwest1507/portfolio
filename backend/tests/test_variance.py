@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from eval.variance import floor, spread, step_size
+from eval.variance import derive, floor, spread, step_size
 
 
 def judged_case(split, supported, factual=1, declined=False, answerable=True):
@@ -40,14 +40,12 @@ def test_spread_is_each_metrics_range_across_runs_on_one_split():
 
 
 @pytest.mark.parametrize(
-    ("largest_range", "step"),
+    ("spread_range", "step"),
     [(0.0, 0.005), (0.004, 0.005), (0.008, 0.01), (0.01, 0.01), (0.031, 0.05), (0.2, 0.1)],
 )
-def test_the_step_is_the_smallest_round_step_covering_the_largest_range(largest_range, step):
+def test_the_step_is_the_smallest_round_step_covering_the_range(spread_range, step):
     """A step no smaller than the noise keeps noise alone from moving a published number."""
-    ranges = {"faithfulness": largest_range / 2, "factRecall": largest_range}
-
-    assert step_size(ranges) == step
+    assert step_size(spread_range) == step
 
 
 @pytest.mark.parametrize(
@@ -68,3 +66,22 @@ def test_a_floor_sits_two_ranges_below_the_lowest_run_rounded_down_to_the_step(
 ):
     """Three runs understate the noise, so the Floor leaves twice the observed range."""
     assert floor(values, spread_range, step) == pytest.approx(expected)
+
+
+def test_each_metric_is_rounded_and_floored_by_a_step_from_its_own_spread():
+    """One metric's noise must not coarsen another's step or loosen its Floor (#81).
+
+    Here Fact Recall swings by half while Faithfulness never moves: Faithfulness keeps
+    the smallest step, and its Floor sits one such step below the lowest run.
+    """
+
+    def run(conveyed):
+        case = judged_case("holdout", 1)
+        case["facts"] = [{"fact": "f", "conveyed": conveyed}]
+        return {"cases": [case, judged_case("holdout", 1)]}
+
+    derived = derive([run(True), run(False), run(True)])
+
+    assert derived["steps"]["factRecall"] == 0.1
+    assert derived["steps"]["faithfulness"] == 0.005
+    assert derived["floors"]["faithfulness"] == pytest.approx(0.995)
