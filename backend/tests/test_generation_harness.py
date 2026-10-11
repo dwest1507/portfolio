@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from eval.generation import (
+    SUPPORTS_AT,
     Generation,
     Relation,
     TokenBudgetExhausted,
@@ -197,26 +198,36 @@ def test_a_call_that_would_overspend_the_token_budget_is_never_made():
 class FakeJudge:
     """A Judge returning scripted judgments, one method per judgment.
 
-    Unscripted judgments take the least eventful answer: a sentence is factual, a chunk
-    says nothing about it, a fact is not conveyed, an answer does not decline.
+    Unscripted judgments take the least eventful answer: a sentence is factual and is one
+    claim, a chunk says nothing about it, a fact is not conveyed, an answer does not
+    decline. A scripted relation is certain unless given as a Relation.
     """
 
     model = "fake-judge-1.0.0"
+    splitter_model = "fake-splitter-1"
 
-    def __init__(self, filler=(), relations=None, conveyed=(), declining=()):
+    def __init__(self, filler=(), relations=None, conveyed=(), declining=(), claims=None):
         self.filler = set(filler)
         self.relations = relations or {}
         self.conveyed = set(conveyed)
         self.declining = set(declining)
+        self.split = claims or {}
         self.calls = []
 
     def is_factual(self, sentence):
         self.calls.append(("is_factual", sentence))
         return sentence not in self.filler
 
-    def relation(self, sentence, chunk):
-        self.calls.append(("relation", sentence, chunk))
-        return Relation(self.relations.get((sentence, chunk), "says_nothing"), {})
+    def claims(self, question, sentence):
+        self.calls.append(("claims", question, sentence))
+        return self.split.get(sentence, [sentence])
+
+    def relation(self, claim, chunk):
+        self.calls.append(("relation", claim, chunk))
+        scripted = self.relations.get((claim, chunk), "says_nothing")
+        if isinstance(scripted, Relation):
+            return scripted
+        return Relation(scripted, {scripted: 1.0})
 
     def conveys(self, answer, fact):
         self.calls.append(("conveys", fact))
@@ -300,6 +311,89 @@ def test_a_sentence_is_supported_when_any_one_chunk_supports_it():
     )
 
 
+def test_a_sentence_is_supported_only_when_every_one_of_its_claims_is():
+    """A compound sentence is split into claims; any chunk may support each (ADR-0007).
+
+    One chunk backing part of a sentence no longer passes the whole of it, and parts
+    backed by different chunks still do.
+    """
+    across = "David works at Booz Allen Hamilton as a Lead AI Engineer."
+    partly = "David works at Booz Allen Hamilton and has published three papers."
+    judge = FakeJudge(
+        claims={
+            across: ["David works at Booz Allen Hamilton.", "David is a Lead AI Engineer."],
+            partly: ["David works at Booz Allen Hamilton.", "David has published three papers."],
+        },
+        relations={
+            ("David works at Booz Allen Hamilton.", EMPLOYER_CHUNKS[0]): "supports",
+            ("David is a Lead AI Engineer.", EMPLOYER_CHUNKS[1]): "supports",
+        },
+    )
+
+    run = run_generation(
+        [EMPLOYER_CASE],
+        retrieving(EMPLOYER_CHUNKS),
+        answering({EMPLOYER_CASE["question"]: f"{across} {partly}"}),
+        judge=judge,
+    )
+
+    [result] = run["cases"]
+    assert [(s["text"], s["supported"]) for s in result["sentences"]] == [
+        (across, True),
+        (partly, False),
+    ]
+    assert ("claims", EMPLOYER_CASE["question"], partly) in judge.calls
+
+
+def test_a_factual_sentence_split_into_no_claims_is_judged_whole():
+    """Otherwise every one of its zero claims is supported, and so is the sentence."""
+    invented = "David has published three papers."
+    judge = FakeJudge(claims={invented: []})
+
+    run = run_generation(
+        [EMPLOYER_CASE],
+        retrieving(EMPLOYER_CHUNKS),
+        answering({EMPLOYER_CASE["question"]: invented}),
+        judge=judge,
+    )
+
+    [result] = run["cases"]
+    assert result["sentences"] == [
+        {"text": invented, "supported": False, "claims": [{"claim": invented, "supported": False}]}
+    ]
+
+
+def test_a_chunk_supports_a_claim_only_when_the_judge_finds_it_more_likely_than_not():
+    """`supports` as the likeliest of three is not enough; it must reach SUPPORTS_AT.
+
+    Below it, the Judge finds the claim more likely unsupported than supported, even when
+    `supports` is its single likeliest answer.
+    """
+    sure = "David works at Booz Allen Hamilton."
+    unsure = "David is a Lead AI Engineer."
+
+    def leaning(p):
+        rest = (1 - p) / 2
+        return Relation("supports", {"supports": p, "says_nothing": rest, "contradicts": rest})
+
+    judge = FakeJudge(
+        relations={
+            (sure, EMPLOYER_CHUNKS[0]): leaning(SUPPORTS_AT),
+            (unsure, EMPLOYER_CHUNKS[1]): leaning(SUPPORTS_AT - 0.05),
+        },
+    )
+
+    run = run_generation(
+        [EMPLOYER_CASE],
+        retrieving(EMPLOYER_CHUNKS),
+        answering({EMPLOYER_CASE["question"]: f"{sure} {unsure}"}),
+        judge=judge,
+    )
+
+    [result] = run["cases"]
+    assert [s["supported"] for s in result["sentences"]] == [True, False]
+
+
 def test_each_contradiction_is_listed_with_its_sentence_and_chunk():
     """Each one is a false statement about David, so each is listed for review, not averaged."""
     wrong = "David works at Deloitte."
@@ -313,9 +407,42 @@ def test_each_contradiction_is_listed_with_its_sentence_and_chunk():
     )
 
     assert run["contradictions"] == [
-        {"case": "employer-current", "sentence": wrong, "chunk": EMPLOYER_CHUNKS[0]},
+        {
+            "case": "employer-current",
+            "sentence": wrong,
+            "claim": wrong,
+            "chunk": EMPLOYER_CHUNKS[0],
+        },
     ]
     assert run["metrics"]["contradictions"] == 1
+
+
+def test_a_contradiction_in_one_claim_of_a_sentence_names_that_claim():
+    """The claim says what is wrong; the sentence alone may be mostly right."""
+    sentence = "David works at Deloitte as a Lead AI Engineer."
+    wrong = "David works at Deloitte."
+    judge = FakeJudge(
+        claims={sentence: [wrong, "David is a Lead AI Engineer."]},
+        relations={(wrong, EMPLOYER_CHUNKS[0]): "contradicts"},
+    )
+
+    run = run_generation(
+        [EMPLOYER_CASE],
+        retrieving(EMPLOYER_CHUNKS),
+        answering({EMPLOYER_CASE["question"]: sentence}),
+        judge=judge,
+    )
+
+    assert run["contradictions"] == [
+        {
+            "case": "employer-current",
+            "sentence": sentence,
+            "claim": wrong,
+            "chunk": EMPLOYER_CHUNKS[0],
+        },
+    ]
+    report = format_report(run)
+    assert f"  employer-current: {sentence}\n    claim: {wrong}\n" in report
 
 
 def test_the_cli_report_lists_each_contradiction_after_the_metrics():
@@ -495,8 +622,8 @@ def test_decline_accuracy_counts_both_directions():
     assert run["metrics"]["declinedOutOfScope"] == 1.0
 
 
-def test_a_judged_run_records_the_judge_version_that_answered():
-    """A Judge that changed silently would make two Measured Runs incomparable."""
+def test_a_judged_run_records_the_judge_version_and_splitter_that_answered():
+    """A Judge or splitter that changed silently would make two Measured Runs incomparable."""
     run = run_generation(
         [EMPLOYER_CASE],
         retrieving(EMPLOYER_CHUNKS),
@@ -505,6 +632,7 @@ def test_a_judged_run_records_the_judge_version_that_answered():
     )
 
     assert run["judge"] == "fake-judge-1.0.0"
+    assert run["splitter"] == "fake-splitter-1"
 
 
 # ---------------------------------------------------------------------------

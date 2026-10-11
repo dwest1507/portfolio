@@ -70,18 +70,23 @@ class Judge(Protocol):
 
     One method per judgment, each asked of the smallest input that answers it: the
     Judge is weak on multi-claim input, long context and negation, so a sentence is
-    judged against one chunk at a time, and a Decline is asked about directly rather
-    than inferred from a lack of support.
+    split into claims, each claim is judged against one chunk at a time, and a Decline
+    is asked about directly rather than inferred from a lack of support.
     """
 
     #: The exact Judge version that answered, recorded with every Measured Run.
     model: str
+    #: The model that split sentences into claims, recorded with every Measured Run.
+    splitter_model: str
 
     def is_factual(self, sentence: str) -> bool:
         """Whether the sentence states a fact about David or his work, rather than filler."""
 
-    def relation(self, sentence: str, chunk: str) -> Relation:
-        """Whether one chunk supports, contradicts, or says nothing about the sentence."""
+    def claims(self, question: str, sentence: str) -> list[str]:
+        """The sentence's claims, each standing alone; `question` resolves what it refers to."""
+
+    def relation(self, claim: str, chunk: str) -> Relation:
+        """Whether one chunk supports, contradicts, or says nothing about one claim."""
 
     def conveys(self, answer: str, fact: str) -> bool:
         """Whether the answer conveys a Required Fact, judged on meaning, not wording."""
@@ -246,6 +251,7 @@ def run_generation(
     run = {"cases": results, "usage": total_usage(results)}
     if judge is not None:
         run["judge"] = judge.model
+        run["splitter"] = judge.splitter_model
         run["metrics"] = score(results)
         run["contradictions"] = [
             {"case": r["id"], **contradiction}
@@ -273,14 +279,21 @@ def judge_case(case: dict, chunks: list[str], answer: str, judge: Judge) -> dict
     sentences = []
     contradictions = []
     for text in split_sentences(answer):
-        relations = judge_sentence(text, chunks, judge)
-        if relations is None:
+        claims = judge_sentence(case["question"], text, chunks, judge)
+        if claims is None:
             continue
-        sentences.append({"text": text, "supported": "supports" in relations})
+        sentences.append(
+            {
+                "text": text,
+                "supported": all(claim.supported for claim in claims),
+                "claims": [{"claim": c.claim, "supported": c.supported} for c in claims],
+            }
+        )
         contradictions += [
-            {"sentence": text, "chunk": chunk}
-            for chunk, label in zip(chunks, relations, strict=True)
-            if label == "contradicts"
+            {"sentence": text, "claim": claim.claim, "chunk": chunk}
+            for claim in claims
+            for chunk, relation in zip(chunks, claim.relations, strict=True)
+            if relation.label == "contradicts"
         ]
     facts = [
         {"fact": fact, "conveyed": judge.conveys(answer, fact)}
@@ -289,11 +302,44 @@ def judge_case(case: dict, chunks: list[str], answer: str, judge: Judge) -> dict
     return {**judged, "sentences": sentences, "contradictions": contradictions, "facts": facts}
 
 
-def judge_sentence(text: str, chunks: list[str], judge: Judge) -> list[str] | None:
-    """How each chunk bears on one sentence of an answer, or None if it is filler."""
+#: How likely the Judge must find `supports` for a chunk to count as supporting a claim:
+#: more likely than not, rather than merely the likeliest of three. Over three runs on the
+#: tuned hand labels, 0.6 and 0.7 lost more supported sentences than they caught
+#: unsupported ones (#81, docs/evaluation.md).
+SUPPORTS_AT = 0.5
+
+
+@dataclass(frozen=True)
+class ClaimJudgment:
+    """How each retrieved chunk bears on one claim of a sentence, in chunk order."""
+
+    claim: str
+    relations: list[Relation]
+
+    @property
+    def supported(self) -> bool:
+        """Whether any one chunk supports the claim, with confidence."""
+        return any(
+            relation.probabilities.get("supports", 0.0) >= SUPPORTS_AT
+            for relation in self.relations
+        )
+
+
+def judge_sentence(
+    question: str, text: str, chunks: list[str], judge: Judge
+) -> list[ClaimJudgment] | None:
+    """How each chunk bears on each claim of one sentence, or None if it is filler.
+
+    The sentence is supported only if every claim is; different chunks may support
+    different claims (ADR-0007). A factual sentence split into no claims is judged whole,
+    or it would pass with nothing checked.
+    """
     if not judge.is_factual(text):
         return None
-    return [judge.relation(text, chunk).label for chunk in chunks]
+    return [
+        ClaimJudgment(claim, [judge.relation(claim, chunk) for chunk in chunks])
+        for claim in judge.claims(question, text) or [text]
+    ]
 
 
 LIST_ITEM = re.compile(r"^(?:[-*+•]|\d+[.)])\s+")
@@ -433,6 +479,8 @@ def format_report(run: dict) -> str:
     ]
     for contradiction in run["contradictions"]:
         lines.append(f"  {contradiction['case']}: {contradiction['sentence']}")
+        if contradiction["claim"] != contradiction["sentence"]:
+            lines.append(f"    claim: {contradiction['claim']}")
         lines.append(f"    contradicted by: {' '.join(contradiction['chunk'].split())}")
     return "\n".join(lines)
 

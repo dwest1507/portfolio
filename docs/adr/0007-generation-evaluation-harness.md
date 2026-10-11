@@ -20,7 +20,8 @@ LLM calls" therefore stays true of the retrieval harness and does not apply to t
   provider, and it is from a different model family than the generator, which avoids
   self-preference bias. It is a paid service (fractions of a cent per run), accepted as an
   exception to the free-tier preference.
-- **Claims are sentences, split by code.** Jev is weak on multi-claim input, long context
+- **Claims are sentences, split by code** (amended 2026-10-11: each sentence is then
+  split into claims by an LLM, below). Jev is weak on multi-claim input, long context
   and negation, so each factual sentence is judged against one retrieved chunk at a time;
   a separate yes/no question filters out filler sentences, and Declines are detected
   separately rather than judged for support.
@@ -42,7 +43,7 @@ LLM calls" therefore stays true of the retrieval harness and does not apply to t
   generator's provider.
 - **An LLM rewriting answers into atomic claims** — rejected for now: a second unchecked
   LLM step. Revisit if the hand-labelled validation set shows Jev's disagreements cluster on
-  compound sentences.
+  compound sentences. *Adopted 2026-10-11: they did; see the amendment below.*
 - **Exact-string `must_include` checks** — rejected: they fail on wording, not on wrong
   answers.
 
@@ -76,3 +77,39 @@ LLM calls" therefore stays true of the retrieval harness and does not apply to t
   twice its range, at least one step, rounded down to the step. Three runs understate the
   noise, hence the factor of two. A change to the Judge's questions is a new measurement
   and the study is rerun, as it is for a new generation model.
+
+## Amendment (2026-10-11): claims are split by an LLM
+
+The condition for revisiting LLM claim splitting was met. Validating Jev against hand
+labels (#70) found every Faithfulness disagreement on a compound sentence: a chunk
+backing one part of a sentence made Jev call the whole sentence supported. Neither
+cheaper fix worked (#81, docs/evaluation.md):
+
+- **A strict `supports`** (every part), asked one chunk at a time, failed the sentences
+  whose parts different chunks back. Jev also still passed most partly supported ones.
+- **One question over the sentence and all its chunks** scored supported and unsupported
+  sentences in overlapping ranges, so no threshold separated them.
+
+So each factual sentence is now split into standalone claims, and each claim is judged
+against each chunk. A sentence is supported only if every claim is, and different
+chunks may support different claims. Sentences are still split by code first, and filler
+is still dropped per sentence.
+
+- **Splitter: OpenAI's `gpt-6-luna`**, reasoning effort `low`, given the question and the
+  sentence, with structured output. Jev returns judgments, not text. Luna is already used
+  by the harness, costs a few cents per judged run, and serves the OpenAI showcase
+  (ADR-0008). Groq's free quota is shared with production until the switch, and
+  `gpt-6.1-sol` costs about 20× as much.
+- **The splitter is not validated alone.** The Judge validation's pass bar measures the
+  splitter and Jev together, on held-out sentences. A splitter that drops or softens a
+  detail shows up there as an unsupported sentence passed.
+- **Self-preference risk is accepted.** Luna may also become the generator (ADR-0008), so
+  it would split its own answers. It only rewrites sentences into claims, and Jev, from a
+  different family, still judges every claim. The held-out bar would show a splitter that
+  smooths claims into supportable ones.
+- **Part of the measurement.** The splitter's reported model is recorded with every
+  judged run, next to the Judge version. Its answers vary from run to run (no
+  temperature), which adds to the run-to-run spread the Floors are set from.
+- **Support threshold.** A chunk supports a claim when Jev finds `supports` more likely
+  than not (P ≥ 0.5), not merely when `supports` is its likeliest answer. A sentence is
+  dropped as filler only when Jev is confident it is filler (P(factual) < 0.2).

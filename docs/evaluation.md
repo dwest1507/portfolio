@@ -497,14 +497,27 @@ method per judgment, each asked about the smallest input that answers it:
 |---|---|---|
 | Declines | the question and the whole answer | yes / no |
 | Is factual | one sentence | yes / no (no = filler) |
-| Relation | one sentence and one retrieved chunk | supports / contradicts / says nothing |
+| Claims | the question and one sentence | the sentence's standalone claims |
+| Relation | one claim and one retrieved chunk | supports / contradicts / says nothing |
 | Conveys | the whole answer and one Required Fact | yes / no |
 
 Per case, the answer is first asked whether it Declines. A Decline, and any answer to
 an Out-of-Scope Case, is judged no further: the Judge is weak on negation, so "the
-information doesn't include that" would otherwise count as an unsupported claim. Every other answer is split into sentences in code,
-filler is dropped, and each factual sentence is judged against each retrieved chunk
-separately. One supporting chunk is enough.
+information doesn't include that" would otherwise count as an unsupported claim. Every
+other answer is split into sentences in code, and filler is dropped. A sentence counts
+as filler only when Jev is confident it is (P(factual) < 0.2): a factual sentence dropped
+is never checked, which flatters Faithfulness.
+
+Each factual sentence is then split into standalone claims, and each claim is judged
+against each retrieved chunk separately. A sentence is supported only if every one of
+its claims is. Different chunks may support different claims, and a chunk supports a
+claim when Jev finds `supports` more likely than not (P ≥ 0.5). Jev returns judgments,
+not text, so the splitting is done by OpenAI's `gpt-6-luna` (`eval/splitter.py`), given
+the question so that "it" and "the system" can be resolved. Judging whole compound
+sentences let one chunk that backed part of a sentence pass all of it ([Validating the
+Judge](#validating-the-judge), [ADR-0007](adr/0007-generation-evaluation-harness.md)). A
+judged run records the splitter's model and usage next to the Judge version, and each
+sentence's claims.
 
 Sentences are split so that each states its claim on its own. A list item ("SQLite")
 is judged together with the line introducing its list ("David has worked with the
@@ -533,9 +546,10 @@ uv run --frozen python eval/judge_generation.py                                 
 uv run --frozen python eval/judge_generation.py --split dev --output judged.json
 ```
 
-This needs `JEV_API_KEY`. The CLI prints the metrics and then each Contradiction with
-its case, sentence and chunk. `--output` writes the same, plus per-case judgments, the
-Judge version, Jev's billed usage and the judged record's provenance, as JSON. Judged
+This needs `JEV_API_KEY`, and `OPENAI_CI_API_KEY` for the splitter. The CLI prints the
+metrics and then each Contradiction with its case, sentence, claim and chunk. `--output`
+writes the same, plus per-case judgments, the Judge version, the splitter's model, both
+billed usages and the judged record's provenance, as JSON. Judged
 runs are not committed or published yet, and nothing is gated.
 
 ## Validating the Judge
@@ -554,18 +568,21 @@ answer was written from, plus 12 held-out sentences (below):
 
 Each sentence is also marked compound (several claims) or single. 23 of the 32 are
 compound on purpose: if Jev's disagreements cluster there, that is the case for an LLM
-step that splits answers into atomic claims, rejected for now in ADR-0007. A test fails if
+step that splits answers into atomic claims. They did, and that step was adopted (#81,
+ADR-0007 amendment, and the result below). A test fails if
 a labelled sentence is no longer one the harness's splitter produces from its stored
 answer, so the labels cannot quietly drift away from what is judged.
 
 `eval/validate_judge.py` runs the labelled sentences through the harness's own sentence
-judgment and reports two agreements, one per thing a judged run outputs:
+judgment (filler, then claims, then each claim against each chunk) and reports two
+agreements, one per thing a judged run outputs:
 
 - **Faithfulness agreement**: filler, supported or unsupported, where contradicted and
   says-nothing both count as unsupported;
 - **Contradiction agreement**: whether a Contradiction is listed for the sentence.
 
-It then lists every disagreement with Jev's per-chunk relations, and counts disagreements
+It then lists every disagreement with its claims and Jev's per-chunk relations for each,
+and counts disagreements
 separately for compound and single sentences.
 
 ```bash
@@ -677,6 +694,42 @@ same thing; and the partly supported failure fixed by a stricter `supports` crit
 by claim splitting. Changing a Judge question is a new measurement, so the run-to-run
 spread below is rerun after any of these. Decline accuracy uses a separate judgment that
 this set does not test.
+
+### Fixing the questions (#81)
+
+The questions were tuned against the 32 labels above only. Jev judged no held-out
+sentence until the questions were frozen. Each step below was measured on the 32:
+
+| Approach | Supported kept | Across chunks kept | Unsupported caught |
+|---|---|---|---|
+| Before (#70) | 21 of 22 | 5 of 5 | 0 of 7 |
+| Strict `supports`, whole sentence, one chunk at a time | 18 of 22 | 1 of 5 | 1 of 7 |
+| One strict question over the sentence and all its chunks | no threshold meets the bar | | |
+| Hand-split claims, each against each chunk | 22 of 22 | 5 of 5 | 5 of 7 |
+| `gpt-6-luna` claims, each against each chunk (three runs) | 22, 20, 22 | 5, 5, 5 | 5, 7, 7 |
+
+- **Filler.** The question now asks for any checkable statement about David *or his
+  projects, systems and results*, named or not. On the 32, real filler then scored at
+  most 0.08 and every factual sentence at least 0.73. A sentence is dropped only below
+  0.2, because dropping a factual one is the costlier error.
+- **Partly supported sentences.** A strict `supports` (every part) asked one chunk at a
+  time fixed nothing it didn't also break: the sentences whose parts different chunks
+  back failed, and Jev still passed most partly supported ones. Asked once with all five
+  chunks, its scores for supported and unsupported sentences overlapped across
+  0.56–0.79. Splitting into claims was first tried with claims written by hand, as an
+  upper bound, and then with `gpt-6-luna`'s, and handled both kinds. The strict wording
+  is kept for claims, since the splitter sometimes leaves a list whole.
+- **Support threshold.** A claim is supported when Jev finds `supports` more likely than
+  not. Over three runs, 0.6 and 0.7 cost more supported sentences than they caught
+  unsupported ones.
+- **Contradictions.** The narrowed wording did not stop Jev listing a chunk that names a
+  different item of the same kind (another CI tool, another certificate). With every
+  claim judged against every chunk there are more pairs to list, and Contradiction
+  agreement on the 32 fell to 0.84–0.88. Contradictions are listed for review, not gated.
+- **Run-to-run noise.** Luna's splits and Jev's borderline probabilities both vary between
+  runs. Most of the spread above comes from a few sentences near the line: the diamonds
+  sentence scores 0.50–0.53, and an over-split such as "other DoD-approved LLMs besides…",
+  from "among others", can fail a supported sentence.
 
 ## Run-to-run spread
 

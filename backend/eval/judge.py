@@ -6,12 +6,18 @@ generator, which avoids self-preference bias (ADR-0007).
 
 Each judgment is one question about the smallest state that answers it. Jev is weak on
 multi-claim input, long context and negation, which is why the harness asks it about one
-sentence and one chunk at a time, and asks about a Decline directly.
+claim and one chunk at a time, and asks about a Decline directly. Jev returns judgments,
+not text, so splitting a sentence into claims is done by another model (eval/splitter.py).
+
+The filler and support questions were revised in #81, after validation against hand
+labels found Jev dropping factual sentences as filler and passing partly supported ones
+(docs/evaluation.md). Changing any question is a new measurement.
 """
 
 from __future__ import annotations
 
 import time
+from typing import Protocol
 
 import httpx
 
@@ -28,33 +34,69 @@ JEV_MODEL = "jev-1.13.0"
 RETRY_STATUSES = (429, 529)
 MAX_ATTEMPTS = 6
 
+# Strict: a chunk supports a claim only if it backs every part of it, since the splitter
+# can leave a list whole. `contradicts` is kept to incompatible statements about the same
+# thing: Jev took a chunk naming another item of the same kind as a contradiction.
 SUPPORT_QUESTION = {
     "type": "choice",
     "instructions": (
         "How does `section`, an excerpt from David West's portfolio, bear on `claim`, a "
-        "sentence from a chatbot's answer about David?"
+        "sentence from a chatbot's answer about David? The claim may make several "
+        "statements, for example in a list or joined by 'and'. Check each one."
     ),
     "criteria": {
-        "supports": "The section states the claim, or clearly implies that it is true.",
-        "contradicts": "The section states the opposite, or clearly implies the claim is false.",
-        "says_nothing": "The section does not address the claim either way.",
-    },
-}
-
-FACTUAL_QUESTION = {
-    "type": "noul",
-    "instructions": (
-        "Does `sentence`, from a chatbot's answer about David West, state a fact about "
-        "David: his work, skills, projects, background or circumstances?"
-    ),
-    "criteria": {
-        "true": "It asserts something about David that could be true or false.",
-        "false": (
-            "It is filler, such as a greeting, an offer to help, a heading or a "
-            "transition, and asserts nothing about David."
+        "supports": {
+            "what": "The section states or clearly implies every statement in the claim.",
+            "not_for": (
+                "A section that backs some statements but not all of them, or only the "
+                "general topic: that is says_nothing."
+            ),
+        },
+        "contradicts": {
+            "what": (
+                "The section states something incompatible with a statement in the claim, "
+                "about the same thing: a different number, date, level or outcome for it."
+            ),
+            "not_for": (
+                "A section that names a different item of the same kind, such as another "
+                "certificate, tool or model: that is says_nothing."
+            ),
+        },
+        "says_nothing": (
+            "Neither: at least one statement in the claim is not in the section, and none "
+            "is contradicted."
         ),
     },
 }
+
+# Widened from "a fact about David": sentences about his projects and systems that do not
+# name him were dropped as filler, and so never checked against a chunk.
+FACTUAL_QUESTION = {
+    "type": "noul",
+    "instructions": (
+        "Does `sentence`, from a chatbot's answer about David West, make a statement that "
+        "could be checked against his portfolio? That includes any statement about David, "
+        "or about a project, system, tool, employer or result of his, even when the "
+        "sentence does not name him."
+    ),
+    "criteria": {
+        "true": (
+            "It asserts something that could be true or false: what a project does, how a "
+            "system is built, a number, a tool, a date, a role, a result."
+        ),
+        "false": (
+            "It asserts nothing that could be checked: a greeting, an offer to help, a bare "
+            "heading, a transition, a yes or no on its own, or a remark about the provided "
+            "context or the chatbot itself."
+        ),
+    },
+}
+
+#: A sentence is dropped as filler only when Jev is this unlikely to call it factual. A
+#: factual sentence dropped is never checked, which flatters Faithfulness; filler kept is
+#: judged unsupported, which only counts against it. On the hand labels, filler scored at
+#: most 0.08 and factual sentences at least 0.73.
+FACTUAL_BELOW = 0.2
 
 CONVEYS_QUESTION = {
     "type": "noul",
@@ -85,24 +127,44 @@ class JudgeVersionChanged(RuntimeError):
     """Jev answered with a version other than the pinned one."""
 
 
+class Splitter(Protocol):
+    """Splits a sentence into standalone claims, such as `eval.splitter.OpenAISplitter`."""
+
+    #: The model that split, recorded with every Measured Run.
+    model: str
+
+    def __call__(self, question: str, sentence: str) -> list[str]: ...
+
+
 class JevJudge:
-    """A Judge asking TypeSafe's Jev, pinned to `JEV_MODEL`.
+    """A Judge asking TypeSafe's Jev, pinned to `JEV_MODEL`, with claims from `splitter`.
 
     Every answer is checked against the pin, so `model` is the version that actually
-    judged the run, not only the one requested. `usage` totals billed tokens.
+    judged the run, not only the one requested. `usage` totals Jev's billed tokens; the
+    splitter totals its own.
     """
 
-    def __init__(self, api_key: str, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self, api_key: str, splitter: Splitter, client: httpx.Client | None = None
+    ) -> None:
         self.model = JEV_MODEL
         self.usage = {"input_tokens": 0, "output_tokens": 0}
+        self.splitter = splitter
         self._headers = {"Authorization": f"Bearer {api_key}"}
         self._client = client or httpx.Client(timeout=60)
 
-    def is_factual(self, sentence: str) -> bool:
-        return self._yes({"sentence": sentence}, FACTUAL_QUESTION)
+    @property
+    def splitter_model(self) -> str:
+        return self.splitter.model
 
-    def relation(self, sentence: str, chunk: str) -> Relation:
-        answer = self._ask({"claim": sentence, "section": chunk}, SUPPORT_QUESTION)
+    def is_factual(self, sentence: str) -> bool:
+        return self._ask({"sentence": sentence}, FACTUAL_QUESTION)["noul"] >= FACTUAL_BELOW
+
+    def claims(self, question: str, sentence: str) -> list[str]:
+        return self.splitter(question, sentence)
+
+    def relation(self, claim: str, chunk: str) -> Relation:
+        answer = self._ask({"claim": claim, "section": chunk}, SUPPORT_QUESTION)
         return Relation(answer["choice"], answer["probabilities"])
 
     def conveys(self, answer: str, fact: str) -> bool:

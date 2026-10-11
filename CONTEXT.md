@@ -97,7 +97,7 @@ _Avoid_: No results, miss, null retrieval
 ### Language: Generation evaluation
 
 **Judge**:
-The model that decides whether a generated answer is supported by, contradicted by, or silent about the retrieved chunks. It is pinned to an exact version, because a Judge that changes silently makes Measured Runs incomparable just as a changed Corpus does.
+The model that decides whether a generated answer is supported by, contradicted by, or silent about the retrieved chunks. It judges claims that a separate splitter model writes from each sentence. It is pinned to an exact version, because a Judge that changes silently makes Measured Runs incomparable just as a changed Corpus does.
 _Avoid_: Grader, evaluator, critic
 
 **Required Fact**:
@@ -105,11 +105,11 @@ A statement, written as a full sentence, that a correct answer to a Golden Set c
 _Avoid_: Expected answer, must-include string, key fact
 
 **Faithfulness**:
-The share of an answer's factual sentences that at least one retrieved chunk supports. It measures whether the answer stays inside its context, not whether it is correct.
+The share of an answer's factual sentences whose every claim some retrieved chunk supports (different chunks may support different claims). It measures whether the answer stays inside its context, not whether it is correct.
 _Avoid_: Groundedness, accuracy, hallucination rate
 
 **Contradiction**:
-A sentence in an answer that a retrieved chunk states the opposite of. Reported individually for review rather than averaged, because each one is a false statement about David.
+A sentence in an answer, one of whose claims a retrieved chunk states the opposite of. Reported individually for review rather than averaged, because each one is a false statement about David.
 _Avoid_: Hallucination, error
 
 **Decline**:

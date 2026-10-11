@@ -69,15 +69,20 @@ def test_sentences_supported_only_by_several_chunks_together_are_marked():
 
 
 def test_each_labelled_sentence_is_loaded_with_the_chunks_its_answer_was_written_from():
-    """The Judge must see what the generator saw, not today's retrieval."""
+    """The Judge must see what the generator saw, not today's retrieval.
+
+    The question comes too: splitting a sentence into claims resolves "it" and "the
+    system" from it.
+    """
     record = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
-    chunks = {case["id"]: case["chunks"] for case in record["cases"]}
+    cases = {case["id"]: case for case in record["cases"]}
 
     items = load_validation_set(held_out=True)
 
     assert len(items) == len(json.loads(VALIDATION_PATH.read_text())["sentences"])
     for item in items:
-        assert item["chunks"] == chunks[item["case"]]
+        assert item["chunks"] == cases[item["case"]]["chunks"]
+        assert item["question"] == cases[item["case"]]["question"]
 
 
 def test_held_out_sentences_are_left_out_unless_asked_for():
@@ -99,7 +104,14 @@ CHUNKS = ["David works at Booz Allen Hamilton.", "The corpus holds 19 works."]
 
 
 def labelled(text, label, compound=False):
-    return {"case": "c", "text": text, "label": label, "compound": compound, "chunks": CHUNKS}
+    return {
+        "case": "c",
+        "question": "q",
+        "text": text,
+        "label": label,
+        "compound": compound,
+        "chunks": CHUNKS,
+    }
 
 
 def test_agreement_is_counted_as_faithfulness_counts_a_sentence():

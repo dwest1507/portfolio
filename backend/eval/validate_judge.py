@@ -12,7 +12,8 @@ judgments of them. The final measurement judges them too, and checks the pass ba
 
     uv run --frozen python eval/validate_judge.py --final --output validation-run.json
 
-Needs JEV_API_KEY. Labels still marked "draft" have not been reviewed by David, and are
+Needs JEV_API_KEY, and OPENAI_CI_API_KEY for the model that splits sentences into claims
+(eval/splitter.py). Labels still marked "draft" have not been reviewed by David, and are
 not measured against unless asked to with --draft.
 """
 
@@ -28,7 +29,11 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from eval.generation import Judge, judge_sentence  # (needs the sys.path line above)
+from eval.generation import (  # (needs the sys.path line above)
+    ClaimJudgment,
+    Judge,
+    judge_sentence,
+)
 
 VALIDATION_PATH = Path(__file__).resolve().parent / "judge_validation.json"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -38,16 +43,21 @@ HAND_LABELS = ("filler", "supported", "contradicted", "says_nothing")
 
 
 def load_validation_set(path: Path = VALIDATION_PATH, held_out: bool = False) -> list[dict]:
-    """The labelled sentences, each with the chunks its answer was written from.
+    """The labelled sentences, each with its case's question and the chunks its answer
+    was written from.
 
     Held-out sentences are left out unless asked for: they are kept out of tuning the
     Judge's questions, and judged only in the final measurement.
     """
     validation = json.loads(path.read_text(encoding="utf-8"))
     record = json.loads((REPO_ROOT / validation["record"]).read_text(encoding="utf-8"))
-    chunks = {case["id"]: case["chunks"] for case in record["cases"]}
+    cases = {case["id"]: case for case in record["cases"]}
     return [
-        {**sentence, "chunks": chunks[sentence["case"]]}
+        {
+            **sentence,
+            "question": cases[sentence["case"]]["question"],
+            "chunks": cases[sentence["case"]]["chunks"],
+        }
         for sentence in validation["sentences"]
         if held_out or not sentence.get("heldOut")
     ]
@@ -67,9 +77,11 @@ def compare(items: list[dict], judge: Judge) -> dict:
     tally["single"] = {"sentences": 0, "disagreements": 0}
     held_out_unsupported, supported, across = [], [], []
     for item in items:
-        relations = judge_sentence(item["text"], item["chunks"], judge)
-        verdict = judge_verdict(relations)
-        contradicts = relations is not None and "contradicts" in relations
+        claims = judge_sentence(item["question"], item["text"], item["chunks"], judge)
+        verdict = judge_verdict(claims)
+        contradicts = claims is not None and any(
+            relation.label == "contradicts" for claim in claims for relation in claim.relations
+        )
         faithful = verdict == HAND_VERDICT[item["label"]]
         contradiction = contradicts == (item["label"] == "contradicted")
         faithful_agreed += faithful
@@ -92,7 +104,16 @@ def compare(items: list[dict], judge: Judge) -> dict:
                     "hand": item["label"],
                     "judge": verdict,
                     "judgeContradicts": contradicts,
-                    "relations": relations,
+                    "claims": None
+                    if claims is None
+                    else [
+                        {
+                            "claim": claim.claim,
+                            "supported": claim.supported,
+                            "relations": [relation.label for relation in claim.relations],
+                        }
+                        for claim in claims
+                    ],
                 }
             )
     return {
@@ -145,11 +166,11 @@ HAND_VERDICT = {
 }
 
 
-def judge_verdict(relations: list[str] | None) -> str:
-    """The verdict a judged run reaches: supported if any one chunk supports the sentence."""
-    if relations is None:
+def judge_verdict(claims: list[ClaimJudgment] | None) -> str:
+    """The verdict a judged run reaches: supported if some chunk supports every claim."""
+    if claims is None:
         return "filler"
-    return "supported" if "supports" in relations else "unsupported"
+    return "supported" if all(claim.supported for claim in claims) else "unsupported"
 
 
 def main() -> int:
@@ -164,20 +185,26 @@ def main() -> int:
     args = parser.parse_args()
 
     from dotenv import load_dotenv
+    from openai import OpenAI
 
     from eval.judge import JevJudge
     from eval.publish import _git_commit
+    from eval.splitter import OpenAISplitter
 
     status = json.loads(VALIDATION_PATH.read_text(encoding="utf-8"))["status"]
     if status != "reviewed" and not args.draft:
         raise SystemExit(f"FAIL — the labels are {status}, not reviewed. Pass --draft to measure.")
 
     load_dotenv(BACKEND_ROOT / ".env")
-    judge = JevJudge(os.environ["JEV_API_KEY"])
+    splitter = OpenAISplitter(OpenAI(api_key=os.environ["OPENAI_CI_API_KEY"], max_retries=6))
+    judge = JevJudge(os.environ["JEV_API_KEY"], splitter)
     report = compare(load_validation_set(held_out=args.final), judge)
 
     scope = "with" if args.final else "without"
-    print(f"Judge: {judge.model} | {report['sentences']} {status} hand labels, {scope} held-out\n")
+    print(
+        f"Judge: {judge.model}, claims split by {splitter.model} | "
+        f"{report['sentences']} {status} hand labels, {scope} held-out\n"
+    )
     print(f"  Faithfulness agreement   {report['faithfulnessAgreement']:.3f}")
     print(f"  Contradiction agreement  {report['contradictionAgreement']:.3f}")
     for group in ("compound", "single"):
@@ -189,7 +216,9 @@ def main() -> int:
         kind = "compound" if d["compound"] else "single"
         print(f"  {d['case']} ({kind}): hand {d['hand']}, Jev {d['judge']}{listed}")
         print(f"    {d['text']}")
-        print(f"    relations: {d['relations']}")
+        for claim in d["claims"] or []:
+            mark = "supported" if claim["supported"] else "unsupported"
+            print(f"      {mark:<11} {claim['claim']}  {claim['relations']}")
     if args.final:
         print("\nPass bar:")
         for measure, bar in PASS_BAR.items():
@@ -197,9 +226,11 @@ def main() -> int:
             shown = "none" if value is None else f"{value:.3f}"
             print(f"  {measure:<26} {shown:>6}  (bar {bar:.0%})")
     print(f"\nJudge usage: {judge.usage}")
+    print(f"Splitter usage: {splitter.usage}")
     if args.output:
         document = {
             "judge": judge.model,
+            "splitter": splitter.model,
             "labels": status,
             "commit": _git_commit(),
             "judgedAt": datetime.now(UTC).isoformat(timespec="seconds"),

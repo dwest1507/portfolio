@@ -1,14 +1,16 @@
 """Judge a stored generation record, such as the Groq baseline, without regenerating it.
 
 Each case is replayed from the record: the Judge sees the answer the model gave and the
-exact chunks it was given, so the only model called is the Judge. Prints Fact Recall,
+exact chunks it was given, so the only models called are the Judge and the model that
+splits its sentences into claims. Prints Fact Recall,
 Faithfulness and Decline accuracy, then lists every Contradiction (ADR-0007):
 
     uv run --frozen python eval/judge_generation.py                  # the Groq baseline
     uv run --frozen python eval/judge_generation.py --split holdout --output judged.json
 
-Needs JEV_API_KEY. Jev bills per input token: judging the whole baseline costs well under
-a cent.
+Needs JEV_API_KEY, and OPENAI_CI_API_KEY for the model that splits sentences into claims
+(eval/splitter.py). Jev bills per input token: judging the whole baseline costs well under
+a cent, and splitting a few cents.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from eval.judge import JevJudge
 from eval.publish import _git_commit
 from eval.run_eval import GOLDEN_SET_PATH, SPLITS, select_cases
 from eval.run_generation import BASELINE_PATH
+from eval.splitter import OpenAISplitter
 
 #: What a judged run carries over from the record it judged: what was measured, and when.
 RECORD_KEYS = (
@@ -59,7 +62,10 @@ def main() -> int:
     record = json.loads(args.record.read_text(encoding="utf-8"))
     golden = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
     cases = select_cases(golden["cases"], args.split)
-    judge = JevJudge(os.environ["JEV_API_KEY"])
+    from openai import OpenAI
+
+    splitter = OpenAISplitter(OpenAI(api_key=os.environ["OPENAI_CI_API_KEY"], max_retries=6))
+    judge = JevJudge(os.environ["JEV_API_KEY"], splitter)
 
     def on_case(result: dict) -> None:
         verdict = "declined" if result["declined"] else f"{len(result['sentences'])} factual"
@@ -77,6 +83,8 @@ def main() -> int:
         "split": args.split,
         "judge": run["judge"],
         "judgeUsage": judge.usage,
+        "splitter": run["splitter"],
+        "splitterUsage": splitter.usage,
         "commit": _git_commit(),
         "judgedAt": datetime.now(UTC).isoformat(timespec="seconds"),
         "metrics": run["metrics"],
@@ -86,6 +94,7 @@ def main() -> int:
 
     print(format_report(run))
     print(f"\nJudge usage: {judge.usage}")
+    print(f"Splitter usage ({run['splitter']}): {splitter.usage}")
     if args.output:
         args.output.write_text(
             json.dumps(judged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"

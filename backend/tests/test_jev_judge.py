@@ -36,8 +36,45 @@ def jev_answering(answer: dict, model: str = "jev-1.13.0", requests: list | None
     return httpx.Client(transport=httpx.MockTransport(handle))
 
 
+class WholeSentence:
+    """A splitter that returns each sentence as its one claim."""
+
+    model = "whole-sentence-1"
+
+    def __call__(self, question, sentence):
+        return [sentence]
+
+
 def test_the_judge_is_pinned_to_an_exact_version():
     assert JEV_MODEL == "jev-1.13.0"
+
+
+def test_claims_come_from_the_splitter_the_judge_was_given():
+    """Jev returns judgments, not text, so another model splits sentences into claims."""
+
+    class Halves:
+        model = "halves-1"
+
+        def __call__(self, question, sentence):
+            return [f"{question}: first half", f"{question}: second half"]
+
+    judge = JevJudge("test-key", Halves(), client=jev_answering({"type": "noul", "noul": 0.7}))
+
+    assert judge.claims("q", "A and B.") == ["q: first half", "q: second half"]
+    assert judge.splitter_model == "halves-1"
+
+
+@pytest.mark.parametrize(("noul", "factual"), [(0.9, True), (0.3, True), (0.1, False)])
+def test_a_sentence_is_filler_only_when_jev_is_confident_it_is(noul, factual):
+    """A factual sentence dropped as filler is never checked, which flatters Faithfulness.
+
+    Filler kept as factual only counts against it, so the doubtful middle is kept.
+    """
+    judge = JevJudge(
+        "test-key", WholeSentence(), client=jev_answering({"type": "noul", "noul": noul})
+    )
+
+    assert judge.is_factual("The system enforces several safeguards.") is factual
 
 
 def test_a_support_judgment_asks_jev_about_one_sentence_against_one_chunk():
@@ -48,7 +85,7 @@ def test_a_support_judgment_asks_jev_about_one_sentence_against_one_chunk():
         "probabilities": {"supports": 0.9, "contradicts": 0.02, "says_nothing": 0.08},
         "confidence": 0.85,
     }
-    judge = JevJudge("test-key", client=jev_answering(answer, requests=requests))
+    judge = JevJudge("test-key", WholeSentence(), client=jev_answering(answer, requests=requests))
 
     relation = judge.relation("David works at Booz Allen.", "I work at Booz Allen Hamilton.")
 
@@ -88,7 +125,9 @@ def test_a_support_judgment_asks_jev_about_one_sentence_against_one_chunk():
 def test_yes_no_judgments_ask_one_noul_question_and_answer_yes_above_even_odds(ask, state):
     requests = []
     judge = JevJudge(
-        "test-key", client=jev_answering({"type": "noul", "noul": 0.7}, requests=requests)
+        "test-key",
+        WholeSentence(),
+        client=jev_answering({"type": "noul", "noul": 0.7}, requests=requests),
     )
 
     assert ask(judge) is True
@@ -102,7 +141,9 @@ def test_yes_no_judgments_ask_one_noul_question_and_answer_yes_above_even_odds(a
 def test_an_answer_from_any_other_judge_version_is_refused():
     """A silently upgraded Judge makes runs incomparable, so it fails the run instead."""
     judge = JevJudge(
-        "test-key", client=jev_answering({"type": "noul", "noul": 0.7}, model="jev-1.14.0")
+        "test-key",
+        WholeSentence(),
+        client=jev_answering({"type": "noul", "noul": 0.7}, model="jev-1.14.0"),
     )
 
     with pytest.raises(JudgeVersionChanged, match="jev-1.14.0"):
@@ -110,7 +151,9 @@ def test_an_answer_from_any_other_judge_version_is_refused():
 
 
 def test_billed_usage_is_totalled_across_judgments():
-    judge = JevJudge("test-key", client=jev_answering({"type": "noul", "noul": 0.2}))
+    judge = JevJudge(
+        "test-key", WholeSentence(), client=jev_answering({"type": "noul", "noul": 0.2})
+    )
 
     judge.is_factual("Happy to help!")
     judge.is_factual("Anything else?")
