@@ -63,3 +63,17 @@ generation needed choices this ADR did not make (#72, `eval/select_model.py`):
   amendment), and one run of each is compared. Their run-to-run noise adds disagreements in
   both directions. That makes a real difference harder to call, while the test's false
   alarm rate stays at 5%.
+
+## Amendment (2026-10-11): the switch (#73)
+
+- **Production serves `gpt-6-luna` at reasoning effort `low`, with no temperature.** Luna
+  rejects any temperature but the default (ADR-0007 amendment, 2026-10-10), so production
+  shares the eval's model, prompt, reasoning effort and completion cap instead of
+  temperature 0. `OPENAI_MODEL` overrides the model; the reasoning effort is a code
+  constant, because it is part of what was measured. The generation gate always measures
+  the code default, so an override in Railway is unmeasured.
+- **The daily cap counts in memory, per UTC day,** across all visitors (`DAILY_REQUEST_CAP`,
+  default 1,000). A capped request does no retrieval and no generation, and streams a
+  "resting for today" message in the normal answer format. A restart resets the count and
+  replicas would each keep their own. That is acceptable for one Railway instance, because
+  the OpenAI project's hard budget is the backstop, not the cap.

@@ -1,6 +1,6 @@
 # AI Chatbot & RAG Pipeline
 
-The chatbot answers recruiter questions about David's experience, skills, and projects using a Retrieval-Augmented Generation (RAG) pipeline backed by Groq for LLM inference.
+The chatbot answers recruiter questions about David's experience, skills, and projects using a Retrieval-Augmented Generation (RAG) pipeline backed by OpenAI for LLM inference.
 
 ## User Experience
 
@@ -85,7 +85,8 @@ Prompt construction
 (system + context + history)
     │
     ▼
-Groq API (GROQ_MODEL env var, temperature 0)
+OpenAI API (OPENAI_MODEL env var, default gpt-6-luna;
+reasoning effort low, no temperature)
 Streaming SSE response
 ```
 
@@ -129,7 +130,8 @@ Conversation history:
 |-------|-------|
 | Client-side | 50 messages/session, 1 message/3 seconds |
 | FastAPI (`slowapi`) | 30 requests/minute per IP |
-| Groq backstop | 14,400 requests/day, 30 req/min (free tier) |
+| FastAPI (global daily cap) | `DAILY_REQUEST_CAP` requests/UTC day across all visitors (default 1,000); past it the reply is a polite "resting for today" message, not an error |
+| OpenAI project budget | Hard monthly limit set in OpenAI's dashboard — the backstop ([deployment.md](deployment.md#step-2a--the-openai-project-key-and-budget)) |
 
 ## Error Handling
 
@@ -140,7 +142,7 @@ Conversation history:
 
 | Purpose | Model | Where it runs |
 |---------|-------|---------------|
-| LLM | `openai/gpt-oss-120b` via Groq, overridable with `GROQ_MODEL` | Production |
+| LLM | `gpt-6-luna` via OpenAI (chosen by [ADR-0008](adr/0008-generation-moves-to-openai.md)'s rule), overridable with `OPENAI_MODEL` | Production |
 | Embedding | `sentence-transformers/all-mpnet-base-v2` | Index build + eval only |
 | Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Eval only |
 
@@ -151,7 +153,9 @@ live in the `dev` dependency group, which the Dockerfile's `uv sync --no-dev` sk
 
 | Variable | Where | Description |
 |----------|-------|-------------|
-| `GROQ_API_KEY` | Railway (backend) | Groq API key |
+| `OPENAI_API_KEY` | Railway (backend) | Production's OpenAI key (CI uses its own, `OPENAI_CI_API_KEY`) |
+| `OPENAI_MODEL` | Railway (backend) | Optional; defaults to `gpt-6-luna` |
+| `DAILY_REQUEST_CAP` | Railway (backend) | Optional; global chat requests per UTC day, default 1,000 |
 | `CHAT_API_URL` | Vercel (frontend) | URL of the FastAPI backend |
 | `ALLOWED_ORIGINS` | Railway (backend) | CORS allowed origins (Vercel URL) |
 

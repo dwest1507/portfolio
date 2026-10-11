@@ -12,8 +12,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/../backend"
 
-# Config import requires these; the gate never calls Groq.
-export GROQ_API_KEY="${GROQ_API_KEY:-test_key}"
+# Config import requires these. The gate never uses production's OPENAI_API_KEY: it
+# generates with OPENAI_CI_API_KEY.
+export OPENAI_API_KEY="${OPENAI_API_KEY:-test_key}"
 export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000}"
 
 # Set GENERATION_RUN_OUTPUT to a path to keep the judged run (every answer, judgment and

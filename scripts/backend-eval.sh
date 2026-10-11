@@ -14,8 +14,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../backend"
 
-# Config import requires these; the eval never calls Groq.
-export GROQ_API_KEY="${GROQ_API_KEY:-test_key}"
+# Config import requires these; the retrieval eval never calls a model API.
+export OPENAI_API_KEY="${OPENAI_API_KEY:-test_key}"
 export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000}"
 
 # The full arm list is NOT repeated here. Arms are added and retired in

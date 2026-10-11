@@ -1,4 +1,4 @@
-"""Tests for app.llm — model wiring and a live provider smoke check."""
+"""Tests for app.llm — model wiring, the eval generators, and a live provider smoke check."""
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -6,18 +6,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from dotenv import dotenv_values
-from groq import AsyncGroq
+from openai import AsyncOpenAI
 
-from app.llm import MAX_TOKENS, NO_CONTEXT, SYSTEM_PROMPT, build_messages, generate_stream
+from app.llm import (
+    MAX_TOKENS,
+    NO_CONTEXT,
+    REASONING_EFFORT,
+    SYSTEM_PROMPT,
+    build_messages,
+    generate_stream,
+)
 from eval.generation import groq_generator, openai_generator
 
 
 @pytest.mark.asyncio
 async def test_model_comes_from_config_not_hardcoded():
-    """Regression: the Groq model must be the configured one.
+    """Regression: the OpenAI model must be the configured one.
 
     A hardcoded model silently rots when the provider decommissions it
-    (llama-3.3-70b-versatile, Aug 2026) and there is no way to swap it
+    (llama-3.3-70b-versatile on Groq, Aug 2026) and there is no way to swap it
     without a code change.
     """
     captured = {}
@@ -31,12 +38,12 @@ async def test_model_comes_from_config_not_hardcoded():
 
         return _empty()
 
-    mock_groq = AsyncMock()
-    mock_groq.chat.completions.create = AsyncMock(side_effect=_fake_create)
+    mock_openai = AsyncMock()
+    mock_openai.chat.completions.create = AsyncMock(side_effect=_fake_create)
 
     with (
-        patch("app.llm.AsyncGroq", return_value=mock_groq),
-        patch("app.llm.GROQ_MODEL", "sentinel-model"),
+        patch("app.llm.AsyncOpenAI", return_value=mock_openai),
+        patch("app.llm.OPENAI_MODEL", "sentinel-model"),
     ):
         async for _ in generate_stream(build_messages("ctx", [], "hi")):
             pass
@@ -44,22 +51,91 @@ async def test_model_comes_from_config_not_hardcoded():
     assert captured["model"] == "sentinel-model"
 
 
+@pytest.mark.asyncio
+async def test_generate_stream_yields_tokens_from_an_injected_client():
+    """Empty deltas (the role-only first chunk, the final one) are not tokens."""
+
+    async def _stream():
+        for token in [None, "David", " codes.", ""]:
+            chunk = MagicMock()
+            chunk.choices[0].delta.content = token
+            yield chunk
+        usage_only = MagicMock()
+        usage_only.choices = []
+        yield usage_only
+
+    client = AsyncMock()
+    client.chat.completions.create = AsyncMock(return_value=_stream())
+
+    tokens = [t async for t in generate_stream(build_messages("ctx", [], "hi"), client=client)]
+
+    assert tokens == ["David", " codes."]
+
+
+def _reload_config(monkeypatch, **env):
+    """Re-import app.config under `env`, ignoring any developer's backend/.env."""
+    import importlib
+
+    import dotenv
+
+    import app.config
+
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: False)
+    for name, value in env.items():
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    return importlib.reload(app.config)
+
+
+def test_the_model_is_configured_by_environment_with_the_selected_default(monkeypatch):
+    """OPENAI_MODEL overrides the model; unset, production serves the one ADR-0008 chose.
+
+    The default is `gpt-6-luna`, the model the selection rule picked (#72) and the one the
+    generation Floors were measured on.
+    """
+    import importlib
+
+    import app.config
+
+    try:
+        assert _reload_config(monkeypatch, OPENAI_MODEL="gpt-other").OPENAI_MODEL == "gpt-other"
+        assert _reload_config(monkeypatch, OPENAI_MODEL=None).OPENAI_MODEL == "gpt-6-luna"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(app.config)
+
+
+def test_the_generation_gate_measures_the_production_default():
+    """The gate answers with production's default model and reasoning effort.
+
+    Its Floors defend what visitors are served, so the two cannot be configured apart
+    (spec #62, story 47).
+    """
+    from app.config import DEFAULT_OPENAI_MODEL
+    from eval.run_generation import OPENAI_MODEL, OPENAI_REASONING_EFFORT
+
+    assert OPENAI_MODEL == DEFAULT_OPENAI_MODEL
+    assert OPENAI_REASONING_EFFORT == REASONING_EFFORT
+
+
 @pytest.mark.live
 @pytest.mark.asyncio
-async def test_configured_model_exists_at_groq():
+async def test_configured_model_exists_at_openai():
     """Live smoke check: the configured model is real and streams.
 
-    Deselected by default; run with `pytest -m live` and a real GROQ_API_KEY.
-    This is the only seam that catches a provider-side model decommission —
-    every other test mocks Groq.
+    Deselected by default; run with `pytest -m live` and a real OPENAI_API_KEY in
+    backend/.env. This is the only seam that catches a provider-side model decommission
+    or a rejected request parameter — every other test mocks OpenAI.
     """
-    # conftest pins a fake GROQ_API_KEY before .env loads, so read the real one here.
-    key = dotenv_values(Path(__file__).parent.parent / ".env").get("GROQ_API_KEY")
+    # conftest pins a fake OPENAI_API_KEY before .env loads, so read the real one here.
+    key = dotenv_values(Path(__file__).parent.parent / ".env").get("OPENAI_API_KEY")
     if not key:
-        pytest.skip("needs a real GROQ_API_KEY in backend/.env")
+        pytest.skip("needs a real OPENAI_API_KEY in backend/.env")
 
     messages = build_messages("David is an engineer.", [], "Hi")
-    tokens = [t async for t in generate_stream(messages, client=AsyncGroq(api_key=key))]
+    tokens = [t async for t in generate_stream(messages, client=AsyncOpenAI(api_key=key))]
     assert "".join(tokens).strip()
 
 
@@ -90,7 +166,7 @@ def test_history_is_marked_as_history_not_context():
 
 
 # ---------------------------------------------------------------------------
-# Groq generator for the generation eval
+# Generators for the generation eval
 # ---------------------------------------------------------------------------
 
 
@@ -108,11 +184,15 @@ def _fake_completions_client(text: str = "An answer.", model: str = "openai/gpt-
 
 
 def test_the_eval_prompt_is_the_production_prompt(client, mock_pipeline):
-    """The Groq generator sends exactly what the chat endpoint sends for the same input.
+    """The gate's OpenAI generator sends exactly what the chat endpoint sends.
 
     An eval prompt that drifted from production's would measure answers no visitor gets,
-    so the generator has no prompt of its own: both go through the production builder.
+    so the generator has no prompt of its own: both go through the production builder,
+    with the same model, reasoning effort and completion cap, and neither sends a
+    temperature.
     """
+    from eval.run_generation import OPENAI_MODEL, OPENAI_REASONING_EFFORT
+
     question = "What is David's background?"
     chunks = mock_pipeline.retrieve.return_value
 
@@ -127,17 +207,16 @@ def test_the_eval_prompt_is_the_production_prompt(client, mock_pipeline):
 
         return _empty()
 
-    mock_groq = AsyncMock()
-    mock_groq.chat.completions.create = AsyncMock(side_effect=_fake_create)
-    with patch("app.llm.AsyncGroq", return_value=mock_groq):
+    mock_openai = AsyncMock()
+    mock_openai.chat.completions.create = AsyncMock(side_effect=_fake_create)
+    with patch("app.llm.AsyncOpenAI", return_value=mock_openai):
         client.post("/api/chat", json={"message": question})
 
-    groq = _fake_completions_client()
-    groq_generator(groq, model=served["model"])(question, chunks)
-    evaluated = groq.chat.completions.create.call_args.kwargs
+    openai = _fake_completions_client()
+    openai_generator(openai, OPENAI_MODEL, OPENAI_REASONING_EFFORT)(question, chunks)
+    evaluated = openai.chat.completions.create.call_args.kwargs
 
-    for setting in ("model", "messages", "temperature", "max_tokens"):
-        assert evaluated[setting] == served[setting], setting
+    assert {k: v for k, v in served.items() if k != "stream"} == evaluated
 
 
 def test_the_groq_generator_reports_billed_usage_and_the_answering_model():

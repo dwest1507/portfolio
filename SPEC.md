@@ -319,7 +319,7 @@ components/
    Conversation history:
    {last 10 messages}
    ```
-6. **Generate:** Call Groq API (model set by `GROQ_MODEL`, default `openai/gpt-oss-120b`) with streaming enabled
+6. **Generate:** Call the OpenAI API (model set by `OPENAI_MODEL`, default `gpt-6-luna`, chosen by ADR-0008; reasoning effort `low`) with streaming enabled. Generation ran on Groq until the measured migration (#62, #73).
 7. **Stream:** Return response as a streamed text response (SSE)
 
 #### Next.js Proxy Route
@@ -335,13 +335,16 @@ The Next.js app has a thin `/api/chat` route that proxies requests to the FastAP
 
 - **Client-side:** 50 messages per session, 1 message per 3 seconds (debounce)
 - **Server-side (FastAPI):** In-memory rate limiting per IP (e.g., `slowapi`). Limits: 30 requests/minute per IP.
-- **Backstop:** Groq's own rate limits (14,400 requests/day, 30 requests/minute on free tier)
+- **Server-side (FastAPI), global:** a daily cap across all visitors (`DAILY_REQUEST_CAP`, default 1,000 per UTC day). Past it, the endpoint streams a polite "the assistant is resting for today" message.
+- **Backstop:** a hard monthly budget on the production OpenAI project (see `docs/deployment.md`)
 
 #### Environment Variables
 
 | Variable | Service | Description |
 |----------|---------|-------------|
-| `GROQ_API_KEY` | FastAPI (Railway) | Groq API key |
+| `OPENAI_API_KEY` | FastAPI (Railway) | Production OpenAI key (CI uses a separate `OPENAI_CI_API_KEY`) |
+| `OPENAI_MODEL` | FastAPI (Railway) | Optional; defaults to `gpt-6-luna` |
+| `DAILY_REQUEST_CAP` | FastAPI (Railway) | Optional; global chat requests per UTC day (default 1,000) |
 | `CHAT_API_URL` | Next.js (Vercel) | URL of the FastAPI backend |
 | `ALLOWED_ORIGINS` | FastAPI (Railway) | CORS allowed origins (Vercel URL) |
 
@@ -542,7 +545,7 @@ export default function RootLayout({ children }) {
 **Railway Dashboard:**
 | Variable | Value |
 |----------|-------|
-| `GROQ_API_KEY` | (from Groq dashboard) |
+| `OPENAI_API_KEY` | (production project key from the OpenAI dashboard) |
 | `ALLOWED_ORIGINS` | Vercel production URL |
 
 ### Build & Deploy
@@ -592,7 +595,7 @@ Focus testing effort on business logic, interactive components, and API behavior
 | High | `POST /api/chat` | Valid request returns streamed response |
 | High | `POST /api/chat` | Empty message returns 400 |
 | High | `POST /api/chat` | Long message (>500 chars) returns 400 |
-| High | `POST /api/chat` | Groq API error returns 500 with safe message |
+| High | `POST /api/chat` | OpenAI API error returns a safe error event in the stream |
 | High | RAG pipeline | Hybrid search returns relevant chunks |
 | High | RAG pipeline | Cross-encoder re-ranking improves result order |
 | High | RAG pipeline | Prompt construction includes context and history |

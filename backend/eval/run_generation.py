@@ -41,7 +41,9 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from eval.generation import (  # (needs the sys.path line above)
+from app.config import DEFAULT_OPENAI_MODEL  # (needs the sys.path line above)
+from app.llm import REASONING_EFFORT
+from eval.generation import (
     TokenBudgetExhausted,
     groq_generator,
     openai_generator,
@@ -63,10 +65,12 @@ TOKENS_PER_MINUTE = 7000
 # billed 132,249 tokens over 107 cases (0.8-1.9k each).
 DEFAULT_TOKEN_BUDGET = 180_000
 
-#: OpenAI's candidate (ADR-0008) and the reasoning effort chosen for it. Its reasoning
-#: models accept no temperature but the default, so the effort is what is pinned.
-OPENAI_MODEL = "gpt-6-luna"
-OPENAI_REASONING_EFFORT = "low"
+#: The OpenAI model and reasoning effort production serves by default (ADR-0008), so the
+#: generation gate measures what visitors get. Its reasoning models accept no temperature
+#: but the default, so the effort is what is pinned. `--model` and `--reasoning-effort`
+#: measure candidates.
+OPENAI_MODEL = DEFAULT_OPENAI_MODEL
+OPENAI_REASONING_EFFORT = REASONING_EFFORT
 
 #: What a record measured: resuming it with any of these changed would mix two measurements.
 MEASURED = (

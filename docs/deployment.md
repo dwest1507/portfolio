@@ -6,7 +6,7 @@
 |---------|----------|-----------|
 | Frontend | Vercel | 100 GB bandwidth, 6,000 build min/month |
 | Backend | Railway | 500 execution hours/month |
-| LLM | Groq | 14,400 requests/day, 30 req/min |
+| LLM | OpenAI (`gpt-6-luna`) | Paid, capped — see [The OpenAI project](#step-2a--the-openai-project-key-and-budget) |
 | Analytics | Vercel Analytics | 2,500 events/month |
 
 Deploys are handled by the **native Vercel and Railway git integrations**: both
@@ -90,8 +90,9 @@ Do the backend first: the frontend needs the backend's URL.
 
    | Variable | Value |
    |----------|-------|
-   | `GROQ_API_KEY` | From [console.groq.com](https://console.groq.com) |
-   | `GROQ_MODEL` | Optional; defaults to `openai/gpt-oss-120b`. Set this if Groq decommissions that model — check the live list at [console.groq.com/docs/models](https://console.groq.com/docs/models). |
+   | `OPENAI_API_KEY` | Production's own key, from the production OpenAI project (see [Step 2a](#step-2a--the-openai-project-key-and-budget)). Never the CI key. |
+   | `OPENAI_MODEL` | Optional; defaults to `gpt-6-luna`, the model [ADR-0008](adr/0008-generation-moves-to-openai.md)'s rule chose. Override only to swap out a decommissioned model — a different model is a different measurement, and the generation gate keeps measuring the code default. |
+   | `DAILY_REQUEST_CAP` | Optional; defaults to `1000`. Chat requests served per UTC day across all visitors; past it, visitors get a "resting for today" reply instead of an answer. |
    | `ALLOWED_ORIGINS` | Vercel production URL — fill in after Step 3, e.g. `https://your-site.vercel.app` |
    | `PORT` | `8000` |
 
@@ -114,6 +115,39 @@ Do the backend first: the frontend needs the backend's URL.
 
    Expect `200` with a JSON body.
 
+### Step 2a — The OpenAI project, key and budget
+
+Generation calls OpenAI's paid API from a public, anonymous endpoint, so three limits
+stand between a visitor and the bill ([ADR-0008](adr/0008-generation-moves-to-openai.md)):
+
+1. **Per-IP rate limit** — 30 requests/minute per address, in the app.
+2. **Global daily cap** — `DAILY_REQUEST_CAP` (default 1,000) chat requests per UTC day,
+   in the app. The count is held in memory, so a restart or redeploy resets it; that is
+   acceptable because it is not the backstop.
+3. **Hard monthly budget on the OpenAI project** — the backstop, set in OpenAI's
+   dashboard. When it is spent, OpenAI refuses requests and visitors see the chat's
+   "Generation failed" error until the month rolls over or the budget is raised.
+
+Set them up once:
+
+1. In [platform.openai.com](https://platform.openai.com), create a **project for
+   production**, separate from the one CI's key belongs to, so visitor spend and eval spend
+   are reported apart.
+2. In that project's **Limits** settings, set a **monthly budget** and enable the hard
+   limit that stops requests when it is reached. At `gpt-6-luna`'s list price (~$0.00012
+   per answer measured by the eval, [evaluation.md](evaluation.md#choosing-the-generation-model);
+   more with long conversation history) a full day at the default cap costs well under a
+   dollar, so a budget of a few dollars a month absorbs a capped day of abuse every day. Add an alert threshold below it.
+3. Restrict the project's allowed models to `gpt-6-luna` if the dashboard offers it, so a
+   leaked key cannot be spent on a dearer model.
+4. Create an API key in the production project and set it as `OPENAI_API_KEY` in Railway.
+   The backend refuses to start without it.
+
+CI uses its own key, `OPENAI_CI_API_KEY`, a GitHub Actions secret from the CI project
+(see [ci-cd.md](ci-cd.md) and the generation gate in [evaluation.md](evaluation.md)).
+Never copy one key into the other's place. `GROQ_API_KEY` is no longer needed in Railway;
+it is only read by the eval's Groq baseline tool.
+
 ### If the backend deploy fails
 
 | Symptom in the deploy log | Cause |
@@ -123,6 +157,7 @@ Do the backend first: the frontend needs the backend's URL.
 | Build succeeds, then stalls on "waiting for healthcheck" | Healthcheck timeout too low for model load, or `/api/health` path not set |
 | Container starts, health check 404s or times out | Domain target port ≠ the port uvicorn bound; both should be 8000 |
 | `FileNotFoundError` on an index file at startup | `backend/indexes/` wasn't built and committed (step 1) |
+| `KeyError: 'OPENAI_API_KEY'` at startup | The production key isn't set in Railway (step 4, Step 2a) |
 
 ---
 
@@ -236,9 +271,11 @@ Railway's free tier sleeps services after inactivity (~30–60s cold start). Opt
 Create `backend/.env`:
 
 ```
-GROQ_API_KEY=your_key_here
+OPENAI_API_KEY=your_key_here
 ALLOWED_ORIGINS=http://localhost:3000
 ```
+
+See `backend/.env.example` for the optional and eval-only variables.
 
 And `frontend/.env.local`:
 
@@ -251,7 +288,8 @@ CHAT_API_URL=http://localhost:8000
 - [ ] `make build-index` run and `backend/indexes/` committed
 - [ ] Railway project created from the GitHub repo; root directory `backend`, watch paths `backend/**`
 - [ ] Railway builder set to **Dockerfile** (not the default Railpack); healthcheck `/api/health` with a 300s timeout
-- [ ] `GROQ_API_KEY` set in Railway; public domain generated
+- [ ] Production OpenAI project created, separate from CI's, with a hard monthly budget (Step 2a)
+- [ ] `OPENAI_API_KEY` (production's key) set in Railway; public domain generated
 - [ ] `/api/health` returns 200 on the Railway URL
 - [ ] Vercel project imported; root directory `frontend`, Framework Preset **Next.js** (not Other)
 - [ ] `CHAT_API_URL` set in Vercel (Production + Preview) to the Railway URL

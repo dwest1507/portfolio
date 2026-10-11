@@ -532,11 +532,12 @@ record later, and OpenAI candidates can replay identical contexts, so the model 
 only variable.
 
 The generator has no prompt of its own. It builds messages with the production
-`build_messages` and samples with production's `TEMPERATURE` (0) and `MAX_TOKENS`, and a
-test asserts it sends exactly what `/api/chat` sends for the same question and chunks.
-Production generates at temperature 0 for the same reason
+`build_messages` and samples with the `TEMPERATURE` (0) and `MAX_TOKENS` production used
+while it served Groq. Production generated at temperature 0 for the same reason
 ([ADR-0007](adr/0007-generation-evaluation-harness.md)): the eval should measure what
-visitors are served.
+visitors are served. Production now serves OpenAI (#73), which accepts no temperature;
+the OpenAI generator shares production's prompt, model, reasoning effort and completion
+cap instead, and a test asserts it sends exactly what `/api/chat` sends.
 
 Groq's free tier (8k tokens/min, 200k tokens/day) is shared with visitors, so calls are
 paced to 7k billed tokens a minute and the run stops before passing a 180k-token budget.
@@ -943,9 +944,10 @@ falls below its Floor (`FLOORS` in `eval/generation.py`: 0.85 and 0.915, from th
 too. Fact Recall and Contradictions are printed but not gated
 ([ADR-0007](adr/0007-generation-evaluation-harness.md)).
 
-The gate generates with OpenAI, not with Groq, even while production still serves Groq.
-The Floors were derived from Luna's spread, and Groq's free tier is shared with visitors,
-so a gate run of ~130k tokens would take most of a day's quota.
+The gate generates with the model production serves by default: `eval/run_generation.py`
+takes its model and reasoning effort from `app.config.DEFAULT_OPENAI_MODEL` and
+`app.llm.REASONING_EFFORT`, and a test asserts the gate's request matches the chat
+endpoint's. An `OPENAI_MODEL` override in Railway is not measured by the gate.
 
 CI runs it from `.github/workflows/generation-gate.yml`, on pull requests and pushes to
 `main` that touch what can change an answer: the prompt and model configuration
@@ -1064,8 +1066,8 @@ Cost per answer is billed `usage` at OpenAI's standard list price on 2026-10-11 
 $0.10 / $0.50, Sol $2.00 / $10.00 per 1M input / output tokens), with every input token
 priced as uncached, an upper bound. Groq's free tier has no price, and its paid tier is
 no longer offered. The run-to-run spread and Floors [above](#run-to-run-spread) were
-already measured on Luna, so the choice needs no new spread study. Switching production
-to Luna is #73.
+already measured on Luna, so the choice needs no new spread study. Production has served
+Luna since #73.
 
 ```bash
 cd backend

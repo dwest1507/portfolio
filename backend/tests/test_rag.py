@@ -571,7 +571,7 @@ print("ok")
         cwd=str(Path(__file__).resolve().parent.parent),
         env={
             **os.environ,
-            "GROQ_API_KEY": "test_key",
+            "OPENAI_API_KEY": "test_key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
         },
     )

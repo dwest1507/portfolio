@@ -47,7 +47,7 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | `POST /api/chat` | Valid request returns streamed response |
 | High | `POST /api/chat` | Empty message → 400 |
 | High | `POST /api/chat` | Message > 500 chars → 400 |
-| High | `POST /api/chat` | Groq API error → 500 with safe message |
+| High | `POST /api/chat` | OpenAI API error → error event in the stream with a safe message |
 | High | RAG pipeline | Served retrieval works with no model weights and no FAISS index present |
 | High | RAG pipeline | An off-topic query returns no context rather than the least-bad chunks |
 | High | RAG pipeline | Hybrid search returns relevant chunks (measured arm) |
@@ -77,12 +77,14 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | Generation harness | Each case records its answer, retrieved chunks, billed usage and answering model; answers are handed over as recorded so a stopped run can resume |
 | High | Generation judging | Filler is dropped; one supporting chunk is enough; each Contradiction is listed with its sentence and chunk; Declines and Out-of-Scope Cases are never judged for support; Decline accuracy in both directions; Fact Recall, where a declined fair question conveys none of its facts; list items and table rows are judged as self-contained claims; a stored record is judged without regenerating |
 | High | Jev adapter | Every request names `jev-1.13.0`; an answer from any other version is refused; one question per judgment |
-| High | Generation prompt | The eval's Groq generator sends exactly the model, messages, temperature and `max_tokens` the chat endpoint sends |
+| High | Generation prompt | The gate's OpenAI generator sends exactly the model, messages, reasoning effort and `max_completion_tokens` the chat endpoint sends, and the gate measures production's default model |
 | High | OpenAI generator | Sends the production prompt, the reasoning effort and no temperature; reports billed usage and the answering model |
 | High | Judge validation | Every hand-labelled sentence is one the splitter produces from its stored answer; agreement is counted as Faithfulness counts a sentence; a Contradiction listed or missed is a disagreement; compound and single sentences are counted apart |
 | High | Run-to-run spread | Each metric's range across runs per split; each metric's rounding step is the smallest round step covering its own range; a Floor sits twice the range (at least one of its metric's steps) below the lowest run, rounded down |
 | High | Free-tier throttle | Calls are paced to a tokens-per-minute limit by billed tokens; a call that could pass the token budget is never made |
-| High | `POST /api/chat` | Production generates at temperature 0 |
+| High | `POST /api/chat` | Production streams the configured OpenAI model with the eval's reasoning effort and completion cap, and no temperature |
+| High | Model config | `OPENAI_MODEL` overrides the model; unset, it is `gpt-6-luna`, the model ADR-0008 chose |
+| High | Daily cap | Past `DAILY_REQUEST_CAP`, the stream is the polite "resting for today" message, OpenAI and retrieval are never called, and the count resets on the next UTC day |
 | Medium | `GET /api/health` | Returns 200 `{ "status": "ok" }` |
 
 Test files are in `backend/tests/`. Fixtures (including mock indexes) are defined
