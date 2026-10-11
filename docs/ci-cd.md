@@ -54,7 +54,9 @@ run calls OpenAI and TypeSafe's Jev, so dependency bumps (`uv.lock`, `pyproject.
 backend code that cannot change an answer do not trigger it. Its two path lists (`pull_request`
 and `push`) are identical; change them together. It uses CI's own keys, stored as the
 repository secrets `OPENAI_CI_API_KEY` and `JEV_CI_API_KEY`, never production's, so eval
-spend and visitor spend can be told apart (ADR-0008). Locally, `make generation-gate` reads
+spend and visitor spend can be told apart (ADR-0008). `OPENAI_CI_API_KEY` is a key in the
+same OpenAI project as production's, so the project's $20 hard monthly budget caps CI and
+visitors together ([deployment.md](deployment.md#step-2a--the-openai-project-key-and-budget)). Locally, `make generation-gate` reads
 `OPENAI_CI_API_KEY` and `JEV_API_KEY` from `backend/.env`.
 
 uv is pinned the same way, for the same reason: `UV_VERSION` in `backend-ci.yml` and

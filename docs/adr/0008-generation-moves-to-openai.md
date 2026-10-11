@@ -77,3 +77,15 @@ generation needed choices this ADR did not make (#72, `eval/select_model.py`):
   "resting for today" message in the normal answer format. A restart resets the count and
   replicas would each keep their own. That is acceptable for one Railway instance, because
   the OpenAI project's hard budget is the backstop, not the cap.
+
+## Amendment (2026-10-11): one OpenAI project for production and CI
+
+The Consequences above say CI and production use separate keys; they still do. They do
+not say the keys belong to separate OpenAI projects, and they don't: David set up **one
+project for both, with a $20 hard monthly budget.** A hard budget caps only the project
+it is set on, so one project makes $20 the ceiling on all OpenAI spend, where two projects
+would need two budgets and the worst case would be their sum. The cost is that eval runs
+and visitor traffic draw on the same budget; if it runs out, the chat and the generation
+gate stop together until the month rolls over. Separate keys inside the project still let
+either be revoked alone and let spend be told apart by key. Setup is in
+`docs/deployment.md` (Step 2a).

@@ -337,13 +337,13 @@ The Next.js app has a thin `/api/chat` route that proxies requests to the FastAP
 - **Client-side:** 50 messages per session, 1 message per 3 seconds (debounce)
 - **Server-side (FastAPI):** In-memory rate limiting per IP (e.g., `slowapi`). Limits: 30 requests/minute per IP.
 - **Server-side (FastAPI), global:** a daily cap across all visitors (`DAILY_REQUEST_CAP`, default 1,000 per UTC day). Past it, the endpoint streams a polite "the assistant is resting for today" message.
-- **Backstop:** a hard monthly budget on the production OpenAI project (see `docs/deployment.md`)
+- **Backstop:** a $20 hard monthly budget on the OpenAI project, which production and CI share so the one budget caps both (see `docs/deployment.md`)
 
 #### Environment Variables
 
 | Variable | Service | Description |
 |----------|---------|-------------|
-| `OPENAI_API_KEY` | FastAPI (Railway) | Production OpenAI key (CI uses a separate `OPENAI_CI_API_KEY`) |
+| `OPENAI_API_KEY` | FastAPI (Railway) | Production OpenAI key (CI uses a separate `OPENAI_CI_API_KEY` in the same OpenAI project) |
 | `OPENAI_MODEL` | FastAPI (Railway) | Optional; defaults to `gpt-6-luna` |
 | `DAILY_REQUEST_CAP` | FastAPI (Railway) | Optional; global chat requests per UTC day (default 1,000) |
 | `CHAT_API_URL` | Next.js (Vercel) | URL of the FastAPI backend |
@@ -546,7 +546,7 @@ export default function RootLayout({ children }) {
 **Railway Dashboard:**
 | Variable | Value |
 |----------|-------|
-| `OPENAI_API_KEY` | (production project key from the OpenAI dashboard) |
+| `OPENAI_API_KEY` | (production's key in the shared OpenAI project) |
 | `ALLOWED_ORIGINS` | Vercel production URL |
 
 ### Build & Deploy

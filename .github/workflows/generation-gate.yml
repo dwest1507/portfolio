@@ -86,7 +86,8 @@ jobs:
         working-directory: backend
 
       # CI's own keys, separate from production's, so eval spend and visitor spend can be
-      # told apart (ADR-0008). Pull requests measure and gate but never publish
+      # told apart (ADR-0008). The OpenAI key shares production's project and its hard
+      # monthly budget (docs/deployment.md). Pull requests measure and gate but never publish
       # (ADR-0001).
       - name: Generation quality gate
         env:

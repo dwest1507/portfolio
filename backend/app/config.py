@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-#: Production's own OpenAI key. CI evaluates with a separate key (OPENAI_CI_API_KEY) so
-#: eval spend and visitor spend can be told apart (ADR-0008).
+#: Production's own OpenAI key. CI evaluates with a separate key (OPENAI_CI_API_KEY) in the
+#: same OpenAI project, so the project's one hard budget caps both while their spend can
+#: still be told apart by key (ADR-0008, docs/deployment.md).
 OPENAI_API_KEY: str = os.environ["OPENAI_API_KEY"]
 
 #: The model ADR-0008's selection rule chose (#72), and the one the generation gate's
