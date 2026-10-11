@@ -380,7 +380,7 @@
     "source": "qa"
   },
   {
-    "text": "What has David not measured yet?\nRetrieval quality is only half of a RAG system's behaviour. Generation faithfulness — does the answer stay inside the retrieved context? — plus refusal behaviour on out-of-scope questions and adversarial robustness are all still unmeasured. I'd rather name those gaps than imply the evaluation covers more than it does.",
+    "text": "What has David not measured yet?\nRetrieval quality is only half of a RAG system's behaviour, so I now measure the answers too. A second harness checks every answer against the retrieved text with a judge model pinned to an exact version: Faithfulness (does the answer stay inside its context?), decline accuracy (does it refuse out-of-scope questions and still answer fair ones?), Fact Recall, and Contradictions. Faithfulness and decline accuracy gate every change that could alter an answer. What's still unmeasured is adversarial robustness and multi-turn conversations. I'd rather name those gaps than imply the evaluation covers more than it does.",
     "source": "qa"
   },
   {
@@ -592,6 +592,10 @@
     "source": "project:portfolio"
   },
   {
+    "text": "This Portfolio — How well it answers\nRetrieval only says whether the right text reached the model. It does not say whether the answer was right, stayed inside that text, or declined when it should have. A second harness measures that: it asks the chatbot every held-out question, splits each answer into claims, and has a separate judge model, pinned to an exact version, check each claim against the retrieved text one passage at a time. Before I trusted the judge, I checked it against sentences I had labelled by hand, and it failed the first time.\nFaithfulness and decline accuracy gate every change that could alter an answer: the prompt, the retrieval code, the documents and the questions. Unlike retrieval, the same commit does not give the same answers twice, so I ran it three times, set the floors below the observed spread, and round each published score to a step that noise alone cannot move.",
+    "source": "project:portfolio"
+  },
+  {
     "text": "This Portfolio — What the evaluation changed\nMetrics are only worth collecting if they alter what you build. This is the running record of what the harness found and what I did about it — appended to, never rewritten.\nTwo of those entries share a pattern I found useful to learn: the code looked correct, every component behaved exactly as specified, every test passed, and nothing was going to surface the problem except a number moving. Unit tests tell you the parts do what you said; only measurement tells you the system does what you meant.\nThe third one is the one I would actually want to be asked about. I built a hybrid retrieval pipeline — semantic search fused with keyword search, then a cross-encoder re-ranking the candidates — because that is the architecture you build when you are demonstrating that you can build it. The evaluation said plain keyword search beat it on every metric.",
     "source": "project:portfolio"
   },
@@ -620,7 +624,7 @@
     "source": "project:portfolio"
   },
   {
-    "text": "This Portfolio — What I am not claiming\nI would rather state that plainly than let a table imply more than it earned. The full write-up of the method, the biases, and what is still unmeasured — generation faithfulness, refusal behaviour on out-of-scope questions, adversarial robustness — is in the repository.",
+    "text": "This Portfolio — What I am not claiming\nI would rather state that plainly than let a table imply more than it earned. The full write-up of the method, the biases, and what is still unmeasured — adversarial robustness, and multi-turn conversations — is in the repository.",
     "source": "project:portfolio"
   },
   {

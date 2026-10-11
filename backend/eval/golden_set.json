@@ -1541,7 +1541,7 @@
         "David says his corpus is small and mostly written as anticipated questions and answers, which favours keyword matching over semantic search.",
         "David says his relevance labels use exact phrase presence, which is close to what keyword ranking measures.",
         "David says conclusions from his evaluation apply to his own corpus rather than to retrieval in general.",
-        "David names generation faithfulness, refusal behaviour on out-of-scope questions, and adversarial robustness as gaps his evaluation does not yet cover."
+        "David names adversarial robustness and multi-turn conversations as gaps his evaluation does not yet cover."
       ]
     },
     {

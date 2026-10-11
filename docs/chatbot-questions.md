@@ -229,7 +229,7 @@ It did, and the evaluation said it wasn't earning its place on this corpus. Retr
 The numbers aren't written by hand anywhere. CI runs the evaluation, writes the results to a file, and commits it; the project page and the repository docs both render from that file. Even the sentence comparing the shipped configuration to the best-scoring one is generated from the data, so the write-up can't drift into claiming something the measurements no longer support.
 
 **What has David not measured yet?**
-Retrieval quality is only half of a RAG system's behaviour. Generation faithfulness — does the answer stay inside the retrieved context? — plus refusal behaviour on out-of-scope questions and adversarial robustness are all still unmeasured. I'd rather name those gaps than imply the evaluation covers more than it does.
+Retrieval quality is only half of a RAG system's behaviour, so I now measure the answers too. A second harness checks every answer against the retrieved text with a judge model pinned to an exact version: Faithfulness (does the answer stay inside its context?), decline accuracy (does it refuse out-of-scope questions and still answer fair ones?), Fact Recall, and Contradictions. Faithfulness and decline accuracy gate every change that could alter an answer. What's still unmeasured is adversarial robustness and multi-turn conversations. I'd rather name those gaps than imply the evaluation covers more than it does.
 
 ---
 
