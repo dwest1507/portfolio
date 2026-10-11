@@ -1,5 +1,5 @@
 {
-  "description": "Hand-labelled sentences for validating the Judge (ADR-0007). Each is a sentence the harness judges, taken from a stored answer, labelled against the chunks that answer was written from. Chunk numbers in notes count from 1 in the record's order. See docs/evaluation.md.",
+  "description": "Hand-labelled sentences for validating the Judge (ADR-0007). Most are sentences the harness judges, taken from a stored answer, labelled against the chunks that answer was written from. Those marked heldOut were written by hand as unsupported sentences, labelled against their case's chunks before any of Jev's judgments of them were seen, and are kept out of tuning the Judge's questions until the final measurement. Chunk numbers in notes count from 1 in the record's order. See docs/evaluation.md.",
   "status": "reviewed",
   "record": "backend/eval/baselines/groq.json",
   "labels": {
@@ -56,6 +56,7 @@
       "text": "It’s his primary language for AI engineering and data science, and he has been using it for about three years, including strong experience with libraries such as pandas, PyMuPDF, and boto3.",
       "label": "supported",
       "compound": true,
+      "acrossChunks": true,
       "note": "Split across chunks: chunk 1 'go-to language for AI engineering and data science ... about 3 years'; chunk 5 'pandas, PyMuPDF, and boto3'. No single chunk supports the whole sentence."
     },
     {
@@ -63,6 +64,7 @@
       "text": "David holds the following certifications: CompTIA Security+ (Certificate of Completion, June 2025) – a requirement for many defense contracts.",
       "label": "supported",
       "compound": true,
+      "acrossChunks": true,
       "note": "Split across chunks: chunk 1 Security+ completed June 2025; chunk 5 'a requirement on defense contracts'."
     },
     {
@@ -105,6 +107,7 @@
       "text": "David has used Groq’s API to serve his own models and for low‑latency LLM inference in his full‑stack AI applications.",
       "label": "supported",
       "compound": true,
+      "acrossChunks": true,
       "note": "Split across chunks: chunk 1 'used Groq's API to serve a few of my own models'; chunk 2 the chatbot's low-latency inference on Groq; chunk 4 Baby Names text-to-SQL on Groq."
     },
     {
@@ -112,6 +115,7 @@
       "text": "He also designs and maintains CI/CD pipelines with GitHub Actions (and Azure DevOps), integrates Docker, Kubernetes, and other cloud services, and mentors teams on IaC best practices.",
       "label": "supported",
       "compound": true,
+      "acrossChunks": true,
       "note": "Split across chunks: chunk 4 CI/CD with GitHub Actions and Azure DevOps; chunk 2 Docker and Kubernetes; chunk 5 mentored team members on IaC best practices."
     },
     {
@@ -217,6 +221,7 @@
       "text": "He uses analogies or metaphors to make technical concepts easy to grasp and often supports his narrative with interactive dashboards (e.g., Streamlit, Shiny, Quarto) that visualize the insights.",
       "label": "supported",
       "compound": true,
+      "acrossChunks": true,
       "note": "Split across chunks: chunk 1 analogies or metaphors; chunk 3 interactive dashboards (Streamlit, Shiny, Quarto) for non-technical stakeholders."
     },
     {
@@ -232,6 +237,102 @@
       "label": "says_nothing",
       "compound": true,
       "note": "CloudWatch appears in chunk 1 as part of the serverless backend, and security findings were mitigated, but no chunk says CloudWatch alerts track compliance events."
+    },
+    {
+      "case": "clearance",
+      "text": "David holds a Top Secret security clearance, sponsored by the US Army.",
+      "label": "contradicted",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 1: 'David has a Secret security clearance. It was sponsored by the US Army.' (also chunks 3 and 4: Secret). The level is wrong; the sponsor is supported. Contradiction about David alongside a supported part."
+    },
+    {
+      "case": "clearance",
+      "text": "David is available to start immediately and is open to relocating for the right role.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 1: available to start immediately (with a 2-week notice period). No chunk mentions relocation. Partly supported."
+    },
+    {
+      "case": "vector-search",
+      "text": "In production, the chatbot ranks results with BM25 keyword search and then re-scores the top passages with a cross-encoder.",
+      "label": "contradicted",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 2: retrieval is BM25 keyword search. Chunk 4: the cross-encoder failed against keyword search alone and 'production now runs keyword search only'. Does not name David."
+    },
+    {
+      "case": "vector-search",
+      "text": "Deleting the semantic and re-ranking stages cut the backend from 87 production dependencies to 24.",
+      "label": "contradicted",
+      "compound": false,
+      "heldOut": true,
+      "note": "Chunk 4: 'from 87 production dependencies to 40'. A wrong number; does not name David."
+    },
+    {
+      "case": "music-project",
+      "text": "The web app renders each generated track's waveform with WaveSurfer.js and stores finished tracks in S3 so users can download them later.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 1: waveform rendering; chunk 5: WaveSurfer.js on the frontend. No chunk mentions S3 or stored tracks. Partly supported; does not name David."
+    },
+    {
+      "case": "rate-limiting",
+      "text": "Rate limits in the music app are keyed on each visitor's session cookie.",
+      "label": "contradicted",
+      "compound": false,
+      "heldOut": true,
+      "note": "Chunk 1: 'Rate limits are keyed strictly on client IP rather than session cookies.' Chunk 5: IP-keyed rate limiting. Does not name David."
+    },
+    {
+      "case": "rate-limiting",
+      "text": "The chatbot's FastAPI backend uses SlowAPI for rate limiting, with Redis storing the counters so limits hold across replicas.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 3: FastAPI backend with SlowAPI for rate limiting. No chunk mentions Redis or replicas. Partly supported; does not name David."
+    },
+    {
+      "case": "baby-names-project",
+      "text": "The forecasting model is retrained every night by a scheduled GitHub Actions workflow.",
+      "label": "says_nothing",
+      "compound": false,
+      "heldOut": true,
+      "note": "Chunk 3: forecast tables generated by automated batch scripts and validated by a deployment gate; chunks 1 and 5 mention CI/CD. None says the model is retrained nightly or on a schedule. Does not name David."
+    },
+    {
+      "case": "time-series",
+      "text": "David replaced per-name ARIMA with a pooled LightGBM model, which beat the naive baseline in every popularity band, including names ranked beyond 5,000.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunks 1 and 3: per-name ARIMA replaced by pooled LightGBM. No chunk gives LightGBM's skill by band. Chunk 3's negative skill beyond rank 5000 is ARIMA's, a different model, so it is not a contradiction."
+    },
+    {
+      "case": "embedding-models",
+      "text": "David has used OpenAI's text-embedding-3-small for work projects and all-mpnet-base-v2 for personal projects.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 1: Amazon's Titan embedding models for work, all-mpnet-base-v2 for personal projects. Titan is a different item of the same kind and does not rule out OpenAI's, so it is not a contradiction. Partly supported."
+    },
+    {
+      "case": "fine-tuning",
+      "text": "David has fine-tuned Llama models on his own data using LoRA.",
+      "label": "contradicted",
+      "compound": false,
+      "heldOut": true,
+      "note": "Chunk 2: 'Has David done any fine-tuning of LLMs? Not yet'. Chunk 1 lists Meta's Llama models among those he has worked with, which does not support fine-tuning them."
+    },
+    {
+      "case": "location",
+      "text": "David is based in Austin, Texas.",
+      "label": "says_nothing",
+      "compound": false,
+      "heldOut": true,
+      "note": "No retrieved chunk mentions where David is based (retrieval missed it). His real location is not in the chunks either, so this is says_nothing, not contradicted."
     }
   ]
 }

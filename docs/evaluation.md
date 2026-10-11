@@ -543,7 +543,7 @@ runs are not committed or published yet, and nothing is gated.
 Before a Judge result gates anything, its verdicts are compared with hand labels
 ([ADR-0007](adr/0007-generation-evaluation-harness.md)). `backend/eval/judge_validation.json`
 holds 32 sentences from the Groq baseline's answers, each labelled against the chunks its
-answer was written from:
+answer was written from, plus 12 held-out sentences (below):
 
 | Label | Meaning |
 |---|---|
@@ -558,7 +558,7 @@ step that splits answers into atomic claims, rejected for now in ADR-0007. A tes
 a labelled sentence is no longer one the harness's splitter produces from its stored
 answer, so the labels cannot quietly drift away from what is judged.
 
-`eval/validate_judge.py` runs every labelled sentence through the harness's own sentence
+`eval/validate_judge.py` runs the labelled sentences through the harness's own sentence
 judgment and reports two agreements, one per thing a judged run outputs:
 
 - **Faithfulness agreement**: filler, supported or unsupported, where contradicted and
@@ -570,12 +570,50 @@ separately for compound and single sentences.
 
 ```bash
 cd backend
-uv run --frozen python eval/validate_judge.py --output validation-run.json
+uv run --frozen python eval/validate_judge.py --output validation-run.json          # tuning
+uv run --frozen python eval/validate_judge.py --final --output validation-run.json  # final
 ```
 
 The labels were drafted before any of Jev's judgments of these sentences were looked at,
 then reviewed by David. The CLI refuses to measure against labels whose `status` is not
 `reviewed` (`--draft` overrides).
+
+### Held-out sentences
+
+Fixing the Judge's questions (#81) means tuning their wording against the 32 labels
+above, which would make agreement on those 32 look better than it is. So the set also
+holds 12 **held-out** sentences (`"heldOut": true`), written by hand rather than taken
+from an answer. Each is unsupported by its case's chunks: 5 contradicted and 7 saying
+nothing. Their labels were written before Jev judged any of them, and David reviewed them.
+They are built to test both known causes without repeating the tuned sentences: 6 don't
+name David, 6 are partly supported, 7 are compound and 5 single, and two name a different
+item of the same kind as a chunk (a different embedding model, a different forecasting
+model) without contradicting it.
+
+A tuning run leaves them out. Only `--final` judges them, so tuning never sees Jev's
+judgments of them. The five supported sentences that no single chunk supports, only
+several together, are marked `"acrossChunks": true`.
+
+### The pass bar
+
+David set this bar before the final run. Faithfulness may gate (#71) only once a
+`--final` run meets every line:
+
+| Measure | Bar | Over |
+|---|---|---|
+| Unsupported sentences caught | **≥ 83%** | held-out unsupported sentences Jev calls unsupported |
+| Supported sentences kept | ≥ 90% | supported sentences Jev still calls supported |
+| Supported across chunks kept | ≥ 80% | of those, the ones only several chunks together support |
+| Faithfulness agreement | ≥ 85% | every labelled sentence, held-out included |
+
+The bar is in shares, not counts, so it still applies as the set grows. Caught counts
+only held-out sentences, because the others were tuned against. At 12 sentences, 83%
+means 10 caught: the fewest that shows, at 95% confidence (Wilson interval), that Jev
+catches more than half of unsupported sentences. The two "kept" lines guard against the
+easy fix of calling more sentences unsupported. The across-chunks line covers the
+sentences a strict `supports`, asked one chunk at a time, would fail. Contradictions
+are reported but have no bar, since they are not gated. `--final` prints each measure
+against its bar and exits non-zero if any is missed.
 
 ### Result: Jev is not yet fit to gate Faithfulness
 
