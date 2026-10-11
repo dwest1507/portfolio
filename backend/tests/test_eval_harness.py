@@ -13,6 +13,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock
 
 import pytest
@@ -28,7 +29,9 @@ from run_eval import (
     check_thresholds,
     describe_cases,
     evaluate_arm,
+    format_latency_table,
     is_relevant,
+    measure_load,
     overbroad_phrases,
     retrievers_for_arms,
     select_cases,
@@ -364,6 +367,139 @@ class TestEvaluateArm:
 
 
 # ---------------------------------------------------------------------------
+# Latency
+# ---------------------------------------------------------------------------
+
+
+class _FakeClock:
+    """Time that moves only when the code under test spends it."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def _timed_cases(n: int) -> list[dict]:
+    return [_answerable(f"c{i}", "Booz Allen Hamilton") for i in range(n)]
+
+
+class TestWarmLatency:
+    def _pipeline(self, clock: _FakeClock, costs: list[float]) -> MagicMock:
+        """A pipeline whose every search spends the next of `costs` seconds."""
+        pipeline = MagicMock()
+        pipeline.chunks = [{"text": "Booz Allen Hamilton"}]
+        remaining = iter(costs)
+
+        def search(query, top_k=5):
+            clock.now += next(remaining)
+            return [0]
+
+        pipeline.sparse_search.side_effect = search
+        return pipeline
+
+    def test_reports_p50_and_p95_per_query(self):
+        clock = _FakeClock()
+        # One warm-up query, then twenty timed ones: 1ms … 20ms.
+        costs = [0.0] + [i / 1000 for i in range(1, 21)]
+        result = evaluate_arm(
+            self._pipeline(clock, costs), "bm25", _timed_cases(20), 5, clock=clock
+        )
+
+        assert result["latency"]["p50"] == pytest.approx(0.010)
+        assert result["latency"]["p95"] == pytest.approx(0.019)
+
+    def test_the_first_query_loads_models_and_is_not_timed(self):
+        """A lazily loaded model makes an arm's first query a load, not a warm query."""
+        clock = _FakeClock()
+        costs = [2.0] + [0.001] * 5
+        result = evaluate_arm(self._pipeline(clock, costs), "bm25", _timed_cases(5), 5, clock=clock)
+
+        assert result["latency"]["p95"] == pytest.approx(0.001)
+
+
+class TestLatencyTable:
+    def test_prints_raw_timings_beside_their_bands(self):
+        """The CLI is where latency is investigated, so it shows the numbers bands hide."""
+        table = format_latency_table(
+            [
+                {"arm": "bm25", "latency": {"p50": 0.000_13, "p95": 0.000_21, "load": 0.0019}},
+                {"arm": "bm25+rerank", "latency": {"p50": 0.0287, "p95": 0.0304, "load": 4.15}},
+            ]
+        )
+        lines = table.splitlines()
+        assert lines[0].split() == [
+            "arm",
+            "p50",
+            "ms",
+            "p95",
+            "ms",
+            "load",
+            "s",
+            "warm",
+            "band",
+            "load",
+            "band",
+        ]
+        assert next(line for line in lines if line.startswith("bm25 ")).split() == [
+            "bm25",
+            "0.13",
+            "0.21",
+            "0.002",
+            "~1ms",
+            "~1ms",
+        ]
+        assert next(line for line in lines if line.startswith("bm25+rerank")).split() == [
+            "bm25+rerank",
+            "28.70",
+            "30.40",
+            "4.150",
+            "~10ms",
+            "~10s",
+        ]
+
+
+class _LazyPipeline:
+    """Loads cost what a real pipeline's do: construction is cheap, each model is not."""
+
+    COSTS: ClassVar[dict[str, float]] = {"faiss_index": 0.1, "embedder": 2.0, "cross_encoder": 3.0}
+
+    def __init__(self, clock: _FakeClock) -> None:
+        self._clock = clock
+        clock.now += 0.002  # chunks and the BM25 index
+
+    def __getattr__(self, name: str):
+        if name not in self.COSTS:
+            raise AttributeError(name)
+        self._clock.now += self.COSTS[name]
+        return object()
+
+
+class TestLoadTime:
+    @pytest.mark.parametrize(
+        ("arm", "seconds"),
+        [
+            ("bm25", 0.002),
+            ("dense", 2.102),
+            ("hybrid", 2.102),
+            ("rerank", 5.102),
+            ("bm25+rerank", 3.002),
+        ],
+    )
+    def test_is_what_the_arm_loads_before_its_first_answer(self, arm, seconds):
+        clock = _FakeClock()
+        assert measure_load(arm, lambda: _LazyPipeline(clock), clock=clock) == pytest.approx(
+            seconds
+        )
+
+    def test_every_arm_can_be_load_timed(self):
+        for arm in ARMS:
+            clock = _FakeClock()
+            measure_load(arm, lambda clock=clock: _LazyPipeline(clock), clock=clock)
+
+
+# ---------------------------------------------------------------------------
 # Out-of-Scope Cases
 # ---------------------------------------------------------------------------
 
@@ -407,7 +543,9 @@ class TestOutOfScopeCases:
 
         assert [c["id"] for c in result["cases"]] == ["employer"]
         assert result["summary"]["hit@5"] == 1.0
-        pipeline.sparse_search.assert_called_once_with("question employer", top_k=5)
+        # Searched for the warm-up query and the timed one; never for the Out-of-Scope Case.
+        searched = {call.args[0] for call in pipeline.sparse_search.call_args_list}
+        assert searched == {"question employer"}
 
     def test_a_broken_label_on_an_answerable_case_still_fails_loudly(self):
         cases = [_out_of_scope("salary"), _answerable("typo", "Booz Alen Hamilton")]

@@ -45,6 +45,7 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
           direct: { won: 4, lost: 0, outcome: 'indistinguishable' },
           paraphrase: { won: 0, lost: 2, outcome: 'indistinguishable' },
         },
+        latencyBand: { warm: '~1ms', load: '~10ms' },
       },
       {
         id: 'rerank',
@@ -60,6 +61,7 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
         mrrInterval: [0.7, 0.9],
         vsShipped: null,
         vsShippedByCategory: null,
+        latencyBand: { warm: '~100ms', load: '~10s' },
       },
     ],
     ...overrides,
@@ -206,6 +208,34 @@ describe('EvalScoreboard won/lost column', () => {
     render(<EvalScoreboard run={makeRun()} />)
     expect(screen.queryByText(/0\.350/)).not.toBeInTheDocument()
     expect(screen.queryByText(/95%/)).not.toBeInTheDocument()
+  })
+})
+
+describe('EvalScoreboard Latency Band columns', () => {
+  it("shows each arm's warm and load Latency Bands", () => {
+    render(<EvalScoreboard run={makeRun()} />)
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
+    expect(headers).toEqual(expect.arrayContaining(['LATENCY BAND', 'LOAD BAND']))
+
+    const bm25 = within(screen.getByText('Word matching.').closest('tr')!)
+    expect(bm25.getByText('~1ms')).toBeInTheDocument()
+    expect(bm25.getByText('~10ms')).toBeInTheDocument()
+
+    const rerank = within(screen.getByText('Two-stage.').closest('tr')!)
+    expect(rerank.getByText('~100ms')).toBeInTheDocument()
+    expect(rerank.getByText('~10s')).toBeInTheDocument()
+  })
+
+  it('keeps the same bands under a category filter, since latency is not per category', async () => {
+    const { userEvent } = await import('@testing-library/user-event')
+    const user = userEvent.setup()
+    render(<EvalScoreboard run={makeRun()} />)
+
+    await user.click(screen.getByRole('tab', { name: /paraphrase/i }))
+
+    const rerank = within(screen.getByText('Two-stage.').closest('tr')!)
+    expect(rerank.getByText('~100ms')).toBeInTheDocument()
+    expect(rerank.getByText('~10s')).toBeInTheDocument()
   })
 })
 
@@ -423,6 +453,15 @@ describe('the generated results file', () => {
         }
       }
     }
+  })
+
+  it('gives every arm a warm and a load Latency Band, and no raw timing', () => {
+    const band = /^~(1|10|100)ms$|^~(1|10)s$/
+    for (const arm of evalRun.arms) {
+      expect(arm.latencyBand.warm).toMatch(band)
+      expect(arm.latencyBand.load).toMatch(band)
+    }
+    expect(JSON.stringify(evalRun)).not.toMatch(/p50|p95/)
   })
 
   it('carries both registers of description for every arm', () => {

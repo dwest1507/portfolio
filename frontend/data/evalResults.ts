@@ -50,6 +50,17 @@ export interface EvalArm {
    * only — this page deliberately does not render it (ADR-0006).
    */
   mrrInterval: number[] | null
+  /**
+   * Order-of-magnitude cost of the arm, e.g. `~10ms`: `warm` is the p95 of one query
+   * once everything is loaded, `load` the time to load its indexes and models. Bands
+   * rather than timings, because raw timings vary between runs and machines.
+   */
+  latencyBand: LatencyBand
+}
+
+export interface LatencyBand {
+  warm: string
+  load: string
 }
 
 export interface EvalRun {

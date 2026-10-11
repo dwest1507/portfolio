@@ -11,6 +11,7 @@ and the verdict can be tested without loading a pipeline or downloading model we
 
 from __future__ import annotations
 
+import bisect
 import json
 import math
 import os
@@ -28,6 +29,7 @@ from pathlib import Path
 # Bumped to 4 when each arm gained `vsShipped` — questions won and lost against the
 # shipped arm and the sign-test outcome (ADR-0006) — and `mrrInterval`. A v3 verdict named
 # whichever arm scored highest; a v4 verdict names only differences beyond sampling noise.
+# v4 also carries each arm's `latencyBand`; no v4 document was published without it.
 SCHEMA_VERSION = 4
 
 BEGIN_MARKER = "<!-- eval:begin -->"
@@ -206,6 +208,26 @@ def compare_with_shipped(cases: list[dict], shipped_cases: list[dict], metric: s
     return {"won": won, "lost": lost, "outcome": outcome}
 
 
+# ---------------------------------------------------------------------------
+# Latency Bands
+# ---------------------------------------------------------------------------
+
+#: Published in place of a raw timing, which moves between runs and runners. Each band is
+#: a power of ten, and a timing takes the nearest one on a log scale. `~1ms` also holds
+#: everything faster: below a millisecond the timer's own noise is the measurement. The
+#: `~10s` band exists because a re-ranking Arm loads two models of ~2s each, and calling
+#: that "~1s" would understate it by more than the scale's own rounding.
+LATENCY_BANDS = ("~1ms", "~10ms", "~100ms", "~1s", "~10s")
+
+#: The geometric midpoints between adjacent bands, in seconds: 10^(k + 0.5) ms.
+_BAND_CUTS = tuple(10 ** (k + 0.5) / 1000 for k in range(len(LATENCY_BANDS) - 1))
+
+
+def latency_band(seconds: float) -> str:
+    """The Latency Band of a timing: its order of magnitude, cut at geometric midpoints."""
+    return LATENCY_BANDS[bisect.bisect_right(_BAND_CUTS, seconds)]
+
+
 #: Resamples per bootstrap interval, and the seed that makes a re-run reproduce it.
 BOOTSTRAP_RESAMPLES = 2000
 BOOTSTRAP_SEED = 0
@@ -300,6 +322,11 @@ def build_results_document(
                 "mrrInterval": bootstrap_interval([c["mrr"] for c in r.get("cases", [])]),
                 "vsShipped": compared,
                 "vsShippedByCategory": compared_by_category,
+                # Bands only: the raw timings stay in the CLI and --json output.
+                "latencyBand": {
+                    "warm": latency_band(r["latency"]["p95"]),
+                    "load": latency_band(r["latency"]["load"]),
+                },
             }
         )
 
@@ -489,9 +516,9 @@ def render_markdown(document: dict) -> str:
     header = (
         "| Arm | "
         + " | ".join(metric_label(m) for m in metrics)
-        + " | MRR 95% CI | vs shipped (won / lost) |"
+        + " | MRR 95% CI | vs shipped (won / lost) | Latency Band (warm p95) | Load band |"
     )
-    align = "|-----|" + "|".join(["---------:"] * (len(metrics) + 2)) + "|"
+    align = "|-----|" + "|".join(["---------:"] * (len(metrics) + 4)) + "|"
 
     # Every arm tied for a column's best is bolded, not just the first one listed —
     # "Best score per column in bold" has to mean it.
@@ -507,6 +534,7 @@ def render_markdown(document: dict) -> str:
         cells.append(f"{interval[0]:.3f}–{interval[1]:.3f}" if interval else "—")
         vs = arm.get("vsShipped")
         cells.append(f"{vs['won']} / {vs['lost']}" if vs else "—")
+        cells.extend([arm["latencyBand"]["warm"], arm["latencyBand"]["load"]])
         shipped = " _(shipped)_" if arm["shipped"] else ""
         rows.append(f"| `{arm['id']}`{shipped} | " + " | ".join(cells) + " |")
 

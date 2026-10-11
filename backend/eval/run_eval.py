@@ -28,6 +28,10 @@ The golden set is split into `dev` and `holdout` portions (see golden_set.json).
 Decide things on `dev`; `holdout` is what gets published, so a published number is
 never a number something was tuned against. `--split` selects which portion runs.
 
+Each arm is also timed: warm p50/p95 per query and the time to load its indexes and
+models. The CLI and --json output show those raw timings; --publish records only their
+Latency Bands (see publish.latency_band).
+
 Out-of-Scope Cases (`answerable: false`) are questions the corpus cannot answer. They
 exist for the generation eval and are skipped here by that label, then counted in the
 summary line, rather than tripping the "matches no chunk" error.
@@ -40,6 +44,7 @@ import json
 import math
 import re
 import sys
+import time
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -49,6 +54,7 @@ sys.path.insert(0, str(BACKEND_ROOT))
 from eval.publish import (  # (needs the sys.path line above)
     ARMS,
     build_results_document,
+    latency_band,
     shipped_arm_id,
     update_markdown_block,
     verdict_line,
@@ -380,16 +386,59 @@ def retrievers_for_arms(pipeline, top_k: int) -> dict:
     return retrievers
 
 
-def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
-    """Run every case through one retrieval arm and average the metrics."""
+#: What each arm loads on top of the chunks and BM25 index every pipeline reads at
+#: construction, named by the RAGPipeline attribute that loads it on first use.
+_ARM_LOADS: dict[str, tuple[str, ...]] = {
+    "bm25": (),
+    "dense": ("faiss_index", "embedder"),
+    "hybrid": ("faiss_index", "embedder"),
+    "rerank": ("faiss_index", "embedder", "cross_encoder"),
+    "bm25+rerank": ("cross_encoder",),
+}
+
+
+def measure_load(arm: str, build=None, clock=time.perf_counter) -> float:
+    """Seconds from nothing loaded to `arm` ready for its first query.
+
+    Timed on a fresh pipeline, so a model an earlier arm already loaded is loaded again
+    and counted here too. Call it after the arm has been evaluated, so a first-ever run
+    has already downloaded the weights: the band reports loading, not the network.
+    """
+    build = build or build_pipeline
+    start = clock()
+    pipeline = build()
+    for attribute in _ARM_LOADS[arm]:
+        getattr(pipeline, attribute)
+    return clock() - start
+
+
+def percentile(values: list[float], p: float) -> float:
+    """Nearest-rank percentile: the smallest value at least `p`% of `values` do not exceed."""
+    ordered = sorted(values)
+    return ordered[max(math.ceil(p / 100 * len(ordered)) - 1, 0)]
+
+
+def evaluate_arm(
+    pipeline, arm: str, cases: list[dict], top_k: int, clock=time.perf_counter
+) -> dict:
+    """Run every case through one retrieval arm, averaging the metrics and timing each query.
+
+    One untimed query runs first: the models load lazily, so an arm's first query is a
+    model load rather than a warm query (see `measure_load` for that cost).
+    """
     retrievers = retrievers_for_arms(pipeline, top_k)
     if arm not in retrievers:
         raise ValueError(f"Unknown arm: {arm}")
     retrieve = retrievers[arm]
 
     per_case = []
+    timings = []
 
-    for case in answerable_cases(cases):
+    scored = answerable_cases(cases)
+    if scored:
+        retrieve(scored[0]["question"])
+
+    for case in scored:
         relevant = relevant_ids(pipeline.chunks, case["relevant_phrases"])
         if not relevant:
             raise ValueError(
@@ -397,7 +446,9 @@ def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
                 "Fix the phrases or rebuild the index."
             )
 
+        start = clock()
         retrieved = retrieve(case["question"])
+        timings.append(clock() - start)
 
         per_case.append(
             {
@@ -426,6 +477,8 @@ def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
         "summary": summary,
         "by_category": by_category,
         "cases": per_case,
+        # Raw seconds, for the CLI and --json output. Only bands are published.
+        "latency": {"p50": percentile(timings, 50), "p95": percentile(timings, 95)},
     }
 
 
@@ -454,6 +507,33 @@ def format_table(results: list[dict], top_k: int) -> str:
     for r in results:
         row = [r["arm"]] + [f"{r['summary'][m]:.3f}" for m in headers[1:]]
         lines.append("  ".join(v.ljust(w) for v, w in zip(row, widths)))
+    return "\n".join(lines)
+
+
+def format_latency_table(results: list[dict]) -> str:
+    """Raw timings beside the Latency Bands they publish as.
+
+    The raw numbers appear here and in --json output only: they move between runs and
+    runners, so the published document carries the bands alone.
+    """
+    headers = ["arm", "p50 ms", "p95 ms", "load s", "warm band", "load band"]
+    rows = [
+        [
+            r["arm"],
+            f"{r['latency']['p50'] * 1000:.2f}",
+            f"{r['latency']['p95'] * 1000:.2f}",
+            f"{r['latency']['load']:.3f}",
+            latency_band(r["latency"]["p95"]),
+            latency_band(r["latency"]["load"]),
+        ]
+        for r in results
+    ]
+    widths = [max(len(row[i]) for row in [headers, *rows]) for i in range(len(headers))]
+    lines = [
+        "  ".join(h.ljust(w) for h, w in zip(headers, widths)),
+        "  ".join("-" * w for w in widths),
+    ]
+    lines += ["  ".join(v.ljust(w) for v, w in zip(row, widths)) for row in rows]
     return "\n".join(lines)
 
 
@@ -573,7 +653,12 @@ def main() -> int:
     )
 
     results = [evaluate_arm(pipeline, arm, cases, args.top_k) for arm in args.arms]
+    # After every arm has run, so any model weights are already downloaded.
+    for r in results:
+        r["latency"]["load"] = measure_load(r["arm"])
     print(format_table(results, args.top_k))
+    print(f"\nLatency ({len(answerable_cases(cases))} warm queries per arm)")
+    print(format_latency_table(results))
 
     all_categories = sorted({cat for r in results for cat in r.get("by_category", {})})
     for cat in all_categories:

@@ -19,6 +19,7 @@ from eval.publish import (
     END_MARKER,
     SCHEMA_VERSION,
     build_results_document,
+    latency_band,
     leading_arm,
     leading_arm_ids,
     render_markdown,
@@ -29,7 +30,13 @@ from eval.publish import (
 )
 
 
-def _raw(arm: str, hit: float, mrr: float, by_category: dict | None = None) -> dict:
+def _raw(
+    arm: str,
+    hit: float,
+    mrr: float,
+    by_category: dict | None = None,
+    latency: dict | None = None,
+) -> dict:
     summary = {"recall@5": 0.5, "hit@5": hit, "mrr": mrr, "ndcg@5": 0.6}
     return {
         "arm": arm,
@@ -37,6 +44,8 @@ def _raw(arm: str, hit: float, mrr: float, by_category: dict | None = None) -> d
         "summary": summary,
         "by_category": by_category if by_category is not None else {"direct": dict(summary)},
         "cases": [],
+        # Raw timings in seconds, as the harness reports them.
+        "latency": latency or {"p50": 0.000_1, "p95": 0.000_2, "load": 0.002},
     }
 
 
@@ -169,6 +178,7 @@ class TestResultsDocument:
                     "top_k": 10,
                     "summary": {"recall@10": 0.8, "hit@10": 1.0, "mrr": 0.9, "ndcg@10": 0.8},
                     "cases": [],
+                    "latency": {"p50": 0.000_1, "p95": 0.000_2, "load": 0.002},
                 }
             ],
             top_k=10,
@@ -314,6 +324,111 @@ class TestResultsDocument:
 
         assert written is True
         assert json.loads(path.read_text(encoding="utf-8"))["schemaVersion"] == SCHEMA_VERSION
+
+
+# ---------------------------------------------------------------------------
+# Latency Bands
+# ---------------------------------------------------------------------------
+
+
+class TestLatencyBand:
+    """A timing becomes its nearest power of ten, cut at the geometric midpoints
+    (√10 ≈ 3.162 times each band's centre), so a published band means the same thing
+    whichever machine measured it."""
+
+    @pytest.mark.parametrize(
+        ("seconds", "band"),
+        [
+            (0.0, "~1ms"),
+            (0.000_13, "~1ms"),
+            (0.001, "~1ms"),
+            (0.010, "~10ms"),
+            (0.100, "~100ms"),
+            (1.0, "~1s"),
+            (4.2, "~10s"),
+        ],
+    )
+    def test_maps_a_timing_to_its_order_of_magnitude(self, seconds, band):
+        assert latency_band(seconds) == band
+
+    @pytest.mark.parametrize(
+        ("below", "above", "lower_band", "upper_band"),
+        [
+            (0.003_16, 0.003_17, "~1ms", "~10ms"),
+            (0.031_6, 0.031_7, "~10ms", "~100ms"),
+            (0.316, 0.317, "~100ms", "~1s"),
+            (3.16, 3.17, "~1s", "~10s"),
+        ],
+    )
+    def test_cuts_at_the_geometric_midpoint(self, below, above, lower_band, upper_band):
+        assert latency_band(below) == lower_band
+        assert latency_band(above) == upper_band
+
+    def test_sub_millisecond_timings_share_the_lowest_band(self):
+        """Below a millisecond the runner's timer noise is the measurement."""
+        assert latency_band(0.000_001) == latency_band(0.002) == "~1ms"
+
+    def test_slower_than_the_top_band_stays_in_it(self):
+        assert latency_band(60.0) == "~10s"
+
+
+class TestPublishedLatency:
+    def test_each_arm_publishes_its_warm_and_load_bands(self):
+        doc = _document(
+            results=[
+                _raw("bm25", 1.0, 0.9, latency={"p50": 0.000_1, "p95": 0.000_2, "load": 0.002}),
+                _raw("rerank", 1.0, 0.9, latency={"p50": 0.030, "p95": 0.037, "load": 4.2}),
+            ]
+        )
+        assert _arm(doc, "bm25")["latencyBand"] == {"warm": "~1ms", "load": "~1ms"}
+        assert _arm(doc, "rerank")["latencyBand"] == {"warm": "~100ms", "load": "~10s"}
+
+    def test_raw_timings_are_not_published(self):
+        """Raw timings vary between runs and runners; only the band is a measurement."""
+        doc = _document(
+            results=[
+                _raw("bm25", 1.0, 0.9, latency={"p50": 0.000_123, "p95": 0.000_2, "load": 0.002})
+            ]
+        )
+        published = json.dumps(doc)
+        assert "p50" not in published and "p95" not in published
+        assert "0.000123" not in published
+
+    def test_timing_noise_within_a_band_is_not_a_new_measurement(self, tmp_path):
+        path = tmp_path / "evalResults.json"
+        write_results_document(
+            _document(
+                results=[_raw("bm25", 1.0, 0.9, latency={"p50": 0.011, "p95": 0.012, "load": 1.9})]
+            ),
+            path,
+        )
+        before = path.read_text(encoding="utf-8")
+
+        noisier = _raw("bm25", 1.0, 0.9, latency={"p50": 0.013, "p95": 0.015, "load": 2.4})
+        _, written = write_results_document(_document(results=[noisier]), path)
+
+        assert written is False
+        assert path.read_text(encoding="utf-8") == before
+
+    @pytest.mark.parametrize(
+        ("moved", "expected"),
+        [
+            ("p95", {"warm": "~100ms", "load": "~1s"}),
+            ("load", {"warm": "~10ms", "load": "~10s"}),
+        ],
+    )
+    def test_a_changed_band_is_a_new_measurement(self, tmp_path, moved, expected):
+        path = tmp_path / "evalResults.json"
+        timings = {"p50": 0.011, "p95": 0.012, "load": 1.9}
+        write_results_document(_document(results=[_raw("bm25", 1.0, 0.9, latency=timings)]), path)
+
+        slower = {**timings, moved: timings[moved] * 10}
+        document, written = write_results_document(
+            _document(results=[_raw("bm25", 1.0, 0.9, latency=slower)]), path
+        )
+
+        assert written is True
+        assert _arm(document, "bm25")["latencyBand"] == expected
 
 
 # ---------------------------------------------------------------------------
@@ -514,10 +629,27 @@ class TestMarkdown:
         dense = [1] * 8 + [0] * 2 + [1] * 23
         md = render_markdown(_document(results=[_scored("bm25", shipped), _scored("dense", dense)]))
         header = next(line for line in md.splitlines() if line.startswith("| Arm |"))
-        assert header.endswith("| vs shipped (won / lost) |")
-        assert next(line for line in md.splitlines() if "`dense`" in line).endswith("| 8 / 2 |")
+        assert "| vs shipped (won / lost) |" in header
+        assert "| 8 / 2 |" in next(line for line in md.splitlines() if "`dense`" in line)
         # The shipped arm is the reference, not a contestant against itself.
-        assert next(line for line in md.splitlines() if "`bm25`" in line).endswith("| — |")
+        assert "| — |" in next(line for line in md.splitlines() if "`bm25`" in line)
+
+    def test_renders_each_arms_latency_bands(self):
+        md = render_markdown(
+            _document(
+                results=[
+                    _raw("bm25", 1.0, 0.9, latency={"p50": 0.000_1, "p95": 0.000_2, "load": 0.002}),
+                    _raw("rerank", 1.0, 0.9, latency={"p50": 0.03, "p95": 0.037, "load": 4.2}),
+                ]
+            )
+        )
+        lines = md.splitlines()
+        header = next(line for line in lines if line.startswith("| Arm |"))
+        assert header.endswith("| Latency Band (warm p95) | Load band |")
+        assert next(line for line in lines if "`bm25`" in line).endswith("| ~1ms | ~1ms |")
+        assert next(line for line in lines if "`rerank`" in line).endswith("| ~100ms | ~10s |")
+        # Raw timings belong to the CLI and --json output, not the published block.
+        assert "0.037" not in md and "4.2" not in md
 
     def test_renders_a_bootstrap_interval_for_mrr(self):
         """An engineer judging a 0.03 MRR gap needs to see how wide MRR's own noise is."""
@@ -531,7 +663,8 @@ class TestMarkdown:
         assert "| 0.500–0.500 |" in next(line for line in md.splitlines() if "`bm25`" in line)
 
         dense_row = next(line for line in md.splitlines() if "`dense`" in line)
-        lo, hi = (float(x) for x in dense_row.split("|")[-3].strip().split("–"))
+        interval = next(cell for cell in dense_row.split("|") if "–" in cell)
+        lo, hi = (float(x) for x in interval.strip().split("–"))
         assert 0.0 < lo < 0.5 < hi < 1.0
 
     def test_the_mrr_interval_is_reproducible(self):

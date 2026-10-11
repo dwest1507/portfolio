@@ -1,9 +1,9 @@
 {
   "schemaVersion": 4,
-  "generatedAt": "2026-10-10T03:30:52+00:00",
-  "commit": "589d3c2",
+  "generatedAt": "2026-10-11T17:37:10+00:00",
+  "commit": "94a7b95",
   "runUrl": null,
-  "corpusChunks": 120,
+  "corpusChunks": 123,
   "goldenQuestions": 33,
   "split": "holdout",
   "topK": 5,
@@ -32,10 +32,10 @@
       "technical": "BM25 over stemmed, stopword-filtered terms. Needs no embedding model, which is why the production image ships none. Matches RAGPipeline.retrieve.",
       "shipped": true,
       "metrics": {
-        "recall@5": 0.5517,
+        "recall@5": 0.5527,
         "hit@5": 0.8788,
-        "mrr": 0.8409,
-        "ndcg@5": 0.689
+        "mrr": 0.8258,
+        "ndcg@5": 0.6902
       },
       "byCategory": {
         "conceptual": {
@@ -45,24 +45,28 @@
           "ndcg@5": 0.2007
         },
         "direct": {
-          "recall@5": 0.6541,
+          "recall@5": 0.6253,
           "hit@5": 1.0,
           "mrr": 0.9659,
-          "ndcg@5": 0.8249
+          "ndcg@5": 0.8103
         },
         "paraphrase": {
-          "recall@5": 0.603,
+          "recall@5": 0.7364,
           "hit@5": 1.0,
-          "mrr": 0.9,
-          "ndcg@5": 0.6768
+          "mrr": 0.8,
+          "ndcg@5": 0.749
         }
       },
       "mrrInterval": [
-        0.7121,
-        0.947
+        0.697,
+        0.9394
       ],
       "vsShipped": null,
-      "vsShippedByCategory": null
+      "vsShippedByCategory": null,
+      "latencyBand": {
+        "warm": "~1ms",
+        "load": "~1ms"
+      }
     },
     {
       "id": "dense",
@@ -71,10 +75,10 @@
       "technical": "FAISS inner-product search over normalized all-mpnet-base-v2 embeddings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.4392,
+        "recall@5": 0.418,
         "hit@5": 0.8182,
-        "mrr": 0.6485,
-        "ndcg@5": 0.5028
+        "mrr": 0.6247,
+        "ndcg@5": 0.4808
       },
       "byCategory": {
         "conceptual": {
@@ -84,21 +88,21 @@
           "ndcg@5": 0.3412
         },
         "direct": {
-          "recall@5": 0.5297,
+          "recall@5": 0.4827,
           "hit@5": 0.8636,
-          "mrr": 0.6985,
-          "ndcg@5": 0.5935
+          "mrr": 0.6909,
+          "ndcg@5": 0.5676
         },
         "paraphrase": {
-          "recall@5": 0.2682,
+          "recall@5": 0.3348,
           "hit@5": 0.8,
-          "mrr": 0.54,
-          "ndcg@5": 0.2978
+          "mrr": 0.4167,
+          "ndcg@5": 0.2665
         }
       },
       "mrrInterval": [
-        0.5,
-        0.7838
+        0.4768,
+        0.7626
       ],
       "vsShipped": {
         "won": 2,
@@ -121,6 +125,10 @@
           "lost": 1,
           "outcome": "indistinguishable"
         }
+      },
+      "latencyBand": {
+        "warm": "~10ms",
+        "load": "~1s"
       }
     },
     {
@@ -130,10 +138,10 @@
       "technical": "Weighted reciprocal-rank fusion of the sparse and dense rankings.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.4935,
+        "recall@5": 0.4837,
         "hit@5": 0.9091,
-        "mrr": 0.7045,
-        "ndcg@5": 0.5649
+        "mrr": 0.6869,
+        "ndcg@5": 0.551
       },
       "byCategory": {
         "conceptual": {
@@ -143,21 +151,21 @@
           "ndcg@5": 0.3203
         },
         "direct": {
-          "recall@5": 0.5691,
+          "recall@5": 0.5433,
           "hit@5": 0.9545,
-          "mrr": 0.7879,
-          "ndcg@5": 0.6592
+          "mrr": 0.7841,
+          "ndcg@5": 0.6504
         },
         "paraphrase": {
-          "recall@5": 0.453,
+          "recall@5": 0.5015,
           "hit@5": 1.0,
-          "mrr": 0.6167,
-          "ndcg@5": 0.4438
+          "mrr": 0.5167,
+          "ndcg@5": 0.3906
         }
       },
       "mrrInterval": [
-        0.5732,
-        0.8232
+        0.5556,
+        0.8081
       ],
       "vsShipped": {
         "won": 2,
@@ -180,6 +188,10 @@
           "lost": 0,
           "outcome": "indistinguishable"
         }
+      },
+      "latencyBand": {
+        "warm": "~10ms",
+        "load": "~1s"
       }
     },
     {
@@ -189,10 +201,10 @@
       "technical": "Cross-encoder re-ranking of the fused candidates: hybrid_search over 2×k candidates → cross-encoder narrows to k. Shipped until the harness measured it against the keyword arm.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.5224,
+        "recall@5": 0.5066,
         "hit@5": 0.9091,
         "mrr": 0.8091,
-        "ndcg@5": 0.6388
+        "ndcg@5": 0.6289
       },
       "byCategory": {
         "conceptual": {
@@ -202,16 +214,16 @@
           "ndcg@5": 0.286
         },
         "direct": {
-          "recall@5": 0.5716,
+          "recall@5": 0.5438,
           "hit@5": 0.9545,
           "mrr": 0.9091,
-          "ndcg@5": 0.7276
+          "ndcg@5": 0.7034
         },
         "paraphrase": {
-          "recall@5": 0.653,
+          "recall@5": 0.6712,
           "hit@5": 1.0,
           "mrr": 0.8,
-          "ndcg@5": 0.6713
+          "ndcg@5": 0.7129
         }
       },
       "mrrInterval": [
@@ -239,6 +251,10 @@
           "lost": 0,
           "outcome": "indistinguishable"
         }
+      },
+      "latencyBand": {
+        "warm": "~100ms",
+        "load": "~10s"
       }
     },
     {
@@ -248,10 +264,10 @@
       "technical": "Cross-encoder re-ranking of BM25 candidates. The arm that answers whether the dense stage contributes anything the re-ranker cannot recover on its own.",
       "shipped": false,
       "metrics": {
-        "recall@5": 0.5477,
+        "recall@5": 0.5272,
         "hit@5": 0.9091,
         "mrr": 0.7955,
-        "ndcg@5": 0.6619
+        "ndcg@5": 0.6472
       },
       "byCategory": {
         "conceptual": {
@@ -261,16 +277,16 @@
           "ndcg@5": 0.226
         },
         "direct": {
-          "recall@5": 0.6088,
+          "recall@5": 0.578,
           "hit@5": 1.0,
           "mrr": 0.8977,
-          "ndcg@5": 0.7664
+          "ndcg@5": 0.7421
         },
         "paraphrase": {
           "recall@5": 0.7364,
           "hit@5": 1.0,
           "mrr": 0.8,
-          "ndcg@5": 0.7251
+          "ndcg@5": 0.735
         }
       },
       "mrrInterval": [
@@ -298,6 +314,10 @@
           "lost": 0,
           "outcome": "indistinguishable"
         }
+      },
+      "latencyBand": {
+        "warm": "~10ms",
+        "load": "~1s"
       }
     }
   ]

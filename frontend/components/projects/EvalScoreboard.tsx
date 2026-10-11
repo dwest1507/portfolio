@@ -98,7 +98,7 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
 
         {/* Wide content scrolls inside its own container rather than the page */}
         <div className="overflow-x-auto bg-[#0a0a0c]">
-          <table className="w-full min-w-[34rem] border-collapse text-left">
+          <table className="w-full min-w-[42rem] border-collapse text-left">
             <caption className="sr-only">
               Retrieval quality by pipeline configuration, measured on{' '}
               {sampleLabel(run, activeCategory)}.
@@ -127,6 +127,22 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
                   className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
                 >
                   VS PRODUCTION
+                </th>
+                {/* Bands rather than timings: a raw timing moves between runs and
+                    machines, its order of magnitude does not. */}
+                <th
+                  scope="col"
+                  title="Typical time per question once loaded (95th percentile)"
+                  className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+                >
+                  LATENCY BAND
+                </th>
+                <th
+                  scope="col"
+                  title="Time to load the configuration's indexes and models"
+                  className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+                >
+                  LOAD BAND
                 </th>
               </tr>
             </thead>
@@ -169,6 +185,12 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
                   })}
                   <td className="px-4 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
                     {wonLost(arm, activeCategory)}
+                  </td>
+                  <td className="px-4 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
+                    {arm.latencyBand.warm}
+                  </td>
+                  <td className="px-4 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
+                    {arm.latencyBand.load}
                   </td>
                 </tr>
               ))}
