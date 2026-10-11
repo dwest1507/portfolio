@@ -229,14 +229,6 @@ class TestCategories:
 
         from app.rag.pipeline import RAGPipeline
 
-        # A known collision that predates this check, left for a label repair rather than
-        # fixed here: `serverless-scaling-patterns` is held out, and its bare `Modal`
-        # phrase covers every chunk its other phrases match (`serverless reverse proxy`
-        # matches none), so it is effectively labelled the same as `music-gpu-infra`.
-        known_collisions = [
-            ["paraphrase-music-gpu-infra", "conceptual-serverless-scaling-patterns"]
-        ]
-
         chunks = RAGPipeline().chunks
         by_chunks = defaultdict(list)
         for case in ANSWERABLE:
@@ -244,8 +236,7 @@ class TestCategories:
                 by_chunks[frozenset(relevant_ids(chunks, case["relevant_phrases"]))].append(
                     case["id"]
                 )
-        collisions = [ids for ids in by_chunks.values() if len(ids) > 1]
-        assert [ids for ids in collisions if ids not in known_collisions] == []
+        assert [ids for ids in by_chunks.values() if len(ids) > 1] == []
 
     def test_an_unlabelled_case_category_is_an_error(self):
         with pytest.raises(ValueError, match="no valid category"):

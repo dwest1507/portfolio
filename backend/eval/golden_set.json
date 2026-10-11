@@ -1270,9 +1270,10 @@
       "split": "holdout",
       "question": "What strategies does he utilize across web services to minimize idle server costs and optimize container scaling?",
       "relevant_phrases": [
+        "scale-to-zero",
+        "lightweight, stateless proxy",
         "Next.js on Vercel",
-        "Modal",
-        "serverless reverse proxy"
+        "strictly control cloud GPU costs"
       ],
       "required_facts": [
         "David runs GPU inference on Modal's serverless GPUs, which scale to zero when idle.",
