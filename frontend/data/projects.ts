@@ -24,7 +24,7 @@ export const projects: Project[] = [
       'TypeScript',
       'FastAPI',
       'Python',
-      'Groq',
+      'OpenAI',
       'RAG',
       'FAISS',
       'BM25',
