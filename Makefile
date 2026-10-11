@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 .PHONY: help install dev dev-frontend dev-backend build-index test lint clean stop \
 	frontend-quality frontend-test frontend-build backend-lint backend-test frontend-deps \
-	security-audit lighthouse ci-cd eval eval-fast
+	security-audit lighthouse ci-cd eval eval-fast generation-gate
 
 help:
 	@echo "Available commands:"
@@ -26,6 +26,7 @@ help:
 	@echo "  make backend-test            - Pytest"
 	@echo "  make eval                    - Retrieval quality eval (all arms; downloads models)"
 	@echo "  make eval-fast               - Retrieval eval, BM25 arm only (no model download)"
+	@echo "  make generation-gate         - Generation gate (paid: needs OPENAI_CI_API_KEY, JEV_API_KEY)"
 	@echo "  make security-audit          - npm audit + pip-audit"
 	@echo "  make lighthouse              - Lighthouse CI budget check (needs Chrome)"
 	@echo ""
@@ -120,6 +121,10 @@ eval:
 
 eval-fast:
 	./scripts/backend-eval.sh bm25
+
+# Not part of ci-cd: it calls paid APIs, and CI runs it only on generation-relevant changes.
+generation-gate:
+	./scripts/backend-generation-gate.sh
 
 security-audit:
 	./scripts/security-audit.sh all

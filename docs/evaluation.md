@@ -617,8 +617,9 @@ uv run --frozen python eval/judge_generation.py --split dev --output judged.json
 This needs `JEV_API_KEY`, and `OPENAI_CI_API_KEY` for the splitter. The CLI prints the
 metrics and then each Contradiction with its case, sentence, claim and chunk. `--output`
 writes the same, plus per-case judgments, the Judge version, the splitter's model, both
-billed usages and the judged record's provenance, as JSON. Judged
-runs are not committed or published yet, and nothing is gated.
+billed usages and the judged record's provenance, as JSON. Judging a
+stored record publishes nothing and gates nothing; the [generation
+gate](#generation-gate-and-published-results) does both.
 
 ## Validating the Judge
 
@@ -932,9 +933,61 @@ tokens. Judging one bills Jev ~1.95M input tokens, about three times its cost be
 claim splitting (each sentence becomes ~3 claims, each judged against 5 chunks), and the
 splitter ~68k tokens.
 
+## Generation gate and published results
+
+`eval/gate_generation.py` answers every Golden Set case (both Splits) with the Shipped
+Arm and `gpt-6-luna` at reasoning effort `low`, the model the Floors were measured on,
+and judges every answer. It fails if Faithfulness or Decline accuracy over the whole set
+falls below its Floor (`FLOORS` in `eval/generation.py`: 0.85 and 0.915, from the
+[Run-to-run spread](#run-to-run-spread)). A gated metric with nothing to measure fails
+too. Fact Recall and Contradictions are printed but not gated
+([ADR-0007](adr/0007-generation-evaluation-harness.md)).
+
+The gate generates with OpenAI, not with Groq, even while production still serves Groq.
+The Floors were derived from Luna's spread, and Groq's free tier is shared with visitors,
+so a gate run of ~130k tokens would take most of a day's quota.
+
+CI runs it from `.github/workflows/generation-gate.yml`, on pull requests and pushes to
+`main` that touch what can change an answer: the prompt and model configuration
+(`app/llm.py`, `app/config.py`), retrieval code and indexes, the Corpus sources, the
+Golden Set, and the generation harness. Dependency bumps don't trigger it, so they spend
+no API budget. It uses CI's own keys (`OPENAI_CI_API_KEY`, and `JEV_CI_API_KEY` passed as
+`JEV_API_KEY`), never production's. A full run takes about 20 minutes and a few cents.
+The judged run is uploaded as the `generation-run` artifact.
+
+On `main`, a passing run publishes its **held-out** cases as the Shipped Arm section of
+`frontend/data/generationResults.json` (`eval/publish_generation.py`), which the portfolio
+page renders. A run below a Floor publishes nothing. The document has two sections, each
+with its own provenance (commit, CI run link, time), because they come from different
+runs: `shippedArm` from this gate, and `comparison` from the manual comparison run of
+Candidate Arms. A run replaces only its own section.
+
+| Published field | Measured? | |
+|---|---|---|
+| Fact Recall, Faithfulness, Decline accuracy | yes | rounded to each metric's step: 0.1, 0.05, 0.005 |
+| cost per answer (USD) | yes | mean billed usage at OpenAI's list prices, to one significant figure |
+| generation model ID, reasoning effort | yes | the model ID OpenAI reports answering with |
+| Judge version, splitter model | yes | |
+| Arm, Corpus size, split, question counts, steps | yes | |
+| commit, CI run URL, time | no | provenance |
+
+A section is rewritten only when a measured field changes, so a rerun whose rounded
+numbers match commits nothing: noise alone never produces a results commit. A change of
+generation model or Judge version is a new measurement even if every number matches. As
+for retrieval, a CI run replaces a local run's provenance once.
+
+Cost per answer uses OpenAI's standard prices from 2026-10-11 (`PRICES_PER_MILLION`:
+Luna $0.10 in / $0.50 out per million tokens; reasoning tokens bill as output). Cached
+input is cheaper, so it is an upper bound. A model with no recorded price is refused
+rather than published without a cost.
+
+```bash
+make generation-gate                              # gate only; needs backend/.env keys
+PUBLISH_EVAL=1 ./scripts/backend-generation-gate.sh   # gate, then publish if it passes
+```
+
 ## Not yet measured
 
-Retrieval quality is only half of a RAG system's behaviour. Generation can now be
-judged, but nothing published or gated relies on it yet. Still open: fixing the Judge's
-questions that validation found blind to unsupported sentences, then the generation gate
-and published results, and adversarial/prompt-injection robustness.
+Retrieval quality is only half of a RAG system's behaviour, and generation is now gated
+and published too. Still open: the comparison section (Candidate Arms through
+generation), adversarial/prompt-injection robustness, and multi-turn conversations.

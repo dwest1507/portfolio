@@ -36,6 +36,14 @@ That last part is deliberate, and it is the only way I could find to publish res
 
 It also means this write-up does not need rewriting when the system changes. The numbers move, the verdict follows them, and the prose around it stays true because it never claimed to know the answer.
 
+## How well it answers
+
+Retrieval only says whether the right text reached the model. It does not say whether the answer was right, stayed inside that text, or declined when it should have. A second harness measures that: it asks the chatbot every held-out question, splits each answer into claims, and has a separate judge model, pinned to an exact version, check each claim against the retrieved text one passage at a time. Before I trusted the judge, I checked it against sentences I had labelled by hand, and it failed the first time.
+
+<GenerationScoreboard />
+
+Faithfulness and decline accuracy gate every change that could alter an answer: the prompt, the retrieval code, the documents and the questions. Unlike retrieval, the same commit does not give the same answers twice, so I ran it three times, set the floors below the observed spread, and round each published score to a step that noise alone cannot move.
+
 ## What the evaluation changed
 
 Metrics are only worth collecting if they alter what you build. This is the running record of what the harness found and what I did about it — appended to, never rewritten.
@@ -62,7 +70,7 @@ The corpus is small, and much of it is written as anticipated questions with ans
 
 That bias cuts directly against the conclusion I drew from it, which is why the retired configurations are still measured rather than deleted from the harness: the result that told me to remove them is the same result I expect to reverse as the corpus grows past the point where the questions and the documents share vocabulary.
 
-I would rather state that plainly than let a table imply more than it earned. The full write-up of the method, the biases, and what is still unmeasured — generation faithfulness, refusal behaviour on out-of-scope questions, adversarial robustness — is in the repository.
+I would rather state that plainly than let a table imply more than it earned. The full write-up of the method, the biases, and what is still unmeasured — adversarial robustness, and multi-turn conversations — is in the repository.
 
 ## Skills Demonstrated
 

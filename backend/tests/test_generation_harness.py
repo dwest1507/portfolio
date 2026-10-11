@@ -10,11 +10,13 @@ from __future__ import annotations
 import pytest
 
 from eval.generation import (
+    FLOORS,
     SUPPORTS_AT,
     Generation,
     Relation,
     TokenBudgetExhausted,
     format_report,
+    gate_failures,
     replay,
     run_generation,
     throttled,
@@ -679,3 +681,64 @@ def test_replaying_a_case_the_record_never_answered_fails_loudly():
 
     with pytest.raises(KeyError, match="What salary range"):
         retrieve(SALARY_CASE["question"])
+
+
+# ---------------------------------------------------------------------------
+# The gate
+# ---------------------------------------------------------------------------
+
+
+def test_the_floors_are_the_ones_the_spread_study_derived():
+    """0.85 and 0.915, from three Luna runs judged with the fixed questions (#81).
+
+    Not targets: a Floor moves only when the spread study is rerun (ADR-0007).
+    """
+    assert FLOORS == {"faithfulness": 0.85, "declineAccuracy": 0.915}
+
+
+def test_a_run_above_both_floors_passes_the_gate():
+    answer = "David works at Booz Allen Hamilton."
+    judge = FakeJudge(declining={DECLINE}, relations={(answer, EMPLOYER_CHUNKS[0]): "supports"})
+
+    run = run_generation(
+        [EMPLOYER_CASE, SALARY_CASE],
+        retrieving(EMPLOYER_CHUNKS),
+        answering({EMPLOYER_CASE["question"]: answer, SALARY_CASE["question"]: DECLINE}),
+        judge=judge,
+    )
+
+    assert gate_failures(run["metrics"]) == []
+
+
+def test_an_unsupported_sentence_below_the_faithfulness_floor_fails_the_gate():
+    """One supported sentence and one not: Faithfulness 0.5, below 0.85."""
+    supported = "David works at Booz Allen Hamilton."
+    judge = FakeJudge(relations={(supported, EMPLOYER_CHUNKS[0]): "supports"})
+
+    run = run_generation(
+        [EMPLOYER_CASE],
+        retrieving(EMPLOYER_CHUNKS),
+        answering({EMPLOYER_CASE["question"]: f"{supported} He has published three papers."}),
+        judge=judge,
+    )
+
+    assert gate_failures(run["metrics"]) == ["faithfulness = 0.500 < 0.850"]
+
+
+def test_answering_an_out_of_scope_case_fails_the_decline_floor():
+    """Faithfulness has nothing to judge on an Out-of-Scope Case; Decline accuracy fails."""
+    run = run_generation(
+        [SALARY_CASE],
+        retrieving([]),
+        answering({SALARY_CASE["question"]: "David is looking for $500k."}),
+        judge=FakeJudge(),
+    )
+
+    assert "declineAccuracy = 0.000 < 0.915" in gate_failures(run["metrics"])
+
+
+def test_a_gated_metric_with_nothing_to_measure_fails_rather_than_passes():
+    """A run that judged no factual sentence measured no Faithfulness, which is not a pass."""
+    assert gate_failures({"faithfulness": None, "declineAccuracy": 1.0}) == [
+        "faithfulness was not measured"
+    ]

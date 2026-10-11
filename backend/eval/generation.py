@@ -444,6 +444,29 @@ def score(results: list[dict]) -> dict:
     }
 
 
+#: The gated metrics' Floors, for the Shipped Arm over the full Golden Set (ADR-0007).
+#: Derived by eval/variance.py from three Luna runs judged with the questions fixed in #81
+#: (docs/evaluation.md, Run-to-run spread). Not targets: a Floor moves only when the
+#: spread study is rerun, for a new generation model, Judge question or splitter.
+FLOORS = {"faithfulness": 0.85, "declineAccuracy": 0.915}
+
+
+def gate_failures(metrics: dict, floors: dict[str, float] = FLOORS) -> list[str]:
+    """Each gated metric below its Floor, as a line to print; empty when the gate passes.
+
+    A gated metric that measured nothing (no factual sentence, no case) fails: a run that
+    checked nothing has not shown the answers are fine.
+    """
+    failures = []
+    for metric, floor in floors.items():
+        value = metrics.get(metric)
+        if value is None:
+            failures.append(f"{metric} was not measured")
+        elif value < floor:
+            failures.append(f"{metric} = {value:.3f} < {floor:.3f}")
+    return failures
+
+
 def ratio(part: int, whole: int) -> float | None:
     """`part / whole`, or None when there is nothing to measure."""
     return part / whole if whole else None

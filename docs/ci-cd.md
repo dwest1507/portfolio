@@ -29,6 +29,7 @@ Each check also has its own target for debugging a single failure:
 | `make backend-test` | `scripts/backend-test.sh` | backend-ci → test job |
 | `make security-audit` | `scripts/security-audit.sh all` | security → npm-audit + pip-audit jobs |
 | `make lighthouse` | `scripts/lighthouse.sh` | lighthouse workflow (needs Chrome) |
+| `make generation-gate` | `scripts/backend-generation-gate.sh` | generation-gate workflow (paid API calls; not part of `make ci-cd`) |
 
 What can't run locally: CodeQL, gitleaks, and dependency review are GitHub-hosted
 analyses inside `security.yml`. Everything else is script-for-script identical.
@@ -39,6 +40,7 @@ analyses inside `security.yml`. Everything else is script-for-script identical.
 |----------|---------|--------------|
 | `frontend-ci.yml` | PRs and pushes to `main` touching `frontend/**`; manual dispatch | `scripts/frontend-quality.sh` (ESLint, Prettier, tsc), `frontend-test.sh` (Vitest), `frontend-build.sh` |
 | `backend-ci.yml` | PRs and pushes to `main` touching `backend/**`; manual dispatch | `scripts/backend-lint.sh` (`uv lock --check`, ruff check + format), `backend-test.sh` (pytest, ML models mocked), `backend-eval.sh` (retrieval gate; publishes the held-out Measured Run on `main`) |
+| `generation-gate.yml` | PRs and pushes to `main` touching generation-relevant paths only (prompt and model config, retrieval code, indexes, Corpus sources, Golden Set, generation harness); manual dispatch | `scripts/backend-generation-gate.sh` — answers the Golden Set with the Shipped Arm, judges it, fails below the Faithfulness or Decline accuracy Floor; publishes the held-out results to `frontend/data/generationResults.json` on `main`. Paid: needs the `OPENAI_CI_API_KEY` and `JEV_CI_API_KEY` secrets |
 | `security.yml` | PRs, pushes to `main`, weekly cron | CodeQL (TS + Python), gitleaks secret scan, `scripts/security-audit.sh` (npm audit prod/high+, pip-audit), dependency review on PRs |
 | `lighthouse.yml` | PRs touching `frontend/**` | `scripts/lighthouse.sh` — Lighthouse CI against the production build; asserts ≥ 0.9 on accessibility / best-practices / SEO (performance warns) per `frontend/lighthouserc.json` |
 | `release.yml` | Pushes to `main` | [Release Please](https://github.com/googleapis/release-please) — maintains the release PR, then tags and publishes the GitHub Release when it merges |
@@ -47,8 +49,16 @@ Node is pinned by `frontend/.nvmrc` and read via `node-version-file:` in every
 workflow — CI must resolve `package-lock.json` with the same npm major that generated
 it, or `npm ci` fails on peer dependencies.
 
-uv is pinned the same way, for the same reason: `UV_VERSION` in `backend-ci.yml` (and the
-`setup-uv` step in `security.yml`) matches the uv that last wrote `backend/uv.lock`, so CI
+**The generation gate's path filter is narrower than `backend-ci.yml`'s on purpose.** Every
+run calls OpenAI and TypeSafe's Jev, so dependency bumps (`uv.lock`, `pyproject.toml`) and
+backend code that cannot change an answer do not trigger it. Its two path lists (`pull_request`
+and `push`) are identical; change them together. It uses CI's own keys, stored as the
+repository secrets `OPENAI_CI_API_KEY` and `JEV_CI_API_KEY`, never production's, so eval
+spend and visitor spend can be told apart (ADR-0008). Locally, `make generation-gate` reads
+`OPENAI_CI_API_KEY` and `JEV_API_KEY` from `backend/.env`.
+
+uv is pinned the same way, for the same reason: `UV_VERSION` in `backend-ci.yml` and
+`generation-gate.yml` (and the `setup-uv` step in `security.yml`) matches the uv that last wrote `backend/uv.lock`, so CI
 and local development agree on the lockfile's format `revision`. Bump them together when
 you upgrade uv locally and re-lock.
 

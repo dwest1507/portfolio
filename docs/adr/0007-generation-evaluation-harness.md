@@ -128,3 +128,16 @@ Each published metric is now rounded to a step from its own held-out range, by t
 rule, and each Floor uses its own metric's step. David chose this over keeping the rule,
 and over running more generations first. Measured values: Fact Recall 0.1, Faithfulness
 0.05, Decline accuracy 0.005; Floors 0.85 and 0.915 (docs/evaluation.md).
+
+## Amendment (2026-10-11): the gate generates with Luna before the switch
+
+The gate (#71) generates with `gpt-6-luna` at reasoning effort `low`, while production
+still serves Groq until ADR-0008's switch. The Floors were derived from Luna's
+run-to-run spread, so gating a Groq run against them would compare against noise that was
+never measured. And a full Golden Set run on Groq takes most of the free daily quota that
+visitors share. Until the switch, the published Shipped Arm section therefore names Luna as
+the generation model. If the selection picks a different model, the gate's model, its
+price and the spread study change together.
+
+Cost per answer is published to one significant figure. The spread study derived no
+step for it, and billed tokens move with every reworded answer.
