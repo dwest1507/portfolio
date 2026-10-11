@@ -1154,8 +1154,54 @@ of `94a7b95`, before the cases the baseline lacks were added. The two generation
 and 113k (Sol) tokens. Judging billed Jev 3.5M (Groq), 1.9M (Luna) and 3.1M (Sol) input
 tokens, since longer answers have more claims to check.
 
+## Comparing Candidate Arms through generation
+
+The Shipped Arm is chosen by [ADR-0009](adr/0009-shipped-arm-selection-rule.md)'s rule,
+which reads answers, not retrieval metrics: a Candidate Arm replaces BM25 only if it is
+distinguishably better on Fact Recall, not distinguishably worse on Faithfulness or
+Decline accuracy, and no slower than the `~100ms` Latency Band warm. `eval/compare_arms.py`
+produces the evidence. Every Candidate Arm (`bm25`, `onnx-dense`, `onnx-hybrid`,
+`bm25+onnx-rerank-20`; never a Reference Arm) retrieves for every Golden Set case on both
+Splits, `gpt-6-luna` at reasoning effort `low` answers from what that Arm retrieved, and
+the pinned Judge scores each answer. Only the Arm varies; each Arm's answers are generated
+afresh, so run-to-run noise in the model adds to the disagreements the test sees.
+
+Each Candidate Arm is compared with the Shipped Arm on the pairs where they disagree, by
+the same exact sign test as for [choosing the generation model](#choosing-the-generation-model):
+Faithfulness and Decline accuracy per case, Fact Recall per Required Fact. The run prints
+the `dev` and `holdout` reports (metrics per Arm, then each Arm's won/lost and outcome per
+metric). The rule is applied to `dev` and confirmed on `holdout`; the latency condition
+is read from the retrieval Scoreboard's Latency Bands.
+
+CI runs it from `.github/workflows/generation-comparison.yml`, only when dispatched by
+hand: it costs about four generation gate runs. Every Arm's judged run on both Splits is
+uploaded as the `comparison-run` artifact, which is where the `dev` results the decision
+is made on live; they are never published. A run dispatched on `main` publishes the
+**held-out** results as the `comparison` section of `frontend/data/generationResults.json`,
+with its own provenance, and the portfolio page renders it under the Shipped Arm table. A
+run on another branch publishes nothing.
+
+| Comparison field | Measured? | |
+|---|---|---|
+| per Arm: Fact Recall, Faithfulness, Decline accuracy | yes | rounded to the same steps as the Shipped Arm section |
+| per Arm: won/lost against the Shipped Arm and outcome, per metric | yes | `null` for the Shipped Arm itself |
+| per Arm: cost per answer, eligibility, label | yes | |
+| Shipped Arm, generation model ID, reasoning effort, Judge version, splitter model | yes | |
+| Corpus size, split, question counts, steps | yes | |
+| commit, CI run URL, time | no | provenance |
+
+As for the Shipped Arm section, a rerun whose rounded numbers and outcomes all match
+commits nothing.
+
+```bash
+make generation-comparison                                   # report only; needs backend/.env keys
+COMPARISON_RUN_OUTPUT=runs/comparison.json make generation-comparison   # keep the judged runs
+PUBLISH_EVAL=1 ./scripts/backend-generation-comparison.sh    # report, then publish holdout
+```
+
 ## Not yet measured
 
 Retrieval quality is only half of a RAG system's behaviour, and generation is now gated
-and published too. Still open: the comparison section (Candidate Arms through
-generation), adversarial/prompt-injection robustness, and multi-turn conversations.
+and published too, for the Shipped Arm and, by the manual comparison run, for every
+Candidate Arm. Still open: adversarial/prompt-injection robustness, and multi-turn
+conversations.

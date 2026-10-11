@@ -20,6 +20,7 @@ from itertools import pairwise
 from typing import TYPE_CHECKING, Protocol
 
 from app.llm import MAX_TOKENS, TEMPERATURE, build_messages, format_context
+from eval.publish import compare_with_shipped
 
 if TYPE_CHECKING:
     from groq import Groq
@@ -460,6 +461,59 @@ def score(results: list[dict]) -> dict:
         "factualSentences": len(sentences),
         "contradictions": sum(len(r["contradictions"]) for r in results),
     }
+
+
+# Paired outcomes. Each metric pairs one judged run with another per case, or per
+# Required Fact, so two runs over the same cases can be compared by ADR-0006's test,
+# whether they differ in the model (ADR-0008, eval/select_model.py) or the Arm
+# (ADR-0009, eval/compare_arms.py).
+
+
+def compare(candidate: dict, incumbent: dict) -> dict:
+    """Per metric, the pairs the candidate won and lost against the incumbent, and the outcome.
+
+    A pair only one of the two runs has an outcome for is left out.
+    """
+    return {
+        metric: compare_with_shipped(
+            outcomes(candidate, metric), outcomes(incumbent, metric), metric
+        )
+        for metric in OUTCOMES
+    }
+
+
+def outcomes(run: dict, metric: str) -> list[dict]:
+    """Each pair's pass or fail on one metric, leaving out what the metric doesn't score."""
+    return [
+        {"id": pair, metric: passed}
+        for case in run["cases"]
+        for pair, passed in OUTCOMES[metric](case)
+    ]
+
+
+def faithful(case: dict) -> list[tuple[str, bool]]:
+    """Whether every factual sentence of the answer is supported (ADR-0008 amendment).
+
+    Faithfulness pools sentences, and two runs' answers have different sentences, so
+    the cases are what can be paired. A Decline, or any answer to an Out-of-Scope Case,
+    is not judged for support, so it has no outcome.
+    """
+    if case["declined"] or not case["answerable"]:
+        return []
+    return [(case["id"], all(sentence["supported"] for sentence in case["sentences"]))]
+
+
+def decline_correct(case: dict) -> list[tuple[str, bool]]:
+    """Declining an Out-of-Scope Case and answering an answerable one are both correct."""
+    return [(case["id"], case["declined"] != case["answerable"])]
+
+
+def conveyed(case: dict) -> list[tuple[str, bool]]:
+    """Whether each Required Fact was conveyed: the same facts, so each fact is a pair."""
+    return [(f"{case['id']}#{i}", fact["conveyed"]) for i, fact in enumerate(case["facts"])]
+
+
+OUTCOMES = {"faithfulness": faithful, "declineAccuracy": decline_correct, "factRecall": conveyed}
 
 
 #: The gated metrics' Floors, for the Shipped Arm over the full Golden Set (ADR-0007).

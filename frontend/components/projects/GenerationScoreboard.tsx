@@ -1,28 +1,10 @@
 import {
   formatMetric,
+  GENERATION_METRICS as METRICS,
   generationResults,
   type GenerationMetric,
   type GenerationResults,
 } from '@/data/generationResults'
-
-const METRICS: { id: GenerationMetric; label: string; description: string }[] = [
-  {
-    id: 'faithfulness',
-    label: 'Faithfulness',
-    description: 'Share of factual sentences in an answer that the retrieved text supports.',
-  },
-  {
-    id: 'declineAccuracy',
-    label: 'Decline accuracy',
-    description:
-      'Share of questions handled correctly: answered when the documents cover them, declined when they do not.',
-  },
-  {
-    id: 'factRecall',
-    label: 'Fact Recall',
-    description: 'Share of the facts a complete answer should contain that the answer conveyed.',
-  },
-]
 
 /** Faithfulness and Decline accuracy fail the build below their Floors; Fact Recall does not. */
 const GATED = new Set<GenerationMetric>(['faithfulness', 'declineAccuracy'])

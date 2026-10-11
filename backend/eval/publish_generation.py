@@ -23,8 +23,8 @@ from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
-from eval.generation import score
-from eval.publish import ARM_SPEC_BY_ID, _git_commit, _run_url
+from eval.generation import compare, score
+from eval.publish import ARM_SPEC_BY_ID, CANDIDATE, _git_commit, _run_url, shipped_arm_id
 
 #: Bumped whenever a section gains or changes a measured field, so a document from
 #: before the change is not compared with one from after.
@@ -54,8 +54,9 @@ PRICES_PER_MILLION = {
     "gpt-6.1-sol": (2.00, 10.00),
 }
 
-#: The fields that carry a section's measurement. Everything else in a section is
-#: provenance (when, which commit, which CI run), which moves on every run by construction.
+#: The fields that carry the Shipped Arm section's measurement. Everything else in a
+#: section is provenance (when, which commit, which CI run), which moves on every run by
+#: construction.
 MEASURED_KEYS = (
     "split",
     "arm",
@@ -72,6 +73,26 @@ MEASURED_KEYS = (
     "steps",
     "costPerAnswerUsd",
 )
+
+#: The fields that carry the Comparison section's measurement: what every row shares,
+#: and the rows, each with its metrics, cost and comparison with the Shipped Arm.
+COMPARISON_MEASURED_KEYS = (
+    "split",
+    "shippedArm",
+    "generationModel",
+    "reasoningEffort",
+    "judge",
+    "splitter",
+    "corpusChunks",
+    "questions",
+    "answerable",
+    "outOfScope",
+    "steps",
+    "arms",
+)
+
+#: Each section's measured fields, by section name.
+SECTION_MEASURED_KEYS = {"shippedArm": MEASURED_KEYS, "comparison": COMPARISON_MEASURED_KEYS}
 
 
 def build_section(
@@ -90,8 +111,7 @@ def build_section(
     spec = ARM_SPEC_BY_ID.get(arm)
     if spec is None:
         raise ValueError(f"Arm {arm!r} has no entry in ARM_SPECS, so it cannot be published.")
-    cases = [case for case in run["cases"] if case["split"] == PUBLISHED_SPLIT]
-    metrics = score(cases)
+    cases = _held_out(run)["cases"]
     answerable = sum(case["answerable"] for case in cases)
     return {
         "generatedAt": datetime.now(UTC).replace(microsecond=0).isoformat(),
@@ -109,10 +129,86 @@ def build_section(
         "questions": len(cases),
         "answerable": answerable,
         "outOfScope": len(cases) - answerable,
-        "metrics": {m: round_to_step(metrics[m], step) for m, step in STEPS.items()},
+        "metrics": _rounded_metrics(cases),
         "steps": dict(STEPS),
         "costPerAnswerUsd": cost_per_answer(cases, requested_model),
     }
+
+
+def build_comparison_section(
+    runs: dict[str, dict],
+    *,
+    requested_model: str,
+    reasoning_effort: str | None,
+    corpus_chunks: int,
+) -> dict:
+    """The Comparison section, from a judged run per Candidate Arm (eval/compare_arms.py).
+
+    One row per Arm, in registry order, each with its held-out metrics and cost, and,
+    for every Arm but the Shipped Arm, the pairs it won and lost against the Shipped Arm
+    on each metric ADR-0009's rule reads, with ADR-0006's outcome. The runs cover every
+    split; only held-out cases are published, so the outcomes here confirm a decision
+    made on `dev` rather than make it.
+    """
+    shipped = shipped_arm_id()
+    unknown = [arm for arm in runs if arm not in ARM_SPEC_BY_ID]
+    if unknown:
+        raise ValueError(f"Arm(s) {', '.join(unknown)} have no entry in ARM_SPECS.")
+    reference = [arm for arm in runs if ARM_SPEC_BY_ID[arm].eligibility != CANDIDATE]
+    if reference:
+        raise ValueError(
+            f"Reference Arm(s) {', '.join(reference)} are never run through generation "
+            "(ADR-0007), so they are not published."
+        )
+    if shipped not in runs:
+        raise ValueError(f"The comparison needs the Shipped Arm, {shipped}, to compare with.")
+
+    held_out = {arm: _held_out(run) for arm, run in runs.items()}
+    baseline = held_out[shipped]
+    rows = []
+    for spec in (ARM_SPEC_BY_ID[arm] for arm in ARM_SPEC_BY_ID if arm in runs):
+        run = held_out[spec.id]
+        rows.append(
+            {
+                "arm": spec.id,
+                "armLabel": spec.label,
+                "eligibility": spec.eligibility,
+                "shipped": spec.shipped,
+                "metrics": _rounded_metrics(run["cases"]),
+                "costPerAnswerUsd": cost_per_answer(run["cases"], requested_model),
+                "vsShipped": None if spec.shipped else compare(run, baseline),
+            }
+        )
+    cases = baseline["cases"]
+    answerable = sum(case["answerable"] for case in cases)
+    return {
+        "generatedAt": datetime.now(UTC).replace(microsecond=0).isoformat(),
+        "commit": _git_commit(),
+        "runUrl": _run_url(),
+        "split": PUBLISHED_SPLIT,
+        "shippedArm": shipped,
+        "generationModel": ", ".join(
+            sorted({case["model"] for run in held_out.values() for case in run["cases"]})
+        ),
+        "reasoningEffort": reasoning_effort,
+        "judge": runs[shipped]["judge"],
+        "splitter": runs[shipped]["splitter"],
+        "corpusChunks": corpus_chunks,
+        "questions": len(cases),
+        "answerable": answerable,
+        "outOfScope": len(cases) - answerable,
+        "steps": dict(STEPS),
+        "arms": rows,
+    }
+
+
+def _held_out(run: dict) -> dict:
+    return {**run, "cases": [case for case in run["cases"] if case["split"] == PUBLISHED_SPLIT]}
+
+
+def _rounded_metrics(cases: list[dict]) -> dict:
+    metrics = score(cases)
+    return {m: round_to_step(metrics[m], step) for m, step in STEPS.items()}
 
 
 def round_to_step(value: float | None, step: float) -> float | None:
@@ -149,8 +245,10 @@ def cost_per_answer(cases: list[dict], requested_model: str) -> float | None:
     return float(f"{total / len(cases) / 1_000_000:.1g}")
 
 
-def _measurement(section: dict | None) -> dict | None:
-    return None if section is None else {k: section.get(k) for k in MEASURED_KEYS}
+def _measurement(name: str, section: dict | None) -> dict | None:
+    if section is None:
+        return None
+    return {k: section.get(k) for k in SECTION_MEASURED_KEYS[name]}
 
 
 def _empty_document() -> dict:
@@ -181,7 +279,7 @@ def write_section(name: str, section: dict, path: Path) -> tuple[dict, bool]:
             document = existing
             current = existing.get(name)
             attests = current is not None and not current.get("runUrl") and bool(section["runUrl"])
-            if not attests and _measurement(current) == _measurement(section):
+            if not attests and _measurement(name, current) == _measurement(name, section):
                 return existing, False
 
     document = {**document, name: section}

@@ -44,6 +44,10 @@ Retrieval only says whether the right text reached the model. It does not say wh
 
 Faithfulness and decline accuracy gate every change that could alter an answer: the prompt, the retrieval code, the documents and the questions. Unlike retrieval, the same commit does not give the same answers twice, so I ran it three times, set the floors below the observed spread, and round each published score to a step that noise alone cannot move.
 
+The retrieval table can only say which configuration finds the right text more often. Whether that changes what visitors are told is a question for this harness, so a separate run, triggered by hand, answers the same questions through every configuration that could ship. A configuration replaces keyword search only if its answers convey distinguishably more of the facts they should, without being distinguishably less faithful or worse at declining, and stays within about a tenth of a second per query. I decide on one set of questions and publish another, so the table below confirms the choice rather than makes it.
+
+<GenerationComparison />
+
 ## What the evaluation changed
 
 Metrics are only worth collecting if they alter what you build. This is the running record of what the harness found and what I did about it — appended to, never rewritten.

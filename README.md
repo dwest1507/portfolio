@@ -79,6 +79,7 @@ make test            # Run all tests (pytest + vitest)
 make eval            # Retrieval quality eval (all arms; downloads models)
 make eval-fast       # Retrieval eval, BM25 arm only (no model download)
 make generation-gate # Generation gate (paid API calls; needs keys in backend/.env)
+make generation-comparison # Candidate Arms through generation (paid; ~4 gate runs)
 make lint            # Ruff + ESLint + Prettier + tsc
 make ci-cd           # Run every CI check locally — same scripts CI runs
 make build-index     # Rebuild RAG search indexes

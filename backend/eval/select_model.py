@@ -21,8 +21,7 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from eval.generation import fmt, score  # (needs the sys.path line above)
-from eval.publish import compare_with_shipped
+from eval.generation import compare, fmt, score  # (needs the sys.path line above)
 from eval.publish_generation import PRICES_PER_MILLION
 
 #: The metrics the rule decides on: a model distinguishably worse on either is not chosen.
@@ -53,53 +52,6 @@ def select_model(groq: dict, luna: dict, sol: dict) -> dict:
     else:
         upgrade = "ahead" in gated
     return {"chosen": "sol" if upgrade else "luna", "comparisons": comparisons}
-
-
-def compare(candidate: dict, incumbent: dict) -> dict:
-    """Per metric, the pairs the candidate won and lost against the incumbent, and the outcome.
-
-    A pair only one of the two runs has an outcome for is left out.
-    """
-    return {
-        metric: compare_with_shipped(
-            outcomes(candidate, metric), outcomes(incumbent, metric), metric
-        )
-        for metric in (*GATED, TIEBREAK)
-    }
-
-
-def outcomes(run: dict, metric: str) -> list[dict]:
-    """Each pair's pass or fail on one metric, leaving out what the metric doesn't score."""
-    return [
-        {"id": pair, metric: passed}
-        for case in run["cases"]
-        for pair, passed in OUTCOMES[metric](case)
-    ]
-
-
-def faithful(case: dict) -> list[tuple[str, bool]]:
-    """Whether every factual sentence of the answer is supported (ADR-0008 amendment).
-
-    Faithfulness pools sentences, and two models' answers have different sentences, so
-    the cases are what can be paired. A Decline, or any answer to an Out-of-Scope Case,
-    is not judged for support, so it has no outcome.
-    """
-    if case["declined"] or not case["answerable"]:
-        return []
-    return [(case["id"], all(sentence["supported"] for sentence in case["sentences"]))]
-
-
-def decline_correct(case: dict) -> list[tuple[str, bool]]:
-    """Declining an Out-of-Scope Case and answering an answerable one are both correct."""
-    return [(case["id"], case["declined"] != case["answerable"])]
-
-
-def conveyed(case: dict) -> list[tuple[str, bool]]:
-    """Whether each Required Fact was conveyed: the same facts, so each fact is a pair."""
-    return [(f"{case['id']}#{i}", fact["conveyed"]) for i, fact in enumerate(case["facts"])]
-
-
-OUTCOMES = {"faithfulness": faithful, "declineAccuracy": decline_correct, "factRecall": conveyed}
 
 
 #: USD per 1M (input, output) tokens: OpenAI's published prices, and the Groq baseline's

@@ -14,6 +14,7 @@ import pytest
 from eval.publish_generation import (
     SCHEMA_VERSION,
     STEPS,
+    build_comparison_section,
     build_section,
     write_section,
 )
@@ -292,3 +293,167 @@ class TestWriteSection:
     def test_rejects_an_unknown_section(self, tmp_path):
         with pytest.raises(ValueError, match="nightly"):
             write_section("nightly", _section(), tmp_path / "generationResults.json")
+
+
+# ---------------------------------------------------------------------------
+# The Comparison section
+# ---------------------------------------------------------------------------
+
+
+def _faithful_cases(faithful: list[bool], split: str = "holdout") -> list[dict]:
+    """Cases whose one answer is wholly supported or not, in order, with ids c0, c1, ..."""
+    return [
+        _case(f"c{i}", split=split, supported=1 if ok else 0, unsupported=0 if ok else 1)
+        for i, ok in enumerate(faithful)
+    ]
+
+
+def _comparison(runs: dict[str, dict], **kwargs) -> dict:
+    defaults = {"requested_model": "gpt-6-luna", "reasoning_effort": "low", "corpus_chunks": 123}
+    section = build_comparison_section(runs, **{**defaults, **kwargs})
+    section["runUrl"] = "https://example.test/run/9"
+    return section
+
+
+def _candidate_runs(**cases: list[dict]) -> dict[str, dict]:
+    """A judged run per Candidate Arm; each defaults to two faithful held-out cases."""
+    return {arm: _run(cases.get(arm.replace("-", "_").replace("+", "_"))) for arm in CANDIDATES}
+
+
+CANDIDATES = ("bm25", "onnx-dense", "onnx-hybrid", "bm25+onnx-rerank-20")
+
+
+class TestComparisonSection:
+    def test_has_a_row_per_candidate_arm_with_its_own_metrics(self):
+        runs = _candidate_runs(onnx_dense=[_case("a", supported=5, unsupported=5)])
+
+        section = _comparison(runs)
+
+        rows = {row["arm"]: row for row in section["arms"]}
+        assert list(rows) == list(CANDIDATES)
+        assert rows["onnx-dense"]["armLabel"] == "Meaning only, shippable"
+        assert rows["onnx-dense"]["metrics"]["faithfulness"] == 0.5
+        assert rows["bm25"]["metrics"]["faithfulness"] == 0.9
+        assert rows["bm25"]["costPerAnswerUsd"] == 0.0002
+
+    def test_refuses_a_reference_arm(self):
+        """Reference Arms are never run through generation, so never published (story 55)."""
+        with pytest.raises(ValueError, match="rerank"):
+            _comparison({**_candidate_runs(), "rerank": _run()})
+
+    def test_refuses_a_run_without_the_shipped_arm(self):
+        """Every row is compared with the Shipped Arm; without it nothing can be."""
+        runs = _candidate_runs()
+        del runs["bm25"]
+
+        with pytest.raises(ValueError, match="bm25"):
+            _comparison(runs)
+
+    def test_only_the_held_out_split_is_published(self):
+        """Dev is what the decision is made on; it stays in the run artifact."""
+        dev = _faithful_cases([False] * 10, split="dev")
+        runs = _candidate_runs(onnx_dense=[*_faithful_cases([True, True]), *dev])
+
+        section = _comparison(runs)
+
+        rows = {row["arm"]: row for row in section["arms"]}
+        assert section["split"] == "holdout"
+        assert section["questions"] == 2
+        assert rows["onnx-dense"]["metrics"]["faithfulness"] == 1.0
+
+    def test_the_shipped_arm_is_marked_and_not_compared_with_itself(self):
+        rows = {row["arm"]: row for row in _comparison(_candidate_runs())["arms"]}
+
+        assert rows["bm25"]["shipped"] is True
+        assert rows["bm25"]["vsShipped"] is None
+        assert rows["onnx-dense"]["shipped"] is False
+
+    def test_a_lopsided_disagreement_is_called_behind(self):
+        """Shipped faithful on 8 cases the Arm was not: p = 0.008 < 0.05 (ADR-0006)."""
+        runs = _candidate_runs(
+            bm25=_faithful_cases([True] * 10), onnx_dense=_faithful_cases([False] * 8 + [True] * 2)
+        )
+
+        rows = {row["arm"]: row for row in _comparison(runs)["arms"]}
+
+        assert rows["onnx-dense"]["vsShipped"]["faithfulness"] == {
+            "won": 0,
+            "lost": 8,
+            "outcome": "behind",
+        }
+
+    def test_a_balanced_disagreement_is_indistinguishable(self):
+        """Won 3, lost 3: as likely as not, whatever the Arms' scores."""
+        shipped = [True] * 3 + [False] * 3 + [True] * 4
+        arm = [False] * 3 + [True] * 3 + [True] * 4
+        runs = _candidate_runs(bm25=_faithful_cases(shipped), onnx_dense=_faithful_cases(arm))
+
+        rows = {row["arm"]: row for row in _comparison(runs)["arms"]}
+
+        assert rows["onnx-dense"]["vsShipped"]["faithfulness"] == {
+            "won": 3,
+            "lost": 3,
+            "outcome": "indistinguishable",
+        }
+
+    def test_compares_on_every_metric_the_shipped_arm_rule_reads(self):
+        """Fact Recall decides; Faithfulness and Decline accuracy may only veto (ADR-0009)."""
+        rows = {row["arm"]: row for row in _comparison(_candidate_runs())["arms"]}
+
+        assert set(rows["onnx-dense"]["vsShipped"]) == {
+            "factRecall",
+            "faithfulness",
+            "declineAccuracy",
+        }
+
+    def test_records_what_was_measured(self):
+        section = _comparison(_candidate_runs())
+
+        assert section["shippedArm"] == "bm25"
+        assert section["generationModel"] == "gpt-6-luna-2026-08-01"
+        assert section["reasoningEffort"] == "low"
+        assert section["judge"] == "jev-1.13.0"
+        assert section["corpusChunks"] == 123
+        assert section["steps"] == STEPS
+        assert section["runUrl"] == "https://example.test/run/9"
+
+    def test_rounding_suppresses_a_noise_only_rewrite(self, tmp_path):
+        path = tmp_path / "generationResults.json"
+        noisy = _candidate_runs(onnx_dense=[_case("a", supported=957, unsupported=43)])
+        write_section("comparison", _comparison(noisy), path)
+        before = path.read_text(encoding="utf-8")
+
+        rerun = _comparison(_candidate_runs(onnx_dense=[_case("a", supported=940, unsupported=60)]))
+        rerun["commit"] = "deadbee"
+        rerun["runUrl"] = "https://example.test/run/10"
+        _, written = write_section("comparison", rerun, path)
+
+        assert written is False
+        assert path.read_text(encoding="utf-8") == before
+
+    def test_a_changed_outcome_is_a_new_measurement(self, tmp_path):
+        path = tmp_path / "generationResults.json"
+        write_section("comparison", _comparison(_candidate_runs()), path)
+
+        runs = _candidate_runs(
+            bm25=_faithful_cases([True] * 10), onnx_dense=_faithful_cases([False] * 8 + [True] * 2)
+        )
+        _, written = write_section("comparison", _comparison(runs), path)
+
+        assert written is True
+
+    def test_leaves_the_shipped_arm_section_alone(self, tmp_path):
+        path = tmp_path / "generationResults.json"
+        shipped = _section()
+        shipped["commit"] = "main123"
+        write_section("shippedArm", shipped, path)
+
+        comparison = _comparison(_candidate_runs())
+        comparison["commit"] = "cmp4567"
+        write_section("comparison", comparison, path)
+
+        published = _published(path)
+        assert published["shippedArm"]["commit"] == "main123"
+        assert published["shippedArm"]["runUrl"] == "https://example.test/run/1"
+        assert published["comparison"]["commit"] == "cmp4567"
+        assert published["comparison"]["runUrl"] == "https://example.test/run/9"
