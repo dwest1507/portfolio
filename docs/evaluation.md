@@ -637,7 +637,8 @@ each run and its median against the bar, and exits non-zero if any median misses
 
 ### Result: Jev is not yet fit to gate Faithfulness
 
-Measured 2026-10-10 with `jev-1.13.0` at `14ba262`:
+Measured 2026-10-10 with `jev-1.13.0` at `14ba262`, with the questions as they were then.
+They have since been fixed, and the result is [below](#result-jev-meets-the-bar).
 
 | | Agreement |
 |---|---|
@@ -733,6 +734,54 @@ sentence until the questions were frozen. Each step below was measured on the 32
   runs. Most of the spread above comes from a few sentences near the line: the diamonds
   sentence scores 0.50–0.53, and an over-split such as "other DoD-approved LLMs besides…",
   from "among others", can fail a supported sentence.
+
+### Result: Jev meets the bar
+
+Measured 2026-10-11 at `72d2df9`, with the questions frozen beforehand: `jev-1.13.0`,
+claims split by `gpt-6-luna`, three `--final` runs over all 44 labelled sentences. It was
+the first time Jev judged the held-out sentences.
+
+| Measure | Runs | Median | Bar | |
+|---|---|---|---|---|
+| Unsupported caught (held-out) | 1.000, 1.000, 1.000 | **1.000** | ≥ 83% | met |
+| Supported kept | 1.000, 1.000, 0.955 | **1.000** | ≥ 90% | met |
+| Supported across chunks kept | 1.000, 1.000, 1.000 | **1.000** | ≥ 80% | met |
+| Faithfulness agreement | 0.977, 0.955, 0.955 | **0.955** | ≥ 85% | met |
+| Contradiction agreement (no bar) | 0.864, 0.909, 0.909 | 0.909 | — | |
+
+Jev's Faithfulness verdict against the hand labels, summed over the three runs (each
+sentence counted once per run):
+
+| Hand label | Jev: filler | Jev: supported | Jev: unsupported |
+|---|---|---|---|
+| filler (3 × 3) | 9 | 0 | 0 |
+| supported (22 × 3) | 0 | 65 | 1 |
+| unsupported, tuned (7 × 3) | 0 | **4** | 17 |
+| unsupported, held-out (12 × 3: 5 contradicted, 7 says nothing) | 0 | **0** | **36** |
+
+Before the fix, Jev called 0 of 7 unsupported sentences unsupported. Now it catches every
+held-out one in every run, and 17 of 21 tuned ones. Every remaining Faithfulness error
+on an unsupported sentence is the same kind: a chunk about a *similar* system taken as
+support. "Each [Nietzsche] deployment includes an automated evaluation pipeline" passes on
+the portfolio chatbot's evaluation, every run. The one supported sentence lost (run 3) is
+the borderline diamonds sentence.
+
+What this does and does not show:
+
+- **Held-out covers unsupported sentences only.** "Supported kept" is measured on the
+  tuned sentences, so false alarms on unseen supported sentences are untested here.
+- **Contradictions are still noisy.** The narrowed `contradicts` did not stop Jev
+  listing a chunk that names a different item of the same kind: held-out sentence 10
+  (OpenAI embeddings, where the chunk names Titan) is listed as contradicted in every run,
+  and some supported sentences are too. All five contradicted held-out sentences were
+  listed. The other different-item sentence (LightGBM's skill, where the chunk gives
+  ARIMA's) was not. Contradictions remain listed for review, not gated.
+- **Twelve sentences is a small sample.** 36 of 36 across three runs is strong evidence
+  that Jev now catches most unsupported sentences of these kinds. It doesn't pin down the
+  rate.
+
+Faithfulness may now gate (#71) once the run-to-run spread below is rerun with these
+questions.
 
 ## Run-to-run spread
 
