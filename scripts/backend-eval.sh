@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Retrieval quality gate: runs the golden question set through the RAG pipeline
-# and fails if recall/MRR drop below the thresholds in eval/run_eval.py.
+# and fails if the shipped arm's hit@5/MRR drop below the Floors in
+# eval/floors/retrieval.json, or that record is stale (see docs/adr/0012-recalibration.md).
 # Called by `make eval` and .github/workflows/backend-ci.yml.
 #
 # Pass arm names to restrict the run, e.g.:
@@ -35,7 +36,7 @@ else
   DESCRIBED="$*"
 fi
 
-# The gate runs over the whole golden set, where the floors are calibrated.
+# The gate runs over the whole golden set, where the Floors are derived.
 # --frozen: measure the committed uv.lock and never rewrite it. A re-lock here left the
 # tree dirty and broke the publish job's `git pull --rebase`; a stale lockfile is
 # caught instead by `uv lock --check` in scripts/backend-lint.sh.

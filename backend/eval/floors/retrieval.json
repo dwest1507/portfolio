@@ -1,0 +1,19 @@
+{
+  "gate": "retrieval",
+  "writtenBy": "eval/recalibrate.py retrieval — never edit by hand (ADR-0012)",
+  "rule": "measured − 2/n, rounded down to 0.005; n = answerable cases on the full Golden Set; Shipped Arm only",
+  "arm": "bm25",
+  "inputs": {
+    "n": 111,
+    "measured": {
+      "hit@5": 0.864865,
+      "mrr": 0.705405
+    }
+  },
+  "floors": {
+    "hit@5": 0.845,
+    "mrr": 0.685
+  },
+  "fingerprint": "sha256:d4124f33d7349da299a74fda121145a6df2d28045fcd0ed233279111bd1172cb",
+  "commit": "324af00"
+}

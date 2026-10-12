@@ -22,7 +22,7 @@ production could ship them (ADR-0009). The five above are Reference Arms:
 Usage:
     uv run python eval/run_eval.py                      # all arms
     uv run python eval/run_eval.py --arms bm25          # no model download
-    uv run python eval/run_eval.py --check              # exit 1 below thresholds
+    uv run python eval/run_eval.py --check              # exit 1 if stale or below a Floor
     uv run python eval/run_eval.py --json results.json  # machine-readable output
     uv run python eval/run_eval.py --publish            # refresh the published results
 
@@ -67,6 +67,12 @@ from eval.publish import (  # (needs the sys.path line above)
     verdict_line,
     write_results_document,
 )
+from eval.recalibration import (
+    RETRIEVAL_FLOORS_PATH,
+    STALE,
+    read_record,
+    retrieval_fingerprint,
+)
 
 GOLDEN_SET_PATH = Path(__file__).resolve().parent / "golden_set.json"
 
@@ -75,30 +81,24 @@ GOLDEN_SET_PATH = Path(__file__).resolve().parent / "golden_set.json"
 RESULTS_PATH = REPO_ROOT / "frontend" / "data" / "evalResults.json"
 EVALUATION_DOC_PATH = REPO_ROOT / "docs" / "evaluation.md"
 
-# Regression floors for `--check`. Not targets — they sit below measured
-# performance so real regressions fail CI while ordinary noise does not.
-#
-# The gate is hit@5 and MRR, deliberately NOT recall@5. recall@5 is reported
-# because it is informative, but it is a poor gate here: several golden
-# questions have more than five relevant chunks, so their recall@5 is capped
-# below 1.0 by construction and the aggregate can never reach a high floor.
-# hit@5 ("did any grounding text reach the model?") is what actually determines
-# whether the LLM can answer, and MRR captures how far up the list it landed.
-#
-# The floors sit below measured performance with headroom for noise, so a real
-# regression fails the build while ordinary variation does not. They are floors,
-# never targets: tuning a parameter until a floor is cleared is fitting to the
-# golden set. See docs/evaluation.md.
-_FLOORS = {"hit@5": 0.85, "mrr": 0.75}
-
-# Keyed by metric name at the default cutoff. `--check` is only meaningful at
-# that cutoff, which check_thresholds() enforces rather than silently comparing
-# a hit@20 against a floor calibrated for hit@5.
+# Regression Floors for `--check` live in eval/floors/retrieval.json, not here. Only
+# `eval/recalibrate.py retrieval` writes them, by a fixed rule, when the Golden Set or the
+# instrument changes (ADR-0012). They are Floors, never targets: tuning a parameter until
+# a Floor is cleared is fitting to the Golden Set. See docs/evaluation.md.
+# Floors are keyed by metric name at the default cutoff. `--check` is only meaningful
+# at that cutoff, which check_floors() enforces rather than silently comparing a hit@20
+# against a Floor derived for hit@5.
 DEFAULT_TOP_K = 5
 
 # The metric the published verdict is decided on: "did any grounding text reach the
 # model?" is what determines whether the LLM can answer at all.
 GATING_METRIC = f"hit@{DEFAULT_TOP_K}"
+
+# The metrics the gate defends with a Floor, at the default cutoff. Deliberately not
+# recall@5: several Golden cases have more than five relevant chunks, so their recall@5
+# is capped below 1.0 by construction. hit@5 ("did any grounding text reach the model?")
+# decides whether the LLM can answer, and MRR how far up the list it landed.
+GATED_METRICS = (GATING_METRIC, "mrr")
 
 # Golden-set portions. "all" is not a third portion, it is both of them together.
 SPLITS = ("all", "dev", "holdout")
@@ -124,19 +124,15 @@ VALID_ORIGINS = ("authored", "visitor")
 PUBLISHED_SPLIT = "holdout"
 GATED_SPLIT = "all"
 
-# Gated arms, keyed by ID. Only the SHIPPED arm is gated, and it is looked up rather
-# than named so the gate follows production when the shipped arm changes.
+# Only the SHIPPED arm is gated, and it is looked up rather than named so the gate
+# follows production when the shipped arm changes.
 #
 # Every other arm is measured and published as a baseline for comparison, not defended
-# as a quality bar. Two reasons that is the right line to draw. A floor is there to stop
-# a change degrading what a visitor is actually served, and nothing is served by an arm
-# production does not run. And floors are calibrated against a corpus: when the corpus
-# grows, floors on four arms means four constants to re-justify, and a constant nudged
-# to make a build pass is the magic number this file exists to argue against.
+# as a quality bar. A Floor is there to stop a change degrading what a visitor is
+# actually served, and nothing is served by an arm production does not run (ADR-0004).
 #
 # `--check` names every ungated arm explicitly, and a run that gates nothing is a
 # failure, so this cannot quietly become a gate over nothing.
-THRESHOLDS: dict[str, dict[str, float]] = {shipped_arm_id(): dict(_FLOORS)}
 
 
 def metric_names_for(top_k: int) -> list[str]:
@@ -318,8 +314,7 @@ def reciprocal_rank(retrieved: list[int], relevant: set[int], k: int) -> float:
     """Reciprocal rank of the first relevant chunk within the top k.
 
     Truncated at k like every other metric here. An untruncated MRR measured on
-    a --top-k 20 run is not comparable to the thresholds, which were calibrated
-    at k=5.
+    a --top-k 20 run is not comparable to the Floors, which were derived at k=5.
     """
     for rank, doc_id in enumerate(retrieved[:k], start=1):
         if doc_id in relevant:
@@ -560,66 +555,90 @@ def format_latency_table(results: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def check_thresholds(results: list[dict], top_k: int, split: str = GATED_SPLIT) -> int:
-    """Gate the run against THRESHOLDS. Returns a process exit code.
+def check_floors(
+    results: list[dict],
+    top_k: int,
+    golden_cases: list[dict],
+    split: str = GATED_SPLIT,
+    record: dict | None = None,
+) -> int:
+    """Gate the run against the retrieval Floors record. Returns a process exit code.
+
+    `golden_cases` is the whole committed Golden Set, whatever split ran, and `record`
+    defaults to the committed one (eval/floors/retrieval.json).
+
+    A record whose fingerprint no longer matches the Golden Set fails first, on its own,
+    with "Floors stale: Recalibrate": its Floors were derived on a set that no longer
+    exists, so comparing against them would be neither a pass nor a regression.
 
     Three ways a run can look gated without being gated. The first two were real
     behaviour once; the third is what a `--split` flag would have introduced:
 
-    1. An arm with no THRESHOLDS entry (``dense``) contributed no checks, so a
-       dense-only ``--check`` run compared nothing and still printed "OK". A run
-       in which *nothing* was gated is now a failure, and any ungated arm is
-       named explicitly rather than passing in silence.
-    2. Floors are calibrated at k=5. Comparing them against metrics measured at
-       another cutoff is meaningless, so a non-default ``--top-k`` cannot be
-       gated.
-    3. Floors are calibrated on the whole golden set. A single split is a smaller,
+    1. An ungated arm (``dense``) contributed no checks, so a dense-only ``--check``
+       run compared nothing and still printed "OK". A run in which *nothing* was gated
+       is now a failure, and any ungated arm is named explicitly rather than passing in
+       silence.
+    2. Floors are derived at k=5. Comparing them against metrics measured at another
+       cutoff is meaningless, so a non-default ``--top-k`` cannot be gated.
+    3. Floors are derived on the whole golden set. A single split is a smaller,
        noisier sample against the same absolute numbers, so gating one would fail
        the build on sampling noise or pass a real regression by luck.
     """
+    record = record if record is not None else read_record(RETRIEVAL_FLOORS_PATH)
+    expected = retrieval_fingerprint(golden_cases)
+    if record["fingerprint"] != expected:
+        print(
+            f"\nFAIL — {STALE}. The Golden Set no longer matches the retrieval Floors "
+            f"record (record {record['fingerprint'][:19]}…, Golden Set {expected[:19]}…). "
+            "Run `uv run --frozen python eval/recalibrate.py retrieval` in this same "
+            "change (ADR-0012)."
+        )
+        return 1
+
     if top_k != DEFAULT_TOP_K:
         print(
-            f"\nFAIL — --check is calibrated for --top-k {DEFAULT_TOP_K}, got {top_k}. "
-            "Re-run at the default cutoff, or update THRESHOLDS deliberately."
+            f"\nFAIL — --check is derived for --top-k {DEFAULT_TOP_K}, got {top_k}. "
+            "Re-run at the default cutoff."
         )
         return 1
 
     if split != GATED_SPLIT:
         print(
-            f"\nFAIL — --check is calibrated on the {GATED_SPLIT} golden set, got "
-            f"--split {split}. A split is a smaller sample against the same floors."
+            f"\nFAIL — --check Floors are derived on the {GATED_SPLIT} golden set, got "
+            f"--split {split}. A split is a smaller sample against the same Floors."
         )
         return 1
 
+    floors_by_arm = {shipped_arm_id(): record["floors"]}
     failures: list[str] = []
     gated: list[str] = []
     ungated: list[str] = []
 
     for r in results:
-        thresholds = THRESHOLDS.get(r["arm"])
-        if not thresholds:
+        floors = floors_by_arm.get(r["arm"])
+        if not floors:
             ungated.append(r["arm"])
             continue
         gated.append(r["arm"])
-        for metric, floor in thresholds.items():
+        for metric, floor in floors.items():
             actual = r["summary"][metric]
             if actual < floor:
                 failures.append(f"{r['arm']}.{metric} = {actual:.3f} < {floor:.3f}")
 
     if ungated:
-        print(f"\nNOT GATED — no thresholds configured for: {', '.join(ungated)}")
+        print(f"\nNOT GATED — no Floors for: {', '.join(ungated)}")
 
     if failures:
-        print("\nFAIL — retrieval quality below threshold:")
+        print("\nFAIL — retrieval quality below its Floors:")
         for f in failures:
             print(f"  {f}")
         return 1
 
     if not gated:
-        print("\nFAIL — --check ran but gated nothing. No evaluated arm has thresholds.")
+        print("\nFAIL — --check ran but gated nothing. No evaluated arm has Floors.")
         return 1
 
-    print(f"\nOK — all gated arms ({', '.join(gated)}) meet their thresholds.")
+    print(f"\nOK — all gated arms ({', '.join(gated)}) meet their Floors.")
     return 0
 
 
@@ -649,7 +668,7 @@ def main() -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Exit non-zero if any evaluated arm falls below its threshold.",
+        help="Exit non-zero if the Floors record is stale, or the Shipped Arm falls below a Floor.",
     )
     parser.add_argument("--json", type=Path, help="Write full per-case results to this path.")
     parser.add_argument(
@@ -759,7 +778,7 @@ def main() -> int:
         print(f"Verdict: {verdict_line(document)}")
 
     if args.check:
-        return check_thresholds(results, args.top_k, args.split)
+        return check_floors(results, args.top_k, golden["cases"], args.split)
 
     return 0
 

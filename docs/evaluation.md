@@ -203,11 +203,11 @@ dependency group; the served API needs none of them, and the Dockerfile's
 runs the shipped arm alone, which is why it needs no weights.
 
 `--top-k` moves the cutoff, and every metric follows it — `--top-k 10` reports `hit@10`,
-`recall@10`, `ndcg@10` and an MRR truncated at 10. The thresholds are calibrated at k=5, so
+`recall@10`, `ndcg@10` and an MRR truncated at 10. The Floors are derived at k=5, so
 `--check` only runs at the default cutoff and fails loudly rather than comparing a `hit@10`
-against a `hit@5` floor.
+against a `hit@5` Floor.
 
-Only the shipped arm has a threshold entry. Every other arm is measured and published as
+Only the shipped arm has Floors. Every other arm is measured and published as
 a baseline for comparison, not defended as a quality bar — see [CI gate](#ci-gate).
 `--check` names every ungated arm explicitly, and a run in which *nothing* was gated —
 `--check --arms dense` — is a failure rather than a pass.
@@ -220,12 +220,12 @@ uv run python eval/run_eval.py --split dev            # decide things against th
 uv run python eval/run_eval.py --split holdout        # what --publish reports
 uv run python eval/run_eval.py --failures             # list the questions that missed
 uv run python eval/run_eval.py --json results.json    # full per-case output and raw timings
-uv run python eval/run_eval.py --check                # exit 1 below thresholds
+uv run python eval/run_eval.py --check                # exit 1 if stale or below a Floor
 uv run python eval/run_eval.py --publish              # refresh the published results
 ```
 
 `--check` and `--publish` each refuse the other's split. Gating a single split compares a
-smaller, noisier sample against floors calibrated on the whole set; publishing `dev` would
+smaller, noisier sample against Floors derived on the whole set; publishing `dev` would
 put the questions a configuration was chosen on onto the page as evidence about it.
 
 ## Results
@@ -297,21 +297,65 @@ Two consequences worth knowing:
 ## CI gate
 
 `.github/workflows/backend-ci.yml` runs `scripts/backend-eval.sh` on every backend change.
-The job fails if a gated arm falls below the floors in `eval/run_eval.py`, so a change that
-degrades retrieval cannot merge silently.
+The job fails if the shipped arm falls below a Floor, so a change that degrades retrieval
+cannot merge silently. The Floors live in one committed record,
+`backend/eval/floors/retrieval.json`, and nowhere in code. They are Floors, never
+targets — tuning a parameter until a Floor is cleared is fitting to the golden set.
 
-Floors are hit@5 ≥ 0.85 and MRR ≥ 0.75, set below the measured values with headroom for
-noise. They are floors, never targets — tuning a parameter until a floor is cleared is
-fitting to the golden set.
+### How the Floors are derived
 
-**Only the shipped arm is gated**, and `THRESHOLDS` looks it up rather than naming it, so
-the gate follows production when the shipped arm changes. Two reasons for that line. A
-floor exists to stop a change degrading what a visitor is actually served, and nothing is
-served by an arm production does not run. And floors are calibrated against a corpus: with
-four gated arms, every corpus change means four constants to re-justify, and a constant
-nudged to make a build pass is exactly the magic number this harness argues against. The
-ungated arms are still measured, still published, and still compared — they are just not
-build-breaking.
+A Floor is derived by a fixed rule, never chosen
+([ADR-0012](adr/0012-recalibration.md)):
+
+> Floor = measured − 2/n, rounded down to 0.005, where n is the answerable cases on the
+> full Golden Set, measured on the shipped arm only.
+
+Two cases' worth states the tolerated regression in questions. Retrieval is
+deterministic, so the margin is a tolerance for a small real loss, not headroom for noise.
+On today's set, BM25 over 111 answerable cases (158 chunks, measured at `324af00`):
+
+| Metric | Measured | − 2/111 | Floor |
+|--------|---------:|--------:|------:|
+| hit@5 | 0.864865 (96 / 111) | 0.846847 | **0.845** |
+| MRR | 0.705405 | 0.687387 | **0.685** |
+
+These replace hit@5 ≥ 0.85 and MRR ≥ 0.75, which no rule produced, and which were set on
+a Golden Set that no longer exists. On the original 107 cases BM25 still clears both
+(hit@5 0.885, MRR 0.757). The 24 cases added since are what pull MRR to 0.705: Golden Set
+growth alone, on the old Corpus, already took it to 0.742. That is a change of instrument,
+not a regression of the system, and the old gate could not tell the two apart.
+
+The record carries the rule, its inputs, the Floors, the commit they were measured at and
+a fingerprint of the Golden Set, so the arithmetic above can be redone from it.
+
+### Recalibration
+
+The Floors are re-derived only when what measures retrieval changes: a case added or
+removed, or a question, Relevant Phrase or `answerable` edited. A Corpus, chunking or
+retrieval-code change never moves them; those are what the gate exists to judge. The
+re-derivation happens in the same change that caused it, by one command:
+
+```bash
+cd backend && uv run --frozen python eval/recalibrate.py retrieval
+```
+
+It measures the shipped arm over the full set, applies the rule and rewrites the record.
+Nothing else writes it, and a test fails if a Floor no longer follows from the inputs
+beside it.
+
+The record's **fingerprint** is a hash over each case's question, Relevant Phrases and
+`answerable`, sorted by case id. Nothing else a case carries can move a retrieval metric, so
+a Required Fact edit never stales these Floors. When the committed Golden Set no longer
+matches it, `--check` fails first, with **"Floors stale: Recalibrate"**, and compares no
+metric at all, so a stale record is never mistaken for a regression. The ordinary test
+suite runs the same comparison (`tests/test_recalibration.py`), so a Golden Set edit
+without a Recalibration fails on its PR before any eval job runs.
+
+**Only the shipped arm is gated**, and the gate looks it up with `shipped_arm_id()` rather
+than naming it, so the gate follows production when the shipped arm changes. A Floor exists
+to stop a change degrading what a visitor is actually served, and nothing is served by an
+arm production does not run. The ungated arms are still measured, still published, and
+still compared — they are just not build-breaking.
 
 ## What the harness has caught
 
@@ -391,9 +435,10 @@ Each is a vocabulary gap that no stemmer bridges. The only stemming mismatch,
 `failure`/`fail`, lifts the `predictive-maintenance` answer only to rank 6 when conflated.
 So the tokenizer was left alone. These are the questions the semantic Arms exist for.
 
-The Floors were re-checked, not edited. Over the whole Golden Set, BM25 went from hit@5
-0.862 to 0.885 and MRR 0.786 to 0.752, against Floors of 0.85 and 0.75. MRR now clears its
-Floor by 0.002.
+The Floors were re-checked, not edited. Over the Golden Set as it then stood, BM25 went
+from hit@5 0.862 to 0.885 and MRR 0.786 to 0.752, against the then Floors of 0.85 and 0.75.
+A Corpus change is never a reason to move a Floor. The Golden Set has since grown, and
+the Floors were re-derived by rule for it: see [How the Floors are derived](#how-the-floors-are-derived).
 
 ### Query categories expose where semantic retrieval excels
 

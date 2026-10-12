@@ -24,10 +24,9 @@ from run_eval import (
     GATED_SPLIT,
     GOLDEN_SET_PATH,
     PUBLISHED_SPLIT,
-    THRESHOLDS,
     VALID_CATEGORIES,
     answerable_cases,
-    check_thresholds,
+    check_floors,
     describe_cases,
     evaluate_arm,
     format_latency_table,
@@ -39,6 +38,7 @@ from run_eval import (
 )
 
 from eval.publish import ARM_SPEC_BY_ID, ARMS, shipped_arm_id
+from eval.recalibration import retrieval_fingerprint
 
 GOLDEN = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
 CASES = GOLDEN["cases"]
@@ -130,28 +130,56 @@ def _result(arm: str, hit: float = 0.99, mrr: float = 0.99) -> dict:
     return {"arm": arm, "summary": {"hit@5": hit, "mrr": mrr}}
 
 
-class TestGate:
-    def test_gates_the_shipped_arm(self):
-        assert set(THRESHOLDS) == {shipped_arm_id()}
+def _record(cases: list[dict], hit: float = 0.85, mrr: float = 0.75) -> dict:
+    """A Floors record that matches `cases`, with the given Floors."""
+    return {
+        "arm": shipped_arm_id(),
+        "floors": {"hit@5": hit, "mrr": mrr},
+        "fingerprint": retrieval_fingerprint(cases),
+    }
 
+
+def _gate(results: list[dict], record: dict | None = None, **kwargs) -> int:
+    return check_floors(results, 5, CASES, record=record or _record(CASES), **kwargs)
+
+
+class TestGate:
     def test_passes_when_the_shipped_arm_clears_its_floors(self, capsys):
-        assert check_thresholds([_result(shipped_arm_id())], top_k=5) == 0
+        assert _gate([_result(shipped_arm_id())]) == 0
 
     def test_fails_when_the_shipped_arm_drops(self, capsys):
-        assert check_thresholds([_result(shipped_arm_id(), hit=0.1)], top_k=5) == 1
-        assert "below threshold" in capsys.readouterr().out
+        assert _gate([_result(shipped_arm_id(), hit=0.1)]) == 1
+        assert "below its Floors" in capsys.readouterr().out
+
+    def test_reads_its_floors_from_the_record(self, capsys):
+        """No Floor lives in code: a record whose Floors the run misses fails it."""
+        assert _gate([_result(shipped_arm_id())], record=_record(CASES, mrr=0.995)) == 1
+        assert "bm25.mrr = 0.990 < 0.995" in capsys.readouterr().out
+
+    def test_a_stale_record_fails_first_and_on_its_own(self, capsys):
+        """A Golden Set edit without a Recalibration: no metric is compared at all, so a
+        stale failure can never be mistaken for a regression, or hidden behind one."""
+        stale = _record(CASES[:-1])
+        assert _gate([_result(shipped_arm_id(), hit=0.1)], record=stale) == 1
+        out = capsys.readouterr().out
+        assert "Floors stale: Recalibrate" in out
+        assert "below its Floors" not in out
+
+    def test_a_stale_record_fails_even_when_every_metric_clears(self, capsys):
+        assert _gate([_result(shipped_arm_id())], record=_record(CASES[:-1])) == 1
+        assert "Floors stale: Recalibrate" in capsys.readouterr().out
 
     def test_a_run_that_gates_nothing_fails(self, capsys):
         """An ungated arm on its own is not a passing build; it is no build at all."""
-        assert check_thresholds([_result("dense")], top_k=5) == 1
+        assert _gate([_result("dense")]) == 1
         out = capsys.readouterr().out
         assert "NOT GATED" in out and "gated nothing" in out
 
     def test_refuses_to_gate_a_single_split(self, capsys):
-        """Floors are calibrated on the whole set. A split is a smaller sample against
+        """Floors are derived on the whole set. A split is a smaller sample against
         the same absolute numbers, which fails on noise or passes by luck."""
-        assert check_thresholds([_result(shipped_arm_id())], top_k=5, split="holdout") == 1
-        assert f"calibrated on the {GATED_SPLIT} golden set" in capsys.readouterr().out
+        assert _gate([_result(shipped_arm_id())], split="holdout") == 1
+        assert f"derived on the {GATED_SPLIT} golden set" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

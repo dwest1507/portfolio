@@ -143,3 +143,13 @@ price and the spread study change together.
 
 Cost per answer is published to one significant figure. The spread study derived no
 step for it, and billed tokens move with every reworded answer.
+
+## Amendment (2026-10-11): Floors are recalibrated (ADR-0012)
+
+When and how the generation Floors are re-derived is now recorded in ADR-0012. They are
+re-derived on a Golden Set or instrument change, never a system change, in the same change
+that caused it, from five judged runs rather than three, by the variance rule above. Like
+the retrieval Floors, they are to move out of `FLOORS` in `eval/generation.py` into a
+committed Floors record with its own fingerprint, written only by the recalibrate command,
+and the gate is to fail "Floors stale: Recalibrate" when the record no longer matches
+(#90).

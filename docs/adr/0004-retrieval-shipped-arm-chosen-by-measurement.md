@@ -4,7 +4,8 @@ status: accepted
 
 # The shipped retrieval Arm is whichever one the harness picks, and only it is gated
 
-> How the harness picks is recorded in ADR-0009.
+> How the harness picks is recorded in ADR-0009. How the Floors are derived, and when
+> they are re-derived, is recorded in ADR-0012.
 
 The pipeline was built as hybrid retrieval — weighted reciprocal-rank fusion of FAISS
 semantic search and BM25 — followed by cross-encoder re-ranking. The evaluation harness
@@ -49,8 +50,8 @@ already the mechanism for running a non-shipped Arm.
 
 ## Only the Shipped Arm has a Floor
 
-`THRESHOLDS` is keyed off `shipped_arm_id()` rather than naming Arms, so the gate follows
-production automatically.
+The gate looks the Shipped Arm up with `shipped_arm_id()` rather than naming it, so it
+follows production automatically.
 
 A Floor exists to stop a change degrading what a visitor is served, and nothing is served
 by an Arm production does not run. Floors are also calibrated against a Corpus: with four
@@ -93,3 +94,13 @@ without that test ever demanding the frozen labels change. A rank-based cutoff (
   comparable with a v2 held-out run.
 - Adding a question changes the `dev`/`holdout` balance but not any existing assignment,
   because the recorded Split is frozen per case.
+
+## Amendment (2026-10-11): the Floors are derived by a fixed rule (ADR-0012)
+
+The Floors were constants in `run_eval.py` (`THRESHOLDS`), set "below the measured values
+with headroom" by no stated rule. They now live in a committed Floors record,
+`backend/eval/floors/retrieval.json`, written only by `eval/recalibrate.py retrieval`:
+measured − 2/n over the answerable cases, rounded down to 0.005, for the Shipped Arm only.
+They are re-derived when the Golden Set changes, never when the Corpus does, and the gate
+fails "Floors stale: Recalibrate" when the record no longer matches the Golden Set. See
+ADR-0012.

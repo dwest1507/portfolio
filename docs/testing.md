@@ -58,7 +58,6 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | RAG pipeline | Prompt construction includes context and history |
 | High | Prompt | An empty context is stated, not left as a bare `Context:` heading |
 | High | Eval harness | Every published arm has a retriever, and vice versa |
-| High | Eval harness | Only the shipped arm is gated; a run that gates nothing fails |
 | High | Eval harness | The recorded dev/holdout split matches the rule, and the rule cannot move a case when the set grows |
 | High | Eval publish | A tie on the gating metric is rendered and worded as a tie, not a lead for production |
 | High | Eval publish | A CI-attested run replaces a locally published one; the takeover happens only once |
@@ -71,7 +70,9 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | Medium | Eval metrics | recall@k, hit@k, MRR, nDCG@k computed correctly |
 | High | Eval arms | Every published arm has a retriever and vice versa; `bm25+rerank` never touches the dense stage; `bm25+onnx-rerank-20` hands the ONNX cross-encoder 20 candidates whatever the cutoff; every arm is a Candidate or Reference Arm, the torch arms are Reference Arms, and no Candidate Arm loads a torch model |
 | High | ONNX retrieval | ONNX dense search ranks by inner product with the precomputed Corpus embeddings and needs no torch model or FAISS index; ONNX hybrid fuses BM25 as `hybrid` does; ONNX re-ranking orders by the ONNX cross-encoder; the embedder mean-pools real tokens only; stale ONNX embeddings raise; the served path imports neither onnxruntime nor tokenizers |
-| High | Eval gate | The shipped arm is what is gated; a run that gates nothing fails; a single split cannot be gated |
+| High | Eval gate | The shipped arm is what is gated, against the Floors in its record; a stale record fails first with "Floors stale: Recalibrate" and compares no metric; a run that gates nothing fails; a single split cannot be gated |
+| High | Recalibration | The retrieval fingerprint is stable when cases are reordered, changes with a question, Relevant Phrase, `answerable` or case added or removed, and ignores Required Facts, split and category; the retrieval rule reproduces its worked example (0.865, n = 111 → 0.845); the recalibrate command writes the rule, inputs, fingerprint and commit, and refuses a non-shipped arm |
+| High | Committed Floors record | The retrieval record's fingerprint matches the committed Golden Set; its Floors follow from its inputs by its rule; it floors every gated metric over every answerable case; only the recalibrate command writes it |
 | High | Golden splits | dev and holdout partition the set, and the recorded split still matches the documented hash rule |
 | High | Out-of-Scope Cases | Excluded from retrieval scoring by their `answerable: false` label and counted in the summary; a broken label on an answerable case still fails; malformed generation fields are rejected |
 | High | Published run | The published document reports the held-out split, and a changed split counts as a new measurement |
