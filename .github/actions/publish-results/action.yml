@@ -1,0 +1,73 @@
+name: Publish measured results
+description: >
+  Commits generated eval results to main as the eval-publisher GitHub App. main's ruleset
+  requires a pull request and the job's GITHUB_TOKEN cannot bypass it; the App is on the
+  ruleset's bypass list (docs/adr/0001-generated-eval-results.md). The calling job must
+  check out with persist-credentials false, or git sends the read-only job token instead.
+
+inputs:
+  paths:
+    description: Space-separated files to commit, relative to the repository root.
+    required: true
+  message:
+    description: The commit subject, to which the short SHA of the measured commit is appended.
+    required: true
+  body:
+    description: The commit body, naming the job and its ADR.
+    required: true
+  client-id:
+    description: The eval-publisher App's client ID.
+    required: true
+  private-key:
+    description: The eval-publisher App's private key.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check for changed results
+      id: changed
+      shell: bash
+      env:
+        PATHS: ${{ inputs.paths }}
+      run: |
+        # shellcheck disable=SC2086 # PATHS is a list of paths
+        if git diff --quiet -- $PATHS; then
+          echo "Results unchanged; nothing to commit."
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    # Minted only now, after the measurement, so no eval code ever runs holding a token
+    # that can write to the repository. It expires after an hour.
+    - name: Create the publisher token
+      if: steps.changed.outputs.changed == 'true'
+      id: app-token
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        permission-contents: write
+
+    - name: Commit and push
+      if: steps.changed.outputs.changed == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        PATHS: ${{ inputs.paths }}
+        MESSAGE: ${{ inputs.message }}
+        BODY: ${{ inputs.body }}
+      run: |
+        user_id=$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+        git config user.name "${APP_SLUG}[bot]"
+        git config user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+        # git asks gh for credentials, and gh answers with GH_TOKEN.
+        gh auth setup-git
+        # shellcheck disable=SC2086 # PATHS is a list of paths
+        git add -- $PATHS
+        git commit -m "$MESSAGE ${GITHUB_SHA:0:7}" -m "$BODY"
+        # Rebase rather than force: another push may have landed while the job ran.
+        git pull --rebase origin main
+        git push origin HEAD:main

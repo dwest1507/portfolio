@@ -36,3 +36,24 @@ table.
   values from different Corpora are not comparable and a trend line would report corpus
   growth as a quality decline. The Findings Log carries the history instead, because each
   entry states its own corpus context.
+
+## Amendment (2026-10-12)
+
+- **Results are pushed by a GitHub App, not the job token.** `main`'s ruleset requires a
+  pull request, and the job's `GITHUB_TOKEN` cannot be a ruleset bypass actor, so every
+  publish push was rejected (`GH013`) once the lockfile no longer broke the step first. The
+  `dwest1507-eval-publisher` App (Contents read and write, installed on this repository
+  only) is on the ruleset's bypass list. The publishing jobs check out without persisted
+  credentials and keep the read-only job token; `.github/actions/publish-results` mints an
+  hour-long App token only after the measurement, so no eval code runs holding a token
+  that can write. This replaces the `contents: write` consequence above.
+- **Deletion and force-push protection sit in a separate ruleset with no bypass.** A bypass
+  covers every rule in its ruleset, so the App is on `main`'s pull-request ruleset only, and
+  `main-history` blocks deleting and force-pushing `main` for everyone, the App and admins
+  included.
+- **A publish commit now triggers workflows.** Pushes made with `GITHUB_TOKEN` trigger
+  nothing; the App's do. Frontend CI checks the published files, and the path filters
+  still keep the eval jobs (and their paid calls) from retriggering.
+- **Considered:** a personal access token (expires, bypasses every rule, and credits the
+  owner with generated commits) and results pull requests (each publish would wait for an
+  approval).

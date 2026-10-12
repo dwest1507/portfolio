@@ -82,6 +82,30 @@ one that no longer matches `pyproject.toml` — fails `uv lock --check` in the l
 the PR that caused it. Before this, `uv run` silently re-locked during the eval, and the
 dirty `uv.lock` broke the publish step's `git pull --rebase` on every push to `main`.
 
+## Publishing results to `main`
+
+The retrieval eval, the generation gate and the generation comparison commit their
+results to `main` through one composite action, `.github/actions/publish-results`. The
+`main` ruleset requires a pull request, and the job's `GITHUB_TOKEN` cannot bypass a
+ruleset, so the action pushes as the **`dwest1507-eval-publisher` GitHub App** instead
+(ADR-0001, 2026-10-12 amendment):
+
+- The App is private, installed on this repository only, with Contents read and write, and
+  it is on the `main` ruleset's bypass list. A second ruleset, `main-history`, blocks
+  deleting and force-pushing `main` with no bypass at all.
+- It needs the repository variable `EVAL_PUBLISHER_CLIENT_ID` (the App's Client ID, from its
+  settings page) and the secret `EVAL_PUBLISHER_PRIVATE_KEY` (a private key generated
+  there). `EVAL_PUBLISHER_APP_ID` is the numeric App ID the ruleset's bypass entry names.
+- The publishing jobs check out with `persist-credentials: false` and keep the
+  workflow-level read-only token. The App token is minted only after the measurement, for
+  one hour, with Contents write only.
+- To rotate the key, generate a new one on the App's settings page, replace the secret,
+  then delete the old key there.
+
+Unlike `GITHUB_TOKEN` pushes, App pushes trigger workflows: a publish commit runs Frontend
+CI, Release Please and Security, but never the eval jobs, whose path filters exclude the
+published files.
+
 ## Making CI block deploys
 
 Since the platforms deploy on push to `main` independent of Actions, CI is advisory
