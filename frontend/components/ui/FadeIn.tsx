@@ -28,7 +28,10 @@ export default function FadeIn({
           observer.disconnect()
         }
       },
-      { threshold: 0.1 }
+      // Any intersection reveals. A fractional threshold is unreachable for an
+      // element taller than viewport/threshold (e.g. a long MDX write-up), which
+      // would leave it at opacity 0 forever.
+      { threshold: 0 }
     )
     observer.observe(el)
     return () => observer.disconnect()
