@@ -48,6 +48,14 @@ describe('FindingsLog', () => {
     expect(finding?.title).toContain('Query categories')
   })
 
+  it('records why the scoreboard shows only shippable arms, with its sample', () => {
+    const finding = findings.find((f) => f.id === 'onnx-matches-torch')
+    expect(finding).toBeDefined()
+    expect(finding?.observed).toMatch(/68 of 68/)
+    expect(finding?.observed).toMatch(/158 chunks/)
+    expect(finding?.changed).toMatch(/only the arms that could ship/)
+  })
+
   it('records the Shipped Arm decision as indistinguishable, with its sample size', () => {
     const finding = findings.find((f) => f.id === 'shipped-arm-decision')
     expect(finding).toBeDefined()

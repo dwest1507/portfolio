@@ -45,6 +45,23 @@ export interface Finding {
 /** Newest first. */
 export const findings: Finding[] = [
   {
+    id: 'onnx-matches-torch',
+    date: '2026-10-12',
+    title: 'Swapping torch for ONNX Runtime changed no retrieval score, only the speed',
+    observed:
+      'Run on ONNX Runtime instead of torch, semantic search and hybrid search scored ' +
+      'identically on all four metrics for 68 of 68 development questions (158 chunks): ' +
+      'the embeddings agreed to a cosine similarity of 0.9999999, and the re-ranker put ' +
+      'every candidate in the same order. The runtime changed only the cost. The ONNX ' +
+      'models load in about a second rather than a tenth of one, and the ONNX re-ranker ran ' +
+      '5–9× slower than torch.',
+    changed:
+      'Each torch Reference Arm was a duplicate row of an arm that could ship, so the ' +
+      'scoreboard now shows only the arms that could ship. The torch arms are still ' +
+      'measured, and their results stay in the evaluation docs.',
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#onnx-runtime-reproduces-the-torch-models-it-does-not-run-them-as-fast',
+  },
+  {
     id: 'shipped-arm-decision',
     date: '2026-10-11',
     title: 'No shippable model changed the answers enough to replace keyword search',

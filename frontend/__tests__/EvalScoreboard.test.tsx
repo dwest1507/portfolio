@@ -41,7 +41,7 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
         description: 'Word matching.',
         technical: 'BM25.',
         shipped: false,
-        eligibility: 'reference',
+        eligibility: 'candidate',
         metrics: { 'hit@5': 1.0, mrr: 0.5 },
         byCategory: {
           direct: { 'hit@5': 1.0, mrr: 0.5 },
@@ -77,17 +77,28 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
   }
 }
 
+/** The arms the page shows: only those that could ship (ADR-0009). */
+const shownArms = evalRun.arms.filter((a) => a.eligibility === 'candidate')
+
 describe('EvalScoreboard', () => {
-  it('renders a row for every measured arm', () => {
+  it('renders a row for every Candidate Arm', () => {
     render(<EvalScoreboard />)
-    for (const arm of evalRun.arms) {
+    for (const arm of shownArms) {
       expect(within(rowFor(arm.id)).getByText(arm.label)).toBeInTheDocument()
+    }
+  })
+
+  it('leaves Reference Arms off the page', () => {
+    render(<EvalScoreboard />)
+    for (const arm of evalRun.arms.filter((a) => a.eligibility === 'reference')) {
+      expect(document.querySelector(`tr[data-arm="${arm.id}"]`)).toBeNull()
+      expect(screen.queryByText(arm.description)).not.toBeInTheDocument()
     }
   })
 
   it('keeps descriptions out of the rows, so each row stays one line tall', () => {
     render(<EvalScoreboard />)
-    for (const arm of evalRun.arms) {
+    for (const arm of shownArms) {
       const row = rowFor(arm.id)
       expect(within(row).queryByText(arm.description)).not.toBeInTheDocument()
       expect(within(row).queryByText(arm.technical)).not.toBeInTheDocument()
@@ -97,7 +108,7 @@ describe('EvalScoreboard', () => {
   it('describes every arm in a key beneath the table', () => {
     render(<EvalScoreboard />)
     const key = within(screen.getByRole('region', { name: 'Configurations' }))
-    for (const arm of evalRun.arms) {
+    for (const arm of shownArms) {
       expect(key.getByText(arm.description)).toBeInTheDocument()
       expect(key.getByText(arm.technical)).toBeInTheDocument()
     }
@@ -105,7 +116,7 @@ describe('EvalScoreboard', () => {
 
   it("reads each arm's description to a screen reader on its row header", () => {
     render(<EvalScoreboard />)
-    for (const arm of evalRun.arms) {
+    for (const arm of shownArms) {
       expect(within(rowFor(arm.id)).getByRole('rowheader')).toHaveAccessibleDescription(
         `${arm.description} ${arm.technical}`
       )
@@ -123,7 +134,7 @@ describe('EvalScoreboard', () => {
 
   it('shows each score to three decimal places', () => {
     render(<EvalScoreboard />)
-    const arm = evalRun.arms[0]
+    const arm = shownArms[0]
     const row = rowFor(arm.id)
     for (const metric of evalRun.metricNames) {
       expect(within(row).getByText(arm.metrics[metric].toFixed(3))).toBeInTheDocument()
@@ -138,9 +149,9 @@ describe('EvalScoreboard', () => {
     expect(within(row).getByText('IN PRODUCTION')).toBeInTheDocument()
   })
 
-  it('renders the generated verdict rather than a hand-written claim', () => {
+  it('renders the generated verdict over the arms it shows', () => {
     render(<EvalScoreboard />)
-    expect(screen.getByText(verdictLine())).toBeInTheDocument()
+    expect(screen.getByText(verdictLine({ ...evalRun, arms: shownArms }))).toBeInTheDocument()
   })
 
   it('reports the corpus and the measured sample', () => {
@@ -166,9 +177,9 @@ describe('EvalScoreboard', () => {
 
   it('marks the winning score in each column for screen readers', () => {
     render(<EvalScoreboard />)
-    // One marker per arm tied for a column's best, not one per column: two arms
-    // currently tie on hit@5, and the sighted reader sees both highlighted.
-    const expected = evalRun.metricNames.reduce((n, m) => n + leadingArmIds(m).length, 0)
+    // One marker per shown arm tied for a column's best, not one per column, and never
+    // for a hidden Reference Arm: the best score in a column must be one on the page.
+    const expected = evalRun.metricNames.reduce((n, m) => n + leadingArmIds(m, shownArms).length, 0)
     expect(screen.getAllByText('(best)')).toHaveLength(expected)
   })
 
@@ -200,7 +211,7 @@ describe('EvalScoreboard', () => {
       'false'
     )
 
-    for (const arm of evalRun.arms) {
+    for (const arm of shownArms) {
       const row = rowFor(arm.id)
       for (const metric of evalRun.metricNames) {
         const catVal = arm.byCategory['paraphrase']?.[metric]
@@ -272,28 +283,56 @@ describe('EvalScoreboard Latency Band column', () => {
   })
 })
 
+/** Adds a Reference Arm that would lead every column and beat production. */
+function withReference(run: EvalRun): EvalRun {
+  run.arms.push({
+    ...run.arms[0],
+    id: 'torch-dense',
+    label: 'Torch semantic',
+    description: 'Not shippable.',
+    technical: 'Torch.',
+    eligibility: 'reference',
+    metrics: { 'hit@5': 1.0, mrr: 0.99 },
+    byCategory: {
+      direct: { 'hit@5': 1.0, mrr: 0.99 },
+      paraphrase: { 'hit@5': 1.0, mrr: 0.99 },
+    },
+    vsShipped: { won: 9, lost: 0, outcome: 'ahead' },
+  })
+  return run
+}
+
 describe('EvalScoreboard eligibility', () => {
-  it('marks each arm as a Candidate Arm or a Reference Arm', () => {
-    render(<EvalScoreboard run={makeRun()} />)
-
-    const bm25 = within(rowFor('bm25'))
-    expect(bm25.getByText('REFERENCE')).toBeInTheDocument()
-    expect(bm25.queryByText('CANDIDATE')).not.toBeInTheDocument()
-
-    const rerank = within(rowFor('rerank'))
-    expect(rerank.getByText('CANDIDATE')).toBeInTheDocument()
+  it('shows only arms that could ship', () => {
+    render(<EvalScoreboard run={withReference(makeRun())} />)
+    expect(document.querySelector('tr[data-arm="torch-dense"]')).toBeNull()
+    expect(screen.queryByText('Not shippable.')).not.toBeInTheDocument()
+    expect(rowFor('bm25')).toBeInTheDocument()
+    expect(rowFor('rerank')).toBeInTheDocument()
   })
 
-  it('explains what each eligibility means', () => {
+  it('needs no eligibility badge, since every row shown could ship', () => {
     render(<EvalScoreboard run={makeRun()} />)
-    expect(screen.getByText('REFERENCE')).toHaveAttribute(
-      'title',
-      expect.stringMatching(/baseline.*cannot ship/i)
-    )
-    expect(screen.getByText('CANDIDATE')).toHaveAttribute(
-      'title',
-      expect.stringMatching(/could ship/i)
-    )
+    expect(screen.queryByText('CANDIDATE')).not.toBeInTheDocument()
+    expect(screen.queryByText('REFERENCE')).not.toBeInTheDocument()
+  })
+
+  it('highlights the best shown score, never a hidden Reference Arm', () => {
+    render(<EvalScoreboard run={withReference(makeRun())} />)
+    // Hidden torch-dense leads both columns; among shown arms bm25 leads hit@5 and
+    // rerank leads MRR.
+    expect(within(rowFor('bm25')).getByText('(best)')).toBeInTheDocument()
+    expect(within(rowFor('rerank')).getByText('(best)')).toBeInTheDocument()
+  })
+
+  it('leaves a hidden Reference Arm out of the verdict', () => {
+    render(<EvalScoreboard run={withReference(makeRun())} />)
+    expect(
+      screen.getByText(
+        'Production runs Re-ranked. Across the 20 held-out questions, no other arm is ' +
+          'distinguishable from it on hit@5.'
+      )
+    ).toBeInTheDocument()
   })
 })
 

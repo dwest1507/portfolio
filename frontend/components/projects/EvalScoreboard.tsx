@@ -7,7 +7,6 @@ import {
   metricLabel,
   sampleLabel,
   verdictLine,
-  type Eligibility,
   type EvalArm,
   type EvalRun,
 } from '@/data/evalResults'
@@ -20,12 +19,6 @@ function format(value: number | undefined): string {
 function wonLost(arm: EvalArm, category: string): string {
   const vs = category === 'all' ? arm.vsShipped : arm.vsShippedByCategory?.[category]
   return vs ? `${vs.won} won · ${vs.lost} lost` : '—'
-}
-
-/** What each eligibility means, for the badge's tooltip (ADR-0009). */
-const ELIGIBILITY_TITLE: Record<Eligibility, string> = {
-  candidate: 'Candidate: could ship, since it needs no heavyweight ML runtime in production',
-  reference: 'Reference: a baseline for comparison that cannot ship as built',
 }
 
 function categoryLabel(cat: string): string {
@@ -44,12 +37,21 @@ function categoryLabel(cat: string): string {
  * contradict its own numbers and needs no edit when the numbers move, an arm is added, or
  * the shipped configuration changes.
  *
+ * Only Candidate Arms are shown (ADR-0009): each torch Reference Arm scored identically to
+ * its ONNX twin, so the references repeated rows a reader could not act on. The highlight
+ * and the verdict are computed over the shown arms alone, so neither can point at a row
+ * that is not on the page.
+ *
  * `run` defaults to the published run; it is a prop only so tests can render fixtures.
  */
-export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
+export default function EvalScoreboard({ run: fullRun = evalRun }: { run?: EvalRun }) {
   const [activeCategory, setActiveCategory] = useState<string>('all')
   // Prefixes the key's ids, which each row header points at with aria-describedby.
   const keyId = useId()
+  const run: EvalRun = {
+    ...fullRun,
+    arms: fullRun.arms.filter((arm) => arm.eligibility === 'candidate'),
+  }
   const metrics = run.metricNames
   const categories = ['all', ...(run.categories ?? [])]
 
@@ -173,12 +175,6 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
                           IN PRODUCTION
                         </span>
                       )}
-                      <span
-                        title={ELIGIBILITY_TITLE[arm.eligibility]}
-                        className="rounded-full border border-white/[0.08] px-2 py-px font-mono text-[8px] tracking-widest text-[#8a8f98]"
-                      >
-                        {arm.eligibility.toUpperCase()}
-                      </span>
                     </span>
                   </th>
                   {metrics.map((m) => {
@@ -254,9 +250,8 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
       </div>
 
       <figcaption className="mt-3 text-xs leading-relaxed text-[#8a8f98]">
-        Best score per column in blue. Candidate configurations could ship; reference ones are
-        baselines that cannot. This table and the sentence above it are generated from the
-        evaluation harness.{' '}
+        Best score per column in blue. Only configurations that could run in production are shown.
+        This table and the sentence above it are generated from the evaluation harness.{' '}
         {/* Only claimed when the run actually measured the held-out portion — which portion
             gets published is the harness's call, not this component's. */}
         {run.split === 'holdout' && (

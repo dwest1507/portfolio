@@ -132,7 +132,7 @@ ARM_SPECS: tuple[Arm, ...] = (
         id="onnx-dense",
         label="Meaning only, shippable",
         description=(
-            "The meaning-based search above, run on a lightweight engine small enough to go "
+            "Matches on meaning rather than wording, on a lightweight engine small enough to go "
             "into production."
         ),
         technical=(
