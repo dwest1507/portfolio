@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "shippedArm": {
-    "generatedAt": "2026-10-11T17:47:36+00:00",
-    "commit": "94a7b95",
-    "runUrl": null,
+    "generatedAt": "2026-10-12T17:52:24+00:00",
+    "commit": "15db05d",
+    "runUrl": "https://github.com/dwest1507/portfolio/actions/runs/38286766780",
     "split": "holdout",
     "arm": "bm25",
     "armLabel": "Keyword only",
@@ -11,21 +11,21 @@
     "reasoningEffort": "low",
     "judge": "jev-1.13.0",
     "splitter": "gpt-6-luna",
-    "corpusChunks": 123,
-    "questions": 39,
-    "answerable": 33,
+    "corpusChunks": 158,
+    "questions": 49,
+    "answerable": 43,
     "outOfScope": 6,
     "metrics": {
-      "factRecall": 0.7,
-      "faithfulness": 0.95,
-      "declineAccuracy": 1.0
+      "factRecall": 0.62,
+      "faithfulness": 1.0,
+      "declineAccuracy": 0.9
     },
     "steps": {
-      "factRecall": 0.1,
-      "faithfulness": 0.05,
-      "declineAccuracy": 0.005
+      "factRecall": 0.02,
+      "faithfulness": 0.1,
+      "declineAccuracy": 0.05
     },
-    "costPerAnswerUsd": 0.0001
+    "costPerAnswerUsd": 9e-05
   },
   "comparison": null
 }
