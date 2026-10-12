@@ -12,6 +12,13 @@ import {
   type EvalRun,
 } from '@/data/evalResults'
 
+/** The table row for one arm. Keyed off the id, since labels need not be unique. */
+function rowFor(armId: string): HTMLElement {
+  const row = document.querySelector<HTMLElement>(`tr[data-arm="${armId}"]`)
+  if (!row) throw new Error(`no row for arm ${armId}`)
+  return row
+}
+
 /** A run with two arms, shaped exactly like the generated file. */
 function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
   return {
@@ -74,10 +81,34 @@ describe('EvalScoreboard', () => {
   it('renders a row for every measured arm', () => {
     render(<EvalScoreboard />)
     for (const arm of evalRun.arms) {
-      // Keyed off the description, which is unique per arm — labels need not be.
-      const row = screen.getByText(arm.description).closest('tr')!
-      expect(within(row).getByText(arm.label)).toBeInTheDocument()
-      expect(within(row).getByText(arm.technical)).toBeInTheDocument()
+      expect(within(rowFor(arm.id)).getByText(arm.label)).toBeInTheDocument()
+    }
+  })
+
+  it('keeps descriptions out of the rows, so each row stays one line tall', () => {
+    render(<EvalScoreboard />)
+    for (const arm of evalRun.arms) {
+      const row = rowFor(arm.id)
+      expect(within(row).queryByText(arm.description)).not.toBeInTheDocument()
+      expect(within(row).queryByText(arm.technical)).not.toBeInTheDocument()
+    }
+  })
+
+  it('describes every arm in a key beneath the table', () => {
+    render(<EvalScoreboard />)
+    const key = within(screen.getByRole('region', { name: 'Configurations' }))
+    for (const arm of evalRun.arms) {
+      expect(key.getByText(arm.description)).toBeInTheDocument()
+      expect(key.getByText(arm.technical)).toBeInTheDocument()
+    }
+  })
+
+  it("reads each arm's description to a screen reader on its row header", () => {
+    render(<EvalScoreboard />)
+    for (const arm of evalRun.arms) {
+      expect(within(rowFor(arm.id)).getByRole('rowheader')).toHaveAccessibleDescription(
+        `${arm.description} ${arm.technical}`
+      )
     }
   })
 
@@ -93,7 +124,7 @@ describe('EvalScoreboard', () => {
   it('shows each score to three decimal places', () => {
     render(<EvalScoreboard />)
     const arm = evalRun.arms[0]
-    const row = screen.getByText(arm.description).closest('tr')!
+    const row = rowFor(arm.id)
     for (const metric of evalRun.metricNames) {
       expect(within(row).getByText(arm.metrics[metric].toFixed(3))).toBeInTheDocument()
     }
@@ -103,7 +134,7 @@ describe('EvalScoreboard', () => {
     render(<EvalScoreboard />)
     const shipped = shippedArm()
     if (!shipped) return
-    const row = screen.getByText(shipped.description).closest('tr')!
+    const row = rowFor(shipped.id)
     expect(within(row).getByText('IN PRODUCTION')).toBeInTheDocument()
   })
 
@@ -170,7 +201,7 @@ describe('EvalScoreboard', () => {
     )
 
     for (const arm of evalRun.arms) {
-      const row = screen.getByText(arm.description).closest('tr')!
+      const row = rowFor(arm.id)
       for (const metric of evalRun.metricNames) {
         const catVal = arm.byCategory['paraphrase']?.[metric]
         if (catVal !== undefined) {
@@ -187,10 +218,10 @@ describe('EvalScoreboard won/lost column', () => {
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
     expect(headers).toContain('VS PRODUCTION')
 
-    const bm25 = screen.getByText('Word matching.').closest('tr')!
+    const bm25 = rowFor('bm25')
     expect(within(bm25).getByText('4 won · 2 lost')).toBeInTheDocument()
     // The shipped arm is the reference, not a contestant against itself.
-    const shipped = screen.getByText('Two-stage.').closest('tr')!
+    const shipped = rowFor('rerank')
     expect(within(shipped).getByText('—')).toBeInTheDocument()
   })
 
@@ -201,7 +232,7 @@ describe('EvalScoreboard won/lost column', () => {
 
     await user.click(screen.getByRole('tab', { name: /paraphrase/i }))
 
-    const bm25 = screen.getByText('Word matching.').closest('tr')!
+    const bm25 = rowFor('bm25')
     expect(within(bm25).getByText('0 won · 2 lost')).toBeInTheDocument()
   })
 
@@ -213,17 +244,17 @@ describe('EvalScoreboard won/lost column', () => {
   })
 })
 
-describe('EvalScoreboard Latency Band columns', () => {
-  it("shows each arm's warm and load Latency Bands", () => {
+describe('EvalScoreboard Latency Band column', () => {
+  it("shows each arm's warm and load Latency Bands in one column", () => {
     render(<EvalScoreboard run={makeRun()} />)
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
-    expect(headers).toEqual(expect.arrayContaining(['LATENCY BAND', 'LOAD BAND']))
+    expect(headers).toContain('LATENCY · LOAD')
 
-    const bm25 = within(screen.getByText('Word matching.').closest('tr')!)
+    const bm25 = within(rowFor('bm25'))
     expect(bm25.getByText('~1ms')).toBeInTheDocument()
     expect(bm25.getByText('~10ms')).toBeInTheDocument()
 
-    const rerank = within(screen.getByText('Two-stage.').closest('tr')!)
+    const rerank = within(rowFor('rerank'))
     expect(rerank.getByText('~100ms')).toBeInTheDocument()
     expect(rerank.getByText('~10s')).toBeInTheDocument()
   })
@@ -235,7 +266,7 @@ describe('EvalScoreboard Latency Band columns', () => {
 
     await user.click(screen.getByRole('tab', { name: /paraphrase/i }))
 
-    const rerank = within(screen.getByText('Two-stage.').closest('tr')!)
+    const rerank = within(rowFor('rerank'))
     expect(rerank.getByText('~100ms')).toBeInTheDocument()
     expect(rerank.getByText('~10s')).toBeInTheDocument()
   })
@@ -245,11 +276,11 @@ describe('EvalScoreboard eligibility', () => {
   it('marks each arm as a Candidate Arm or a Reference Arm', () => {
     render(<EvalScoreboard run={makeRun()} />)
 
-    const bm25 = within(screen.getByText('Word matching.').closest('tr')!)
+    const bm25 = within(rowFor('bm25'))
     expect(bm25.getByText('REFERENCE')).toBeInTheDocument()
     expect(bm25.queryByText('CANDIDATE')).not.toBeInTheDocument()
 
-    const rerank = within(screen.getByText('Two-stage.').closest('tr')!)
+    const rerank = within(rowFor('rerank'))
     expect(rerank.getByText('CANDIDATE')).toBeInTheDocument()
   })
 

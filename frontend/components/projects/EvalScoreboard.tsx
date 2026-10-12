@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   evalRun,
   leadingArmIds,
@@ -48,6 +48,8 @@ function categoryLabel(cat: string): string {
  */
 export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
   const [activeCategory, setActiveCategory] = useState<string>('all')
+  // Prefixes the key's ids, which each row header points at with aria-describedby.
+  const keyId = useId()
   const metrics = run.metricNames
   const categories = ['all', ...(run.categories ?? [])]
 
@@ -105,16 +107,18 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
 
         {/* Wide content scrolls inside its own container rather than the page */}
         <div className="overflow-x-auto bg-[#0a0a0c]">
-          <table className="w-full min-w-[42rem] border-collapse text-left">
+          <table className="w-full min-w-[36rem] border-collapse text-left">
             <caption className="sr-only">
               Retrieval quality by pipeline configuration, measured on{' '}
               {sampleLabel(run, activeCategory)}.
             </caption>
             <thead>
               <tr className="border-b border-white/[0.06]">
+                {/* The configuration column stays pinned while the numbers scroll
+                    sideways on a narrow screen, so every row stays identifiable. */}
                 <th
                   scope="col"
-                  className="px-4 py-3 font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+                  className="sticky left-0 z-10 bg-[#0a0a0c] px-4 py-3 font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
                 >
                   CONFIGURATION
                 </th>
@@ -122,7 +126,7 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
                   <th
                     key={m}
                     scope="col"
-                    className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+                    className="px-3 py-3 text-right font-mono text-[9px] tracking-widest whitespace-nowrap text-[#8a8f98]/60"
                   >
                     {metricLabel(m)}
                   </th>
@@ -131,25 +135,19 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
                     reading any statistics (ADR-0006). */}
                 <th
                   scope="col"
-                  className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+                  className="px-3 py-3 text-right font-mono text-[9px] tracking-widest whitespace-nowrap text-[#8a8f98]/60"
                 >
                   VS PRODUCTION
                 </th>
                 {/* Bands rather than timings: a raw timing moves between runs and
-                    machines, its order of magnitude does not. */}
+                    machines, its order of magnitude does not. Both bands share one
+                    column so the table fits the article's width. */}
                 <th
                   scope="col"
-                  title="Typical time per question once loaded (95th percentile)"
-                  className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+                  title="Typical time per question once loaded (95th percentile) · time to load the configuration's indexes and models"
+                  className="px-3 py-3 text-right font-mono text-[9px] tracking-widest whitespace-nowrap text-[#8a8f98]/60"
                 >
-                  LATENCY BAND
-                </th>
-                <th
-                  scope="col"
-                  title="Time to load the configuration's indexes and models"
-                  className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
-                >
-                  LOAD BAND
+                  LATENCY · LOAD
                 </th>
               </tr>
             </thead>
@@ -157,9 +155,17 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
               {run.arms.map((arm: EvalArm) => (
                 <tr
                   key={arm.id}
-                  className="border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02]"
+                  data-arm={arm.id}
+                  className="group border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02]"
                 >
-                  <th scope="row" className="px-4 py-3 align-top font-normal">
+                  {/* Opaque because it is sticky: the numbers scroll underneath it.
+                      The arm's description lives in the key below and is read from
+                      there. */}
+                  <th
+                    scope="row"
+                    aria-describedby={`${keyId}-${arm.id}-description ${keyId}-${arm.id}-technical`}
+                    className="sticky left-0 z-10 bg-[#0a0a0c] px-4 py-3 align-top font-normal group-hover:bg-[#0e0e10]"
+                  >
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="text-sm text-[#ededef]">{arm.label}</span>
                       {arm.shipped && (
@@ -174,12 +180,6 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
                         {arm.eligibility.toUpperCase()}
                       </span>
                     </span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-[#8a8f98]">
-                      {arm.description}
-                    </span>
-                    <span className="mt-1 block font-mono text-[10px] leading-relaxed text-[#8a8f98]/50">
-                      {arm.technical}
-                    </span>
                   </th>
                   {metrics.map((m) => {
                     const isBest = winners[m].has(arm.id)
@@ -187,7 +187,7 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
                     return (
                       <td
                         key={m}
-                        className={`px-4 py-3 text-right align-top font-mono text-sm tabular-nums ${
+                        className={`px-3 py-3 text-right align-top font-mono text-sm tabular-nums ${
                           isBest ? 'text-[#0ea5e9]' : 'text-[#8a8f98]'
                         }`}
                       >
@@ -196,14 +196,15 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
                       </td>
                     )
                   })}
-                  <td className="px-4 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
+                  <td className="px-3 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
                     {wonLost(arm, activeCategory)}
                   </td>
-                  <td className="px-4 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
-                    {arm.latencyBand.warm}
-                  </td>
-                  <td className="px-4 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
-                    {arm.latencyBand.load}
+                  <td className="px-3 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
+                    <span>{arm.latencyBand.warm}</span>
+                    <span aria-hidden className="text-[#8a8f98]/40">
+                      {' · '}
+                    </span>
+                    <span>{arm.latencyBand.load}</span>
                   </td>
                 </tr>
               ))}
@@ -217,6 +218,39 @@ export default function EvalScoreboard({ run = evalRun }: { run?: EvalRun }) {
             {verdictLine(run, activeCategory)}
           </p>
         </div>
+
+        {/* What each configuration is. Kept out of the rows so each row stays short
+            and the whole table, header included, fits on one screen. */}
+        <section
+          aria-labelledby={`${keyId}-heading`}
+          className="border-t border-white/[0.06] px-4 py-4"
+        >
+          <h3
+            id={`${keyId}-heading`}
+            className="mb-3 font-mono text-[8px] tracking-[0.3em] text-[#8a8f98]/40 uppercase"
+          >
+            Configurations
+          </h3>
+          <dl className="space-y-3">
+            {run.arms.map((arm: EvalArm) => (
+              <div key={arm.id}>
+                <dt className="text-sm text-[#ededef]">{arm.label}</dt>
+                <dd
+                  id={`${keyId}-${arm.id}-description`}
+                  className="mt-0.5 text-xs leading-relaxed text-[#8a8f98]"
+                >
+                  {arm.description}
+                </dd>
+                <dd
+                  id={`${keyId}-${arm.id}-technical`}
+                  className="mt-1 font-mono text-[10px] leading-relaxed text-[#8a8f98]/50"
+                >
+                  {arm.technical}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       </div>
 
       <figcaption className="mt-3 text-xs leading-relaxed text-[#8a8f98]">
