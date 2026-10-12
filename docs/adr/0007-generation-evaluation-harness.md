@@ -58,7 +58,7 @@ LLM calls" therefore stays true of the retrieval harness and does not apply to t
 - Before any Jev judgment gates a build, it is validated against roughly 30 hand-labelled
   sentences from this domain. _(2026-10-11: this covers the Decline judgment too, against
   roughly 30 hand-labelled answers; see docs/evaluation.md, "Validating the Decline
-  judgment".)_
+  judgment". 2026-10-12: it met its bar, so Decline accuracy may gate.)_
 
 ## Amendment (2026-10-10)
 

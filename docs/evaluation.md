@@ -1014,9 +1014,9 @@ other says the safeguards aren't described.
 
 A label is held out when its Golden Set case is: the Split rule already in use, so 17 of
 the 31 are held out. As with sentences, a tuning run leaves held-out labels out. The labels
-were drafted from the answers' text without Jev's verdicts in view. They stay marked
-`"draft": true` until David has reviewed them, and a draft label is never measured
-against unless `--draft` is passed.
+were drafted from the answers' text without Jev's verdicts in view, and stayed marked
+`"draft": true` until David reviewed them (all 31 kept as drafted). A label marked draft
+is never measured against unless `--draft` is passed.
 
 ```bash
 cd backend
@@ -1031,6 +1031,42 @@ counts disagreements per kind and lists each one with its question and answer.
 **≥ 0.9 agreement on held-out labels**, as the median of three `--final` runs
 (`DECLINE_PASS_BAR`). The protocol is the one used for sentences. With 17 held-out labels,
 that allows one disagreement (16 of 17 is 0.94; 15 of 17 is 0.88).
+
+### Result: the Decline judgment meets the bar
+
+Measured 2026-10-12 at `42f0e78`, with `DECLINES_QUESTION` unchanged since the gate's first
+CI run: `jev-1.13.0`, three `--final` runs over all 31 reviewed labels. It was the first
+time Jev judged the held-out labels. The question was not reworded, so the run-to-run
+spread below still holds for this instrument.
+
+| Measure | Runs | Median | Bar | |
+|---|---|---|---|---|
+| Held-out Decline agreement (17 labels) | 1.000, 1.000, 1.000 | **1.000** | ≥ 0.9 | met |
+| Decline agreement, all 31 (no bar) | 0.968, 0.968, 0.968 | 0.968 | — | |
+
+| Kind | Labels (held-out) | Disagreements per run |
+|---|---|---|
+| `decline` | 10 (5) | 0 |
+| `answer` | 10 (5) | 0 |
+| `hedged` | 11 (7) | 1 |
+
+The one disagreement is the same in every run, and it is the answer that prompted this
+validation: `paraphrase-series-stationarity` (dev, gate run). It names the ADF and KPSS
+tests, then says separate procedures for constant mean and variance aren't specified. The
+hand label says it answers in part. Jev says it Declines. The other five partial answers
+and all five Declines with nearby context were judged as labelled.
+
+What this does and does not show:
+
+- **The known error remains.** Jev still reads a partial answer that ends by naming what
+  is missing as a Decline. This case is answerable, so in the gate it counts against
+  Decline accuracy when it shouldn't. Held-out has 4 partial answers and Jev got all of
+  them right, so the error isn't systematic, but it isn't fixed either.
+- **Seventeen labels is a small sample.** 51 of 51 held-out judgments across three runs
+  shows Jev agrees with the labels on answers like these. It doesn't pin down the rate.
+- **Jev's verdicts here didn't vary.** Every label got the same verdict in all three runs.
+
+Decline accuracy may gate, at the Floor that the run-to-run spread below sets.
 
 ## Run-to-run spread
 
