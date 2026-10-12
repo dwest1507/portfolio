@@ -1,8 +1,8 @@
 {
   "schemaVersion": 4,
-  "generatedAt": "2026-10-12T17:53:40+00:00",
-  "commit": "15db05d",
-  "runUrl": "https://github.com/dwest1507/portfolio/actions/runs/38286766752",
+  "generatedAt": "2026-10-12T18:04:16+00:00",
+  "commit": "8699e89",
+  "runUrl": "https://github.com/dwest1507/portfolio/actions/runs/38287836696",
   "corpusChunks": 158,
   "goldenQuestions": 43,
   "split": "holdout",
@@ -386,7 +386,7 @@
       },
       "latencyBand": {
         "warm": "~10ms",
-        "load": "~100ms"
+        "load": "~1s"
       }
     },
     {
@@ -450,7 +450,7 @@
       },
       "latencyBand": {
         "warm": "~10ms",
-        "load": "~100ms"
+        "load": "~1s"
       }
     },
     {
