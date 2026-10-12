@@ -348,7 +348,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Out of scope; says the rate is not specified, nothing else."
     },
     {
@@ -359,7 +359,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Out of scope; says the context doesn't say, and that it can't answer."
     },
     {
@@ -370,7 +370,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Answerable, but the answer says the title is not specified and gives none: a Decline, and a wrong one."
     },
     {
@@ -381,7 +381,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Answerable; says the context doesn't say, nothing else."
     },
     {
@@ -392,7 +392,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Answerable; says the context doesn't say, nothing else."
     },
     {
@@ -403,7 +403,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Out of scope; says the context doesn't say, nothing else."
     },
     {
@@ -414,7 +414,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Out of scope; 'I don't have information' rather than 'the context doesn't say'."
     },
     {
@@ -425,7 +425,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Out of scope; 'doesn't mention', nothing else."
     },
     {
@@ -436,7 +436,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Out of scope; 'doesn't indicate that David has' reads close to a 'no', but asserts nothing about David."
     },
     {
@@ -447,7 +447,7 @@
       "declines": true,
       "kind": "decline",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Out of scope; 'doesn't mention', nothing else."
     },
     {
@@ -458,7 +458,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "One-sentence direct answer."
     },
     {
@@ -469,7 +469,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Answers 'No.' and names the degree: a negative answer, not a Decline."
     },
     {
@@ -480,7 +480,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Direct answer."
     },
     {
@@ -491,7 +491,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Direct answer."
     },
     {
@@ -502,7 +502,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Direct answer with detail."
     },
     {
@@ -513,7 +513,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Answers 'No. David hasn't fine-tuned an LLM yet': a negative answer, not a Decline."
     },
     {
@@ -524,7 +524,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Answers yes, with a 'not open to' clause: an answer, not a Decline."
     },
     {
@@ -535,7 +535,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Direct answer."
     },
     {
@@ -546,7 +546,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Direct answer."
     },
     {
@@ -557,7 +557,7 @@
       "declines": false,
       "kind": "answer",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Direct answer; mentions declining only as something the Judge checks."
     },
     {
@@ -568,7 +568,7 @@
       "declines": false,
       "kind": "hedged",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Partial: names the ADF and KPSS tests, then says separate procedures are not specified. The answer CI's first gate run counted as a Decline."
     },
     {
@@ -579,7 +579,7 @@
       "declines": false,
       "kind": "hedged",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Partial: gives the diamonds example, then says a broader strategy is not specified."
     },
     {
@@ -590,7 +590,7 @@
       "declines": false,
       "kind": "hedged",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Partial: names React, Next.js, TypeScript and Tailwind, then says a UI component library is not specified."
     },
     {
@@ -601,7 +601,7 @@
       "declines": false,
       "kind": "hedged",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Partial: 'since 2020', then says an exact number of years is not specified."
     },
     {
@@ -612,7 +612,7 @@
       "declines": false,
       "kind": "hedged",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Partial: says how the database is built and loaded, then says the exact location is not specified."
     },
     {
@@ -623,7 +623,7 @@
       "declines": false,
       "kind": "hedged",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Partial: lists safeguards first, then says other forms are not specified. Compare the gate run's answer to the same case, which Declines."
     },
     {
@@ -634,7 +634,7 @@
       "declines": true,
       "kind": "hedged",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Says how David prevents contamination is not specified; the evaluations and gates it mentions are named as not being the answer."
     },
     {
@@ -645,7 +645,7 @@
       "declines": true,
       "kind": "hedged",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Says whether he worked for the government directly is not stated; working at a government contractor does not answer it."
     },
     {
@@ -656,7 +656,7 @@
       "declines": true,
       "kind": "hedged",
       "heldOut": true,
-      "draft": true,
+      "draft": false,
       "note": "Says what convinced him is not stated; that ARIMA came before LightGBM is context, not the reason asked for."
     },
     {
@@ -667,7 +667,7 @@
       "declines": true,
       "kind": "hedged",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Says equipment-failure models are not mentioned; the active-learning work it names is explicitly not that."
     },
     {
@@ -678,7 +678,7 @@
       "declines": true,
       "kind": "hedged",
       "heldOut": false,
-      "draft": true,
+      "draft": false,
       "note": "Out of scope; says Tableau and Power BI are not mentioned, and names other dashboard tools instead."
     }
   ]
