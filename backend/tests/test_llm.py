@@ -72,6 +72,32 @@ async def test_generate_stream_yields_tokens_from_an_injected_client():
     assert tokens == ["David", " codes."]
 
 
+@pytest.mark.asyncio
+async def test_answers_without_an_injected_client_share_one_client():
+    """Production builds one OpenAI client per process, not one per answer (story 105).
+
+    A client per answer reuses no connections and leaks each one until garbage
+    collection.
+    """
+
+    def _new_client(**_):
+        async def _empty():
+            return
+            yield
+
+        client = AsyncMock()
+        client.chat.completions.create = AsyncMock(side_effect=lambda **_: _empty())
+        return client
+
+    factory = MagicMock(side_effect=_new_client)
+    with patch("app.llm.AsyncOpenAI", factory):
+        for question in ["Who is David?", "What has he built?"]:
+            async for _ in generate_stream(build_messages("ctx", [], question)):
+                pass
+
+    assert factory.call_count == 1
+
+
 def _reload_config(monkeypatch, **env):
     """Re-import app.config under `env`, ignoring any developer's backend/.env."""
     import importlib

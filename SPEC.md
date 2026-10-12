@@ -320,7 +320,7 @@ components/
    Conversation history:
    {last 10 messages}
    ```
-6. **Generate:** Call the OpenAI API (model set by `OPENAI_MODEL`, default `gpt-6-luna`, chosen by ADR-0008; reasoning effort `low`) with streaming enabled. Generation ran on Groq until the measured migration (#62, #73).
+6. **Generate:** Call the OpenAI API (model set by `OPENAI_MODEL`, default `gpt-6-luna`, chosen by ADR-0008; reasoning effort `low`) with streaming enabled, through one OpenAI client per process, built on first use and shared by every request. Generation ran on Groq until the measured migration (#62, #73).
 7. **Stream:** Return response as a streamed text response (SSE)
 
 #### Next.js Proxy Route

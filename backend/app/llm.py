@@ -1,6 +1,7 @@
 """LLM generation: prompt construction + OpenAI streaming."""
 
 from collections.abc import AsyncIterator
+from functools import cache
 from typing import Literal
 
 from openai import AsyncOpenAI
@@ -65,13 +66,32 @@ def build_messages(
     return messages
 
 
+def openai_client() -> AsyncOpenAI:
+    """Return the process's one OpenAI client, shared by every answer.
+
+    One client per answer reuses no connections and leaks each one until garbage
+    collection. The client is built on first use, so importing the app needs no network.
+    """
+    return _client_built_by(AsyncOpenAI)
+
+
+@cache
+def _client_built_by(constructor: type[AsyncOpenAI]) -> AsyncOpenAI:
+    # Keyed on the constructor rather than held in a bare global: production only ever
+    # has the one, while a test that patches `AsyncOpenAI` gets a client from its own mock.
+    return constructor(api_key=OPENAI_API_KEY)
+
+
 async def generate_stream(
     messages: list[dict],
     client: AsyncOpenAI | None = None,
 ) -> AsyncIterator[str]:
-    """Stream plain text tokens from OpenAI for the given message list."""
+    """Stream plain text tokens from OpenAI for the given message list.
+
+    Without an injected `client`, the process's shared one is used.
+    """
     if client is None:
-        client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        client = openai_client()
 
     stream = await client.chat.completions.create(
         model=OPENAI_MODEL,

@@ -84,6 +84,7 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | Run-to-run spread | Each metric's range across runs per split; each metric's rounding step is the smallest round step covering its own range; a Floor sits twice the range (at least one of its metric's steps) below the lowest run, rounded down |
 | High | Free-tier throttle | Calls are paced to a tokens-per-minute limit by billed tokens; a call that could pass the token budget is never made |
 | High | `POST /api/chat` | Production streams the configured OpenAI model with the eval's reasoning effort and completion cap, and no temperature |
+| High | OpenAI client | Answers streamed without an injected client share one client per process; an injected client is used instead |
 | High | Model config | `OPENAI_MODEL` overrides the model; unset, it is `gpt-6-luna`, the model ADR-0008 chose |
 | High | Daily cap | Past `DAILY_REQUEST_CAP`, the stream is the polite "resting for today" message, OpenAI and retrieval are never called, and the count resets on the next UTC day |
 | High | Visitor query log | Each question is logged with its retrieved-chunk count and nothing else — no IP, history or answer; an Empty Context logs 0; a capped request is not logged |
