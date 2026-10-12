@@ -20,7 +20,6 @@ from eval import compare_arms, gate_generation, judge_generation
 from eval import run_generation as record_script
 from eval.generation import (
     DEFAULT_WORKERS,
-    FLOORS,
     SUPPORTS_AT,
     Generation,
     Relation,
@@ -701,12 +700,9 @@ def test_replaying_a_case_the_record_never_answered_fails_loudly():
 # ---------------------------------------------------------------------------
 
 
-def test_the_floors_are_the_ones_the_spread_study_derived():
-    """0.85 and 0.915, from three Luna runs judged with the fixed questions (#81).
-
-    Not targets: a Floor moves only when the spread study is rerun (ADR-0007).
-    """
-    assert FLOORS == {"faithfulness": 0.85, "declineAccuracy": 0.915}
+#: Floors as a generation Floors record carries them. The gate reads the committed record
+#: (tests/test_recalibration.py); these tests pin down the comparison itself.
+FLOORS = {"faithfulness": 0.85, "declineAccuracy": 0.915}
 
 
 def test_a_run_above_both_floors_passes_the_gate():
@@ -720,7 +716,7 @@ def test_a_run_above_both_floors_passes_the_gate():
         judge=judge,
     )
 
-    assert gate_failures(run["metrics"]) == []
+    assert gate_failures(run["metrics"], FLOORS) == []
 
 
 def test_an_unsupported_sentence_below_the_faithfulness_floor_fails_the_gate():
@@ -735,7 +731,7 @@ def test_an_unsupported_sentence_below_the_faithfulness_floor_fails_the_gate():
         judge=judge,
     )
 
-    assert gate_failures(run["metrics"]) == ["faithfulness = 0.500 < 0.850"]
+    assert gate_failures(run["metrics"], FLOORS) == ["faithfulness = 0.500 < 0.850"]
 
 
 def test_answering_an_out_of_scope_case_fails_the_decline_floor():
@@ -747,12 +743,12 @@ def test_answering_an_out_of_scope_case_fails_the_decline_floor():
         judge=FakeJudge(),
     )
 
-    assert "declineAccuracy = 0.000 < 0.915" in gate_failures(run["metrics"])
+    assert "declineAccuracy = 0.000 < 0.915" in gate_failures(run["metrics"], FLOORS)
 
 
 def test_a_gated_metric_with_nothing_to_measure_fails_rather_than_passes():
     """A run that judged no factual sentence measured no Faithfulness, which is not a pass."""
-    assert gate_failures({"faithfulness": None, "declineAccuracy": 1.0}) == [
+    assert gate_failures({"faithfulness": None, "declineAccuracy": 1.0}, FLOORS) == [
         "faithfulness was not measured"
     ]
 

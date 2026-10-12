@@ -12,7 +12,8 @@ different runs: `shippedArm`, written by the generation gate on pushes to `main`
 replaces only its own section, so rows from different runs never share one table.
 
 Generation metrics move on an unchanged commit. Each is rounded to the step the spread
-study derived for it (eval/variance.py), and a section is rewritten only when a rounded
+study derived for it, read from the committed generation Floors record
+(eval/floors/generation.json, ADR-0012), and a section is rewritten only when a rounded
 number, or what was measured, changed. So noise alone never produces a results commit.
 """
 
@@ -25,6 +26,7 @@ from pathlib import Path
 
 from eval.generation import compare, score
 from eval.publish import ARM_SPEC_BY_ID, CANDIDATE, _git_commit, _run_url, shipped_arm_id
+from eval.recalibration import GENERATION_FLOORS_PATH, read_record
 
 #: Bumped whenever a section gains or changes a measured field, so a document from
 #: before the change is not compared with one from after.
@@ -41,10 +43,14 @@ SECTIONS = ("shippedArm", "comparison")
 #: Only the held-out split is published: decisions are made on `dev` (ADR-0004).
 PUBLISHED_SPLIT = "holdout"
 
-#: Each published metric's rounding step, from its own held-out run-to-run range in the
-#: spread study (eval/variance.py; docs/evaluation.md, Run-to-run spread). Rerun the study
-#: and update these together with the Floors in eval/generation.py.
-STEPS = {"factRecall": 0.1, "faithfulness": 0.05, "declineAccuracy": 0.005}
+
+def steps() -> dict[str, float]:
+    """Each published metric's rounding step, from its own held-out run-to-run range in the
+    spread study. They live in the generation Floors record beside the Floors, written by
+    `eval/recalibrate.py generation` alone (ADR-0012), never in code.
+    """
+    return dict(read_record(GENERATION_FLOORS_PATH)["steps"])
+
 
 #: OpenAI's standard prices in USD per million tokens, as (input, output), from
 #: https://developers.openai.com/api/docs/pricing on 2026-10-11. Reasoning tokens bill as
@@ -130,7 +136,7 @@ def build_section(
         "answerable": answerable,
         "outOfScope": len(cases) - answerable,
         "metrics": _rounded_metrics(cases),
-        "steps": dict(STEPS),
+        "steps": steps(),
         "costPerAnswerUsd": cost_per_answer(cases, requested_model),
     }
 
@@ -197,7 +203,7 @@ def build_comparison_section(
         "questions": len(cases),
         "answerable": answerable,
         "outOfScope": len(cases) - answerable,
-        "steps": dict(STEPS),
+        "steps": steps(),
         "arms": rows,
     }
 
@@ -208,7 +214,7 @@ def _held_out(run: dict) -> dict:
 
 def _rounded_metrics(cases: list[dict]) -> dict:
     metrics = score(cases)
-    return {m: round_to_step(metrics[m], step) for m, step in STEPS.items()}
+    return {m: round_to_step(metrics[m], step) for m, step in steps().items()}
 
 
 def round_to_step(value: float | None, step: float) -> float | None:

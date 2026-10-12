@@ -1,8 +1,8 @@
 """Run-to-run spread of the generation metrics, and the rounding step and Floors set from it.
 
-The same commit, judged or generated and judged three times, does not give the same
-numbers twice (ADR-0007). This reads judged runs, as `judge_generation.py --output`
-writes them, and derives:
+The same commit, generated and judged several times, does not give the same numbers
+twice (ADR-0007). From judged runs, as `judge_generation.py --output` writes them, this
+derives:
 
 - each published metric's rounding step, from its held-out spread, because held-out is
   what is published: the smallest round step no smaller than that metric's range;
@@ -10,21 +10,16 @@ writes them, and derives:
   the gate runs on the full Golden Set: twice the range below the lowest run, and at
   least one of the metric's steps, rounded down to its step.
 
-    uv run --frozen python eval/variance.py runs/judged-1.json runs/judged-2.json ...
+This is the generation rule. `eval/recalibrate.py generation` applies it to five judged
+runs and writes the result into the generation Floors record (ADR-0012); nothing else
+turns it into Floors.
 """
 
 from __future__ import annotations
 
-import argparse
-import json
 import math
-import sys
-from pathlib import Path
 
-BACKEND_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(BACKEND_ROOT))
-
-from eval.generation import score  # (needs the sys.path line above)
+from eval.generation import score
 
 #: The published generation metrics: each needs a step no smaller than its noise.
 PUBLISHED = ("factRecall", "faithfulness", "declineAccuracy")
@@ -75,27 +70,3 @@ def derive(runs: list[dict]) -> dict:
         for metric in GATED
     }
     return {"spread": {"holdout": holdout, "all": every}, "steps": steps, "floors": floors}
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("runs", type=Path, nargs="+", help="Judged runs of one commit.")
-    args = parser.parse_args()
-
-    runs = [json.loads(path.read_text(encoding="utf-8")) for path in args.runs]
-    derived = derive(runs)
-    for split, metrics in derived["spread"].items():
-        print(f"{split}:")
-        for metric, measured in metrics.items():
-            values = ", ".join(f"{value:.4f}" for value in measured["values"])
-            print(f"  {metric:<16} {values}  (range {measured['range']:.4f})")
-    print()
-    for metric, step in derived["steps"].items():
-        print(f"Rounding step, {metric}: {step}")
-    for metric, value in derived["floors"].items():
-        print(f"Floor, {metric}: {value}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

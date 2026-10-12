@@ -81,6 +81,10 @@ because what it measures with changed.
 - A drop caused by a new instrument is visible in the record's diff, beside the Golden Set
   diff that caused it, instead of in a failing gate.
 - Until a gate's record is recalibrated after a trigger, that gate reports stale. That is
-  correct: gating against Floors from a Golden Set that no longer exists is worse.
+  correct: gating against Floors from a Golden Set that no longer exists is worse. The
+  first generation record was carried over from the three-run study's constants with no
+  fingerprint, so it is stale until the five-run study recalibrates it (#91); until then
+  the ordinary suite's check of it is a strict expected failure, which that
+  Recalibration must remove.
 - ADR-0004's and ADR-0007's descriptions of how Floors are set are superseded by this ADR,
   and each carries a pointer to it.

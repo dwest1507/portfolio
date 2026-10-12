@@ -21,6 +21,7 @@ STALE = "Floors stale: Recalibrate"
 #: One committed Floors record per gate. Only `eval/recalibrate.py` writes them.
 FLOORS_DIR = Path(__file__).resolve().parent / "floors"
 RETRIEVAL_FLOORS_PATH = FLOORS_DIR / "retrieval.json"
+GENERATION_FLOORS_PATH = FLOORS_DIR / "generation.json"
 
 #: The retrieval rule's tolerance, in answerable cases: a Floor sits this many questions'
 #: worth below the measurement. Retrieval is deterministic, so this is a tolerance for a
@@ -37,7 +38,7 @@ RETRIEVAL_RULE = (
 )
 
 
-def fingerprint(rows: list) -> str:
+def fingerprint(rows: list | dict) -> str:
     """A stable hash over already-canonicalized rows."""
     canonical = json.dumps(rows, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -96,6 +97,140 @@ def retrieval_record(result: dict, cases: list[dict], commit: str) -> dict:
         "fingerprint": retrieval_fingerprint(cases),
         "commit": commit,
     }
+
+
+#: How many judged runs the generation rule is built for. Three understated the noise
+#: (story 90), so the study is five, and the recalibrate command takes no other number.
+GENERATION_RUNS = 5
+
+#: The generation rule's name, as its record states it (ADR-0007's variance rule, ADR-0012).
+GENERATION_RULE = (
+    "five judged runs of the Shipped Arm over the full Golden Set; step = the smallest of "
+    "0.005/0.01/0.02/0.05/0.1 no smaller than the metric's held-out range; Floor = lowest "
+    "run − max(2 × range, step) over all cases, rounded down to the step"
+)
+
+
+def generation_instrument() -> dict:
+    """What the generation gate measures with today: a change to any of it is a Recalibration.
+
+    The Judge version, the wording of every Judge question, the model that splits
+    sentences into claims, and the generation model and reasoning effort the gate answers
+    with (production's defaults). Imported here, not at the top, so the retrieval gate
+    never loads the generation harness.
+    """
+    from eval.judge import (
+        CONVEYS_QUESTION,
+        DECLINES_QUESTION,
+        FACTUAL_QUESTION,
+        JEV_MODEL,
+        SUPPORT_QUESTION,
+    )
+    from eval.run_generation import OPENAI_MODEL, OPENAI_REASONING_EFFORT
+    from eval.splitter import SPLITTER_MODEL
+
+    return {
+        "judge": JEV_MODEL,
+        "judgeQuestions": {
+            "supports": SUPPORT_QUESTION,
+            "factual": FACTUAL_QUESTION,
+            "conveys": CONVEYS_QUESTION,
+            "declines": DECLINES_QUESTION,
+        },
+        "splitter": SPLITTER_MODEL,
+        "generationModel": OPENAI_MODEL,
+        "reasoningEffort": OPENAI_REASONING_EFFORT,
+    }
+
+
+def generation_fingerprint(cases: list[dict], instrument: dict) -> str:
+    """The generation Floors' fingerprint: each case's question, Required Facts and
+    `answerable`, sorted by case id, plus the instrument (`generation_instrument`).
+
+    Relevant Phrases are left out: a retrieval label repair must never force a paid
+    generation study (story 88).
+    """
+    return fingerprint(
+        {
+            "cases": [
+                {
+                    "question": case["question"],
+                    "requiredFacts": sorted(case.get("required_facts", [])),
+                    "answerable": case.get("answerable", True),
+                }
+                for case in sorted(cases, key=lambda case: case["id"])
+            ],
+            "instrument": instrument,
+        }
+    )
+
+
+def generation_record(
+    runs: list[dict], cases: list[dict], instrument: dict, arm: str, commit: str
+) -> dict:
+    """The generation Floors record for five judged runs of the Shipped Arm over `cases`.
+
+    Each published metric's rounding step comes from its own held-out range, and each
+    gated metric's Floor from its range over every case (eval/variance.py). The record
+    carries every run's values and range as well as the steps and Floors, so anyone can
+    redo the arithmetic and see that no Floor was chosen.
+    """
+    from eval.variance import derive
+
+    derived = derive(runs)
+
+    def rounded(spread: dict) -> dict:
+        return {
+            "values": [round(value, 6) for value in spread["values"]],
+            "range": round(spread["range"], 6),
+        }
+
+    return {
+        "gate": "generation",
+        "writtenBy": "eval/recalibrate.py generation — never edit by hand (ADR-0012)",
+        "rule": GENERATION_RULE,
+        "arm": arm,
+        "inputs": {
+            "runs": [
+                {"generated": run.get("record", {}).get("commit"), "judged": run.get("commit")}
+                for run in runs
+            ],
+            "holdout": {m: rounded(s) for m, s in derived["spread"]["holdout"].items()},
+            "all": {m: rounded(derived["spread"]["all"][m]) for m in derived["floors"]},
+        },
+        "steps": derived["steps"],
+        "floors": derived["floors"],
+        "fingerprint": generation_fingerprint(cases, instrument),
+        "commit": commit,
+    }
+
+
+def generation_staleness(record: dict, cases: list[dict], instrument: dict) -> str | None:
+    """None when `record` describes `cases` (the whole Golden Set) and `instrument`;
+    otherwise the gate's failure: "Floors stale: Recalibrate", and what to do about it.
+
+    A record that predates fingerprints carries none, and is stale.
+    """
+    expected = generation_fingerprint(cases, instrument)
+    if record["fingerprint"] == expected:
+        return None
+    found = (record["fingerprint"] or "none")[:19]
+    return (
+        f"{STALE}. The Golden Set or the generation instrument no longer matches the "
+        f"generation Floors record (record {found}…, now {expected[:19]}…). Run the "
+        "five-run spread study and `uv run --frozen python eval/recalibrate.py generation "
+        "<five judged runs>` in this same change (ADR-0012)."
+    )
+
+
+def assert_generation_record_current(
+    record: dict, golden_cases: list[dict], instrument: dict | None = None
+) -> None:
+    """The ordinary test suite's free check (story 87): fails with the gate's own
+    "Floors stale: Recalibrate" before any paid run starts."""
+    instrument = instrument if instrument is not None else generation_instrument()
+    stale = generation_staleness(record, golden_cases, instrument)
+    assert stale is None, stale
 
 
 def write_record(record: dict, path: Path) -> None:

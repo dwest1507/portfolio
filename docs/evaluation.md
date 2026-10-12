@@ -1094,17 +1094,43 @@ Derived from the end-to-end runs:
 These replace the 2026-10-10 Floors (0.96 and 0.92), which were measured with Judge
 questions that [validation](#result-jev-is-not-yet-fit-to-gate-faithfulness) found blind
 to unsupported sentences. The Faithfulness Floor is lower because the fixed Judge now
-finds unsupported sentences, and those vary between generations. A change to the Judge's
-questions, the splitter, the generation model or its reasoning effort is a new
-measurement, and the study is rerun:
+finds unsupported sentences, and those vary between generations.
+
+### The generation Floors record
+
+The steps and Floors live in one committed record, `backend/eval/floors/generation.json`,
+and nowhere in code: the gate reads its Floors from it and the publisher its steps
+([ADR-0012](adr/0012-recalibration.md)). The record holds the rule, its inputs (every
+run's values and range, held-out and over all cases), the steps, the Floors, a fingerprint
+and the commit the runs were judged at, and a test fails if a step or Floor no longer
+follows from the inputs beside it.
+
+The fingerprint covers what can move a generation metric: each case's question, Required
+Facts and `answerable`, sorted by case id, plus the instrument: the Judge version, the
+wording of every Judge question, the splitter model, and the generation model and
+reasoning effort. Relevant Phrases are left out, so a retrieval label repair never forces
+a paid study, and the retrieval fingerprint leaves out Required Facts and the instrument.
+
+A change to any of these is a Recalibration, in the same change: five generations of the
+Shipped Arm, each judged, then the recalibrate command, the only writer of the record. It
+is built for five runs and refuses any other number, or a run that skipped a case:
 
 ```bash
 cd backend
 uv run --frozen python eval/run_generation.py --provider openai --record runs/luna-1.json
 uv run --frozen python eval/judge_generation.py --record runs/luna-1.json --output runs/judged-1.json
-# ... three of each, then:
-uv run --frozen python eval/variance.py runs/judged-1.json runs/judged-2.json runs/judged-3.json
+# ... five of each, then:
+uv run --frozen python eval/recalibrate.py generation runs/judged-{1,2,3,4,5}.json
 ```
+
+The record committed today was carried over from the constants above, from the three-run
+study on the 107-case Golden Set. It predates fingerprints, carries none, and so is
+**stale**, as it would be anyway: the Golden Set has since grown to 131 cases.
+Until the five-run study recalibrates it (#91), the generation gate fails with "Floors
+stale: Recalibrate" before generating anything. That is intended: gating on Floors from a
+Golden Set that no longer exists is worse. For the same reason the ordinary test suite's
+check of the committed record (`tests/test_recalibration.py`) is a strict expected
+failure until then; the Recalibration that makes it pass must also remove the marker.
 
 `--provider openai` sends no temperature (the candidates reject any but the default) and
 pins `--reasoning-effort` (default `low`). It needs `OPENAI_CI_API_KEY` and a `--record`
@@ -1118,9 +1144,10 @@ splitter ~68k tokens.
 `eval/gate_generation.py` answers every Golden Set case (both Splits) with the Shipped
 Arm and `gpt-6-luna` at reasoning effort `low`, the model the Floors were measured on,
 and judges every answer. It fails if Faithfulness or Decline accuracy over the whole set
-falls below its Floor (`FLOORS` in `eval/generation.py`: 0.85 and 0.915, from the
-[Run-to-run spread](#run-to-run-spread)). A gated metric with nothing to measure fails
-too. Fact Recall and Contradictions are printed but not gated
+falls below its Floor in the [generation Floors record](#the-generation-floors-record).
+Before any of that, it checks the record's fingerprint against the Golden Set and the
+instrument, and on a mismatch fails first with **"Floors stale: Recalibrate"**, generating
+and judging nothing. A gated metric with nothing to measure fails too. Fact Recall and Contradictions are printed but not gated
 ([ADR-0007](adr/0007-generation-evaluation-harness.md)).
 
 The gate generates with the model production serves by default: `eval/run_generation.py`

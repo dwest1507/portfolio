@@ -149,7 +149,8 @@ step for it, and billed tokens move with every reworded answer.
 When and how the generation Floors are re-derived is now recorded in ADR-0012. They are
 re-derived on a Golden Set or instrument change, never a system change, in the same change
 that caused it, from five judged runs rather than three, by the variance rule above. Like
-the retrieval Floors, they are to move out of `FLOORS` in `eval/generation.py` into a
-committed Floors record with its own fingerprint, written only by the recalibrate command,
-and the gate is to fail "Floors stale: Recalibrate" when the record no longer matches
-(#90).
+the retrieval Floors, they have moved out of `FLOORS` in `eval/generation.py`, and the
+rounding steps out of `STEPS` in `eval/publish_generation.py`, into a committed Floors
+record (`backend/eval/floors/generation.json`) with its own fingerprint, written only by
+`eval/recalibrate.py generation`, and the gate fails "Floors stale: Recalibrate" when the
+record no longer matches (#90).

@@ -586,15 +586,11 @@ def conveyed(case: dict) -> list[tuple[str, bool]]:
 OUTCOMES = {"faithfulness": faithful, "declineAccuracy": decline_correct, "factRecall": conveyed}
 
 
-#: The gated metrics' Floors, for the Shipped Arm over the full Golden Set (ADR-0007).
-#: Derived by eval/variance.py from three Luna runs judged with the questions fixed in #81
-#: (docs/evaluation.md, Run-to-run spread). Not targets: a Floor moves only when the
-#: spread study is rerun, for a new generation model, Judge question or splitter.
-FLOORS = {"faithfulness": 0.85, "declineAccuracy": 0.915}
-
-
-def gate_failures(metrics: dict, floors: dict[str, float] = FLOORS) -> list[str]:
+def gate_failures(metrics: dict, floors: dict[str, float]) -> list[str]:
     """Each gated metric below its Floor, as a line to print; empty when the gate passes.
+
+    `floors` come from the committed generation Floors record (eval/floors/generation.json,
+    ADR-0012), never from code.
 
     A gated metric that measured nothing (no factual sentence, no case) fails: a run that
     checked nothing has not shown the answers are fine.

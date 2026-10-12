@@ -2,8 +2,13 @@
 
 Every case is retrieved with production retrieval (the Shipped Arm), answered by the
 OpenAI model the Floors were measured on, and judged by the pinned Judge. The run fails
-if Faithfulness or Decline accuracy falls below its Floor (`FLOORS` in eval/generation.py,
-ADR-0007). Fact Recall and Contradictions are printed but not gated.
+if Faithfulness or Decline accuracy falls below its Floor in the committed generation
+Floors record (eval/floors/generation.json, ADR-0007, ADR-0012). Fact Recall and
+Contradictions are printed but not gated.
+
+Before anything is paid for, the record's fingerprint is checked against the Golden Set
+and the instrument (Judge version and questions, splitter, generation model, reasoning
+effort). A mismatch fails first, with "Floors stale: Recalibrate", and nothing is run.
 
 With --publish, the held-out cases of the same run are published as the Shipped Arm
 section of frontend/data/generationResults.json, unless the rounded measurement is
@@ -23,6 +28,7 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -31,7 +37,6 @@ sys.path.insert(0, str(BACKEND_ROOT))
 from dotenv import load_dotenv
 
 from eval.generation import (  # (needs the sys.path line above)
-    FLOORS,
     add_workers_argument,
     format_report,
     gate_failures,
@@ -41,12 +46,36 @@ from eval.generation import (  # (needs the sys.path line above)
 from eval.judge import JevJudge
 from eval.publish import shipped_arm_id
 from eval.publish_generation import GENERATION_RESULTS_PATH, build_section, write_section
+from eval.recalibration import (
+    GENERATION_FLOORS_PATH,
+    generation_instrument,
+    generation_staleness,
+    read_record,
+)
 from eval.run_eval import GOLDEN_SET_PATH, describe_cases, select_cases
 from eval.run_generation import OPENAI_MODEL, OPENAI_REASONING_EFFORT
 from eval.splitter import OpenAISplitter
 
 #: The keys the gate needs. CI maps its own secrets onto these.
 REQUIRED_KEYS = ("OPENAI_CI_API_KEY", "JEV_API_KEY")
+
+
+def gate(
+    record: dict, cases: list[dict], instrument: dict, measure: Callable[[], dict]
+) -> tuple[list[str], dict | None]:
+    """The gate's failures, and the judged run when one was made.
+
+    A record whose fingerprint does not match `cases` (the whole Golden Set) and
+    `instrument` fails first, on its own, with "Floors stale: Recalibrate", and `measure`
+    is never called: its Floors were derived on another set or with another instrument,
+    so a run compared against them would be paid for and mean nothing. Otherwise the
+    run's metrics are compared with the record's Floors.
+    """
+    stale = generation_staleness(record, cases, instrument)
+    if stale:
+        return [stale], None
+    run = measure()
+    return gate_failures(run["metrics"], record["floors"]), run
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -64,6 +93,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
 
+    golden = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
+    cases = select_cases(golden["cases"], "all")
+    record = read_record(GENERATION_FLOORS_PATH)
+    instrument = generation_instrument()
+    stale = generation_staleness(record, golden["cases"], instrument)
+    if stale:
+        print(f"FAIL — {stale}")
+        return 1
+
     load_dotenv()
     missing = [key for key in REQUIRED_KEYS if not os.environ.get(key)]
     if missing:
@@ -74,8 +112,6 @@ def main() -> int:
 
     from app.rag.pipeline import RAGPipeline
 
-    golden = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
-    cases = select_cases(golden["cases"], "all")
     pipeline = RAGPipeline()
     arm = shipped_arm_id()
     client = OpenAI(api_key=os.environ["OPENAI_CI_API_KEY"], max_retries=6)
@@ -89,22 +125,24 @@ def main() -> int:
         verdict = "declined" if result["declined"] else f"{len(result['sentences'])} factual"
         print(f"  {result['id']}: {verdict}", flush=True)
 
-    run = run_generation(
-        cases, pipeline.retrieve, generate, judge=judge, on_case=on_case, workers=args.workers
-    )
-    print()
-    print(format_report(run))
-    print(f"\nGeneration usage: {run['usage']}")
-    print(f"Judge usage: {judge.reported_usage}")
-    print(f"Splitter usage ({run['splitter']}): {splitter.usage}")
-    if args.output:
-        args.output.write_text(
-            json.dumps(run, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    def measure() -> dict:
+        run = run_generation(
+            cases, pipeline.retrieve, generate, judge=judge, on_case=on_case, workers=args.workers
         )
-        print(f"Wrote {args.output}")
+        print()
+        print(format_report(run))
+        print(f"\nGeneration usage: {run['usage']}")
+        print(f"Judge usage: {judge.reported_usage}")
+        print(f"Splitter usage ({run['splitter']}): {splitter.usage}")
+        if args.output:
+            args.output.write_text(
+                json.dumps(run, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+            print(f"Wrote {args.output}")
+        return run
 
-    floors = ", ".join(f"{metric} ≥ {floor}" for metric, floor in FLOORS.items())
-    failures = gate_failures(run["metrics"])
+    floors = ", ".join(f"{metric} ≥ {floor}" for metric, floor in record["floors"].items())
+    failures, run = gate(record, golden["cases"], instrument, measure)
     if failures:
         print(f"\nFAIL — below the generation Floors ({floors}):")
         for failure in failures:

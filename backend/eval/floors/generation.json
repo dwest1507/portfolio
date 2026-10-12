@@ -1,0 +1,77 @@
+{
+  "gate": "generation",
+  "writtenBy": "migrated by hand from the FLOORS and STEPS constants in code (#90). It predates the recalibrate command and fingerprints, so it is stale until `eval/recalibrate.py generation` rewrites it from five judged runs (#91, ADR-0012). Never edit by hand.",
+  "rule": "three judged runs of the Shipped Arm over the 107-case Golden Set (ADR-0007, before ADR-0012); step = the smallest of 0.005/0.01/0.02/0.05/0.1 no smaller than the metric's held-out range; Floor = lowest run − max(2 × range, step) over all cases, rounded down to the step; values to three places, as docs/evaluation.md published them",
+  "arm": "bm25",
+  "inputs": {
+    "runs": [
+      {
+        "generated": "72d2df9",
+        "judged": "b2f4889"
+      },
+      {
+        "generated": "72d2df9",
+        "judged": "b2f4889"
+      },
+      {
+        "generated": "72d2df9",
+        "judged": "b2f4889"
+      }
+    ],
+    "holdout": {
+      "factRecall": {
+        "values": [
+          0.747,
+          0.701,
+          0.782
+        ],
+        "range": 0.081
+      },
+      "faithfulness": {
+        "values": [
+          0.971,
+          0.94,
+          0.957
+        ],
+        "range": 0.031
+      },
+      "declineAccuracy": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "range": 0.0
+      }
+    },
+    "all": {
+      "faithfulness": {
+        "values": [
+          0.964,
+          0.937,
+          0.934
+        ],
+        "range": 0.03
+      },
+      "declineAccuracy": {
+        "values": [
+          0.935,
+          0.944,
+          0.944
+        ],
+        "range": 0.009
+      }
+    }
+  },
+  "steps": {
+    "factRecall": 0.1,
+    "faithfulness": 0.05,
+    "declineAccuracy": 0.005
+  },
+  "floors": {
+    "faithfulness": 0.85,
+    "declineAccuracy": 0.915
+  },
+  "fingerprint": null,
+  "commit": "b2f4889"
+}

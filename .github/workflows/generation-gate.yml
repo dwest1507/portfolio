@@ -1,7 +1,9 @@
 name: Generation gate
 
 # Answers the golden question set with the Shipped Arm, judges the answers, and fails if
-# Faithfulness or Decline accuracy drops below its Floor (ADR-0007). On pushes to main it
+# Faithfulness or Decline accuracy drops below its Floor in backend/eval/floors/generation.json
+# (ADR-0007, ADR-0012), or fails first with "Floors stale: Recalibrate" when that record no
+# longer matches the Golden Set or the instrument. On pushes to main it
 # also publishes the held-out results to frontend/data/generationResults.json.
 #
 # Every run calls paid APIs (OpenAI and TypeSafe's Jev), so the path filter is narrower
@@ -22,8 +24,10 @@ on:
       - 'docs/resume.txt'
       - 'docs/chatbot-questions.md'
       - 'frontend/content/projects/**'
-      # The Golden Set and the generation harness
+      # The Golden Set, the generation Floors record, and the generation harness
       - 'backend/eval/golden_set.json'
+      - 'backend/eval/floors/generation.json'
+      - 'backend/eval/recalibration.py'
       - 'backend/eval/generation.py'
       - 'backend/eval/judge.py'
       - 'backend/eval/splitter.py'
@@ -43,6 +47,8 @@ on:
       - 'docs/chatbot-questions.md'
       - 'frontend/content/projects/**'
       - 'backend/eval/golden_set.json'
+      - 'backend/eval/floors/generation.json'
+      - 'backend/eval/recalibration.py'
       - 'backend/eval/generation.py'
       - 'backend/eval/judge.py'
       - 'backend/eval/splitter.py'

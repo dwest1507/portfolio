@@ -13,9 +13,9 @@ import pytest
 
 from eval.publish_generation import (
     SCHEMA_VERSION,
-    STEPS,
     build_comparison_section,
     build_section,
+    steps,
     write_section,
 )
 
@@ -82,8 +82,8 @@ def _published(path) -> dict:
 
 class TestSection:
     def test_metrics_are_rounded_to_each_metrics_step(self):
-        """Steps from the spread study: 0.1, 0.05 and 0.005 (docs/evaluation.md)."""
-        assert STEPS == {"factRecall": 0.1, "faithfulness": 0.05, "declineAccuracy": 0.005}
+        """Steps from the spread study, read from the generation Floors record."""
+        assert steps() == {"factRecall": 0.1, "faithfulness": 0.05, "declineAccuracy": 0.005}
 
         # Faithfulness 18/20 = 0.9; Fact Recall 6/8 = 0.75 → 0.8; Decline accuracy 1.0.
         section = _section()
@@ -93,7 +93,7 @@ class TestSection:
             "faithfulness": 0.9,
             "declineAccuracy": 1.0,
         }
-        assert section["steps"] == STEPS
+        assert section["steps"] == steps()
 
     def test_only_the_held_out_split_is_published(self):
         """A dev number is one a decision was made on; publishing it would flatter it."""
@@ -414,7 +414,7 @@ class TestComparisonSection:
         assert section["reasoningEffort"] == "low"
         assert section["judge"] == "jev-1.13.0"
         assert section["corpusChunks"] == 123
-        assert section["steps"] == STEPS
+        assert section["steps"] == steps()
         assert section["runUrl"] == "https://example.test/run/9"
 
     def test_rounding_suppresses_a_noise_only_rewrite(self, tmp_path):
