@@ -279,8 +279,9 @@ push to main
 Two invocations because they measure different samples on purpose: the gate wants the
 largest sample it can get, and the report wants the sample nothing was chosen against.
 
-The commit touches only `frontend/data/**` and `docs/evaluation.md`, neither of which
-matches this workflow's path filters, so it cannot retrigger the job. Pull-request runs
+The commit is pushed by the eval-publisher GitHub App, the one actor allowed past `main`'s
+pull-request rule (ADR-0001). It touches only `frontend/data/**` and `docs/evaluation.md`,
+neither of which matches this workflow's path filters, so it cannot retrigger the job. Pull-request runs
 measure and gate but never publish — branch results would race into the file.
 
 Two consequences worth knowing:
