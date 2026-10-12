@@ -7,14 +7,17 @@ it is not free to rerun. See docs/adr/0007-generation-evaluation-harness.md.
 The single entry point, `run_generation`, takes the cases, a retriever (an Arm) and a
 generator, all injected. Each case records the exact chunks the generator was shown, so a
 Judge can score the run later and another generator can replay identical contexts, leaving
-the model as the only variable.
+the model as the only variable. Cases can be answered and judged several at once; the run
+is the same whatever order they finish in.
 """
 
 from __future__ import annotations
 
+import argparse
 import re
 import time
 from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import TYPE_CHECKING, Protocol
@@ -233,12 +236,36 @@ def throttled(
     return generate_paced
 
 
+#: How many cases the paid entry scripts answer and judge at once. Each case spends most
+#: of its time waiting on OpenAI and Jev, so eight at once turns a ~17-minute gate run
+#: into a few minutes, well inside both providers' rate limits. The Groq baseline is
+#: always answered one case at a time: its pacing to the free tier assumes one caller.
+DEFAULT_WORKERS = 8
+
+
+def add_workers_argument(
+    parser: argparse.ArgumentParser,
+    default: int | None = DEFAULT_WORKERS,
+    help: str = f"Cases answered and judged at once (default: {DEFAULT_WORKERS}).",
+) -> None:
+    """The `--workers` flag every entry script that calls `run_generation` takes."""
+    parser.add_argument("--workers", type=positive_int, default=default, help=help)
+
+
+def positive_int(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, not {number}")
+    return number
+
+
 def run_generation(
     cases: list[dict],
     retrieve: Retriever,
     generate: Generator,
     judge: Judge | None = None,
     on_case: Callable[[dict], None] | None = None,
+    workers: int = 1,
 ) -> dict:
     """Retrieve and generate for every case, recording what each answer was written from.
 
@@ -247,9 +274,18 @@ def run_generation(
 
     `on_case` receives each case's result as soon as it is recorded, so a run that stops
     partway (a spent token budget, a provider error) keeps the answers already paid for.
+
+    `workers` cases are answered and judged at once; the default, one, answers them in
+    turn. Workers only produce results: each is handed to `on_case` on the calling thread,
+    in the order they finish, and the run lists them in case order. The first error starts
+    no further case; the cases already under way are finished and handed over, and then
+    the error is raised. `retrieve`, `generate` and `judge` must be safe to call from
+    several threads at once when `workers` is above one.
     """
-    results = []
-    for case in cases:
+    if workers < 1:
+        raise ValueError(f"workers must be at least 1, not {workers}")
+
+    def answer(case: dict) -> dict:
         chunks = retrieve(case["question"])
         generation = generate(case["question"], chunks)
         result = {
@@ -264,17 +300,51 @@ def run_generation(
         }
         if judge is not None:
             result.update(judge_case(case, chunks, generation.text, judge))
-        results.append(result)
-        if on_case is not None:
-            on_case(result)
-    run = {"cases": results, "usage": total_usage(results)}
+        return result
+
+    if workers > 1 and cases:
+        # A model the retriever loads on first use is loaded here, once, rather than by
+        # every worker at the same moment.
+        retrieve(cases[0]["question"])
+
+    results: list[dict | None] = [None] * len(cases)
+    waiting = iter(enumerate(cases))
+    running: dict[Future, int] = {}
+    error: BaseException | None = None
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+
+        def start_next() -> None:
+            for index, case in waiting:
+                running[pool.submit(answer, case)] = index
+                return
+
+        for _ in range(workers):
+            start_next()
+        while running:
+            done, _ = wait(running, return_when=FIRST_COMPLETED)
+            for future in sorted(done, key=running.__getitem__):
+                index = running.pop(future)
+                if future.exception() is not None:
+                    error = error or future.exception()
+                    continue
+                results[index] = future.result()
+                if on_case is not None:
+                    on_case(future.result())
+            if error is None:
+                for _ in done:
+                    start_next()
+    if error is not None:
+        raise error
+
+    recorded = [result for result in results if result is not None]
+    run = {"cases": recorded, "usage": total_usage(recorded)}
     if judge is not None:
         run["judge"] = judge.model
         run["splitter"] = judge.splitter_model
-        run["metrics"] = score(results)
+        run["metrics"] = score(recorded)
         run["contradictions"] = [
             {"case": r["id"], **contradiction}
-            for r in results
+            for r in recorded
             for contradiction in r["contradictions"]
         ]
     return run

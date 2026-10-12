@@ -7,9 +7,19 @@ recorded context is what lets a later Judge, or a different generator, replay th
 
 from __future__ import annotations
 
-import pytest
+import json
+import sys
+import threading
+import time
 
+import httpx
+import pytest
+from openai import OpenAI
+
+from eval import compare_arms, gate_generation, judge_generation
+from eval import run_generation as record_script
 from eval.generation import (
+    DEFAULT_WORKERS,
     FLOORS,
     SUPPORTS_AT,
     Generation,
@@ -22,6 +32,8 @@ from eval.generation import (
     stored_contexts,
     throttled,
 )
+from eval.judge import DECLINES_QUESTION, JEV_MODEL, JevJudge
+from eval.splitter import OpenAISplitter
 
 CASES = [
     {
@@ -759,3 +771,205 @@ def test_a_candidate_model_answers_from_the_contexts_the_baseline_stored():
     assert shown == [STORED_RECORD["cases"][0]["chunks"]]
     assert run["cases"][0]["chunks"] == STORED_RECORD["cases"][0]["chunks"]
     assert run["cases"][0]["model"] == "fake-model-1"
+
+
+# ---------------------------------------------------------------------------
+# Concurrent runs
+# ---------------------------------------------------------------------------
+
+
+def numbered_cases(n: int) -> list[dict]:
+    return [
+        {"id": f"case-{i}", "split": "dev", "question": f"Question {i}?", "required_facts": []}
+        for i in range(n)
+    ]
+
+
+def finishing_last_first(n: int):
+    """A generator each of whose answers waits for the next case's to finish first.
+
+    The last case finishes first and the first last, which only a run that answers all
+    `n` cases at once can complete: run one at a time, the first case would wait forever.
+    """
+    finished = [threading.Event() for _ in range(n)]
+
+    def generate(question: str, chunks: list[str]) -> Generation:
+        i = int(question.removeprefix("Question ").removesuffix("?"))
+        if i + 1 < n:
+            assert finished[i + 1].wait(timeout=5), "cases were not answered concurrently"
+        finished[i].set()
+        return fake_generate(question, chunks)
+
+    return generate
+
+
+def test_results_come_back_in_case_order_whatever_order_they_finish_in():
+    """Stored runs and published documents diff cleanly only if case order is kept."""
+    cases = numbered_cases(4)
+
+    run = run_generation(cases, retrieving([]), finishing_last_first(4), workers=4)
+
+    assert [r["id"] for r in run["cases"]] == [c["id"] for c in cases]
+
+
+def test_each_completed_case_is_handed_over_on_the_calling_thread():
+    """Workers only answer: the caller's callback needs no lock to keep what was paid for."""
+    cases = numbered_cases(4)
+    handed_over = []
+
+    run_generation(
+        cases,
+        retrieving([]),
+        finishing_last_first(4),
+        workers=4,
+        on_case=lambda result: handed_over.append((result["id"], threading.get_ident())),
+    )
+
+    assert sorted(case_id for case_id, _ in handed_over) == [c["id"] for c in cases]
+    assert {thread for _, thread in handed_over} == {threading.get_ident()}
+
+
+def test_an_error_mid_run_keeps_completed_cases_starts_no_more_and_propagates():
+    """Concurrency changes neither the stopped-partway guarantee nor the spend after it.
+
+    Two workers: case 0 fails at once while case 1 is still being answered. Case 1 was
+    already paid for, so it is handed over; cases 2 to 5 are never started.
+    """
+    started = []
+    recorded = []
+
+    def generate(question: str, chunks: list[str]) -> Generation:
+        started.append(question)
+        if question == "Question 0?":
+            raise TokenBudgetExhausted("out of tokens")
+        time.sleep(0.2)
+        return fake_generate(question, chunks)
+
+    with pytest.raises(TokenBudgetExhausted):
+        run_generation(
+            numbered_cases(6), retrieving([]), generate, workers=2, on_case=recorded.append
+        )
+
+    assert sorted(started) == ["Question 0?", "Question 1?"]
+    assert [r["id"] for r in recorded] == ["case-1"]
+
+
+def test_a_worker_count_below_one_is_refused():
+    with pytest.raises(ValueError, match="workers"):
+        run_generation(CASES, fake_retrieve, fake_generate, workers=0)
+
+
+def test_lazily_loaded_retrieval_is_warmed_once_before_the_workers_start():
+    """An ONNX model loaded on first use would otherwise be loaded by every worker at once."""
+    calls = []
+
+    def retrieve(question: str) -> list[str]:
+        calls.append(threading.get_ident())
+        return []
+
+    run_generation(numbered_cases(4), retrieve, fake_generate, workers=4)
+
+    assert calls[0] == threading.get_ident()
+
+
+def jev_and_splitter():
+    """A real JevJudge and OpenAISplitter over fake transports, billing fixed usage.
+
+    Jev finds every sentence factual and supported, every fact conveyed, and no Decline.
+    """
+
+    def jev(request: httpx.Request) -> httpx.Response:
+        question = json.loads(request.content)["questions"]["judgment"]
+        if question["type"] == "choice":
+            answer = {"type": "choice", "choice": "supports", "probabilities": {"supports": 0.9}}
+        else:
+            answer = {"type": "noul", "noul": 0.1 if question == DECLINES_QUESTION else 0.9}
+        return httpx.Response(
+            200,
+            json={
+                "model": JEV_MODEL,
+                "answers": {"judgment": answer},
+                "usage": {"input_tokens": 120, "output_tokens": 3},
+            },
+        )
+
+    def openai(request: httpx.Request) -> httpx.Response:
+        sentence = json.loads(json.loads(request.content)["messages"][-1]["content"])["sentence"]
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-1",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "gpt-6-luna-2026-09-01",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {
+                            "role": "assistant",
+                            "content": json.dumps({"claims": [sentence]}),
+                        },
+                    }
+                ],
+                "usage": {"prompt_tokens": 300, "completion_tokens": 40, "total_tokens": 340},
+            },
+        )
+
+    splitter = OpenAISplitter(
+        OpenAI(api_key="test-key", http_client=httpx.Client(transport=httpx.MockTransport(openai)))
+    )
+    judge = JevJudge("test-key", splitter, client=httpx.Client(transport=httpx.MockTransport(jev)))
+    return judge, splitter
+
+
+def test_billed_usage_from_a_concurrent_run_equals_a_serial_run():
+    """Cost reporting is trusted only if no billed token is lost to a race between workers."""
+    cases = [
+        {**case, "required_facts": ["David works at Booz Allen Hamilton."]}
+        for case in numbered_cases(24)
+    ]
+    answer = answering(
+        {c["question"]: "David works at Booz Allen. He leads a team. He codes." for c in cases}
+    )
+    totals = []
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # switch threads as often as possible, to surface a race
+    try:
+        for workers in (1, 8):
+            judge, splitter = jev_and_splitter()
+            run = run_generation(
+                cases, retrieving(EMPLOYER_CHUNKS), answer, judge=judge, workers=workers
+            )
+            totals.append((run["usage"], judge.usage, splitter.usage))
+    finally:
+        sys.setswitchinterval(interval)
+
+    serial, concurrent = totals
+    assert concurrent == serial
+    assert serial[1]["input_tokens"] > 0
+    assert serial[2]["total_tokens"] > 0
+
+
+# ---------------------------------------------------------------------------
+# Worker counts in the entry scripts
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("script", [gate_generation, compare_arms, judge_generation])
+def test_the_paid_entry_scripts_answer_eight_cases_at_once_by_default(script):
+    assert DEFAULT_WORKERS == 8
+    assert script.parse_args([]).workers == 8
+    assert script.parse_args(["--workers", "3"]).workers == 3
+
+
+def test_the_openai_record_answers_eight_cases_at_once_by_default():
+    args = record_script.parse_args(["--provider", "openai", "--record", "run.json"])
+
+    assert args.workers == 8
+
+
+def test_the_groq_baseline_answers_one_case_at_a_time_to_keep_its_token_pacing():
+    assert record_script.parse_args([]).workers == 1
+    with pytest.raises(SystemExit):
+        record_script.parse_args(["--workers", "4"])

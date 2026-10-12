@@ -8,8 +8,8 @@ Faithfulness and Decline accuracy, then lists every Contradiction (ADR-0007):
     uv run --frozen python eval/judge_generation.py                  # the Groq baseline
     uv run --frozen python eval/judge_generation.py --split holdout --output judged.json
 
-Needs JEV_API_KEY, and OPENAI_CI_API_KEY for the model that splits sentences into claims
-(eval/splitter.py). Jev bills per input token: judging the whole baseline costs well under
+Cases are judged eight at a time (`--workers`). Needs JEV_API_KEY, and OPENAI_CI_API_KEY
+for the model that splits sentences into claims (eval/splitter.py). Jev bills per input token: judging the whole baseline costs well under
 a cent, and splitting a few cents.
 """
 
@@ -27,7 +27,7 @@ sys.path.insert(0, str(BACKEND_ROOT))
 
 from dotenv import load_dotenv
 
-from eval.generation import format_report, replay, run_generation
+from eval.generation import add_workers_argument, format_report, replay, run_generation
 from eval.judge import JevJudge
 from eval.publish import _git_commit
 from eval.run_eval import GOLDEN_SET_PATH, SPLITS, select_cases
@@ -47,7 +47,7 @@ RECORD_KEYS = (
 )
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--record",
@@ -57,7 +57,12 @@ def main() -> int:
     )
     parser.add_argument("--split", choices=SPLITS, default="all")
     parser.add_argument("--output", type=Path, help="Also write the judged run here, as JSON.")
-    args = parser.parse_args()
+    add_workers_argument(parser)
+    return parser.parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
 
     load_dotenv()
     record = json.loads(args.record.read_text(encoding="utf-8"))
@@ -72,7 +77,7 @@ def main() -> int:
         verdict = "declined" if result["declined"] else f"{len(result['sentences'])} factual"
         print(f"  {result['id']}: {verdict}", flush=True)
 
-    run = run_generation(cases, *replay(record), judge=judge, on_case=on_case)
+    run = run_generation(cases, *replay(record), judge=judge, on_case=on_case, workers=args.workers)
     print()
     judged = {
         "record": {

@@ -15,9 +15,10 @@ it left off:
     uv run --frozen python eval/run_generation.py --token-budget 50000
 
 With `--provider openai` it answers with an OpenAI model instead, unpaced (OpenAI's paid
-tier is not shared with visitors), into its own record. This is how the run-to-run
-spread of the generation metrics is measured: three records of one commit, each judged
-with judge_generation.py (ADR-0007). Needs OPENAI_CI_API_KEY:
+tier is not shared with visitors) and eight cases at a time (`--workers`), into its own
+record. The Groq baseline is always answered one case at a time, so its pacing holds.
+This is how the run-to-run spread of the generation metrics is measured: three records of
+one commit, each judged with judge_generation.py (ADR-0007). Needs OPENAI_CI_API_KEY:
 
     uv run --frozen python eval/run_generation.py --provider openai --record runs/luna-1.json
 
@@ -44,7 +45,9 @@ sys.path.insert(0, str(BACKEND_ROOT))
 from app.config import DEFAULT_OPENAI_MODEL  # (needs the sys.path line above)
 from app.llm import REASONING_EFFORT
 from eval.generation import (
+    DEFAULT_WORKERS,
     TokenBudgetExhausted,
+    add_workers_argument,
     groq_generator,
     openai_generator,
     run_generation,
@@ -116,7 +119,12 @@ def repo_path(path: Path) -> str:
     return str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """The run's options. `workers` is resolved: 1 for Groq, `DEFAULT_WORKERS` for OpenAI.
+
+    Groq is paced to its per-minute limit by one throttle that assumes a single caller,
+    so a Groq run refuses any other worker count rather than overrun the free tier.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--token-budget",
@@ -141,9 +149,25 @@ def main() -> int:
         type=Path,
         help="Answer from the chunks this stored record holds, instead of retrieving.",
     )
-    args = parser.parse_args()
+    add_workers_argument(
+        parser,
+        default=None,
+        help=f"Cases answered at once (OpenAI default: {DEFAULT_WORKERS}; Groq is always 1).",
+    )
+    args = parser.parse_args(argv)
     if args.provider == "openai" and args.record is None:
         parser.error("--provider openai needs --record: the Groq baseline is not to be replaced.")
+    if args.provider == "groq":
+        if args.workers not in (None, 1):
+            parser.error("--provider groq answers one case at a time, to keep its token pacing.")
+        args.workers = 1
+    elif args.workers is None:
+        args.workers = DEFAULT_WORKERS
+    return args
+
+
+def main() -> int:
+    args = parse_args()
     record_path = args.record or BASELINE_PATH
 
     from app.config import GROQ_API_KEY, GROQ_MODEL
@@ -219,7 +243,7 @@ def main() -> int:
         )
 
     try:
-        run_generation(pending, retrieve, generate, on_case=on_case)
+        run_generation(pending, retrieve, generate, on_case=on_case, workers=args.workers)
     except TokenBudgetExhausted as exc:
         print(f"\nStopped: {exc}\nRerun tomorrow to resume.")
         return 1

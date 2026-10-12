@@ -17,6 +17,7 @@ frontend/data/generationResults.json (`--publish`).
 
 Needs OPENAI_CI_API_KEY and JEV_API_KEY, as the generation gate does. It runs four Arms
 through the whole Golden Set, so it costs about four gate runs; it runs only on demand.
+Each Arm's cases are answered and judged eight at a time (`--workers`).
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from eval.generation import (  # (needs the sys.path line above)
     Generator,
     Judge,
     Retriever,
+    add_workers_argument,
     compare,
     fmt,
     openai_generator,
@@ -76,11 +78,13 @@ def compare_arms(
     generate: Generator,
     judge: Judge,
     on_case: Callable[[str, dict], None] | None = None,
+    workers: int = 1,
 ) -> dict[str, dict]:
     """A judged run per Candidate Arm over `cases`, keyed by Arm ID.
 
     `retrievers` may hold every Arm; only the Candidate Arms' are called. `on_case`
-    receives each Arm's ID and each case's result as soon as it is recorded.
+    receives each Arm's ID and each case's result as soon as it is recorded. Each Arm's
+    cases are answered and judged `workers` at a time, one Arm after another.
     """
     arms = candidate_arms()
     missing = [arm for arm in arms if arm not in retrievers]
@@ -90,7 +94,9 @@ def compare_arms(
     runs = {}
     for arm in arms:
         report = None if on_case is None else (lambda result, arm=arm: on_case(arm, result))
-        runs[arm] = run_generation(cases, retrievers[arm], generate, judge=judge, on_case=report)
+        runs[arm] = run_generation(
+            cases, retrievers[arm], generate, judge=judge, on_case=report, workers=workers
+        )
     return runs
 
 
@@ -130,7 +136,7 @@ def format_comparison(runs: dict[str, dict], split: str) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--publish",
@@ -142,7 +148,12 @@ def main() -> int:
         type=Path,
         help="Also write every Arm's judged run, on both splits, here as JSON.",
     )
-    args = parser.parse_args()
+    add_workers_argument(parser)
+    return parser.parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
 
     load_dotenv()
     missing = [key for key in REQUIRED_KEYS if not os.environ.get(key)]
@@ -173,7 +184,7 @@ def main() -> int:
         verdict = "declined" if result["declined"] else f"{len(result['sentences'])} factual"
         print(f"  {arm} {result['id']}: {verdict}", flush=True)
 
-    runs = compare_arms(cases, retrievers, generate, judge, on_case=on_case)
+    runs = compare_arms(cases, retrievers, generate, judge, on_case=on_case, workers=args.workers)
     for split in ("dev", "holdout"):
         print()
         print(format_comparison(runs, split))

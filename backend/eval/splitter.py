@@ -15,6 +15,7 @@ LLM step in judging, and it is not checked on its own: the Judge validation's pa
 from __future__ import annotations
 
 import json
+import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -63,13 +64,15 @@ class OpenAISplitter:
 
     `model` is the ID the provider reports answering with, once it has answered, and
     `usage` totals billed tokens. Answers vary from run to run: OpenAI's reasoning models
-    accept no temperature but the default.
+    accept no temperature but the default. Safe to call from several threads at once: the
+    usage total is updated under a lock, so no billed token is lost to a race.
     """
 
     def __init__(self, client: OpenAI) -> None:
         self.model = SPLITTER_MODEL
         self.usage = dict.fromkeys(USAGE_FIELDS, 0)
         self._client = client
+        self._usage_lock = threading.Lock()
 
     def __call__(self, question: str, sentence: str) -> list[str]:
         response = self._client.chat.completions.create(
@@ -87,7 +90,8 @@ class OpenAISplitter:
             max_completion_tokens=SPLITTER_MAX_TOKENS,
             response_format=CLAIMS_FORMAT,
         )
-        self.model = response.model
-        for field in USAGE_FIELDS:
-            self.usage[field] += getattr(response.usage, field)
+        with self._usage_lock:
+            self.model = response.model
+            for field in USAGE_FIELDS:
+                self.usage[field] += getattr(response.usage, field)
         return json.loads(response.choices[0].message.content or '{"claims": []}')["claims"]

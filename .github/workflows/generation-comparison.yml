@@ -29,7 +29,9 @@ jobs:
   compare:
     name: Compare Candidate Arms
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # Each Arm's cases are answered and judged eight at a time (eval/compare_arms.py's
+    # --workers default): four Arms, each about a generation gate run.
+    timeout-minutes: 60
     # Only this job writes, and only on main.
     permissions:
       contents: write

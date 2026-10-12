@@ -67,7 +67,9 @@ jobs:
   gate:
     name: Generation gate
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The gate answers and judges eight cases at a time (eval/gate_generation.py's
+    # --workers default), so a run takes minutes; one at a time it took ~20.
+    timeout-minutes: 20
     # Only this job writes, and only on main.
     permissions:
       contents: write

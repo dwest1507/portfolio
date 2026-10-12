@@ -620,6 +620,18 @@ uv run --frozen python eval/run_generation.py   # capture, or resume a partial r
 The harness entry point, `run_generation` in `eval/generation.py`, takes the cases, a
 retriever, a generator and optionally a Judge, all injected, and is tested with fakes.
 
+It also takes a worker count, default 1: how many cases are answered and judged at once.
+Each case spends nearly all its time waiting on OpenAI and Jev, so the entry scripts
+(the gate, the comparison run, `judge_generation.py` and an OpenAI `run_generation.py`
+record) take `--workers`, default 8. Workers only produce results. Each result is handed
+to the per-case callback on the calling thread as it finishes, so a run that stops partway
+still keeps every answer already paid for, and the run lists its cases in Golden Set order
+whatever order they finished in. The first error starts no further case; cases already
+under way are finished and kept, then the error is raised. The Judge's and the splitter's
+billed-usage totals are updated under a lock, and the retriever answers one query before
+the workers start, so a model it loads on first use is loaded once. The Groq baseline is
+always answered one case at a time: its pacing assumes a single caller.
+
 ## Judging answers
 
 The Judge is TypeSafe's Jev, pinned to `jev-1.13.0`, never `jev-latest`
@@ -1065,7 +1077,9 @@ CI runs it from `.github/workflows/generation-gate.yml`, on pull requests and pu
 (`app/llm.py`, `app/config.py`), retrieval code and indexes, the Corpus sources, the
 Golden Set, and the generation harness. Dependency bumps don't trigger it, so they spend
 no API budget. It uses CI's own keys (`OPENAI_CI_API_KEY`, and `JEV_CI_API_KEY` passed as
-`JEV_API_KEY`), never production's. A full run takes about 20 minutes and a few cents.
+`JEV_API_KEY`), never production's. It answers and judges eight cases at a time
+(`--workers`), so a full run takes a few minutes, not the ~20 it took one case at a time,
+and costs a few cents: the same calls, made concurrently.
 The judged run is uploaded as the `generation-run` artifact.
 
 On `main`, a passing run publishes its **held-out** cases as the Shipped Arm section of
@@ -1219,7 +1233,8 @@ metric). The rule is applied to `dev` and confirmed on `holdout`; the latency co
 is read from the retrieval Scoreboard's Latency Bands.
 
 CI runs it from `.github/workflows/generation-comparison.yml`, only when dispatched by
-hand: it costs about four generation gate runs. Every Arm's judged run on both Splits is
+hand: it costs about four generation gate runs, eight cases at a time within each Arm.
+Every Arm's judged run on both Splits is
 uploaded as the `comparison-run` artifact, which is where the `dev` results the decision
 is made on live; they are never published. A run dispatched on `main` publishes the
 **held-out** results as the `comparison` section of `frontend/data/generationResults.json`,

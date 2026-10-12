@@ -16,6 +16,7 @@ labels found Jev dropping factual sentences as filler and passing partly support
 
 from __future__ import annotations
 
+import threading
 import time
 from typing import Protocol
 
@@ -141,7 +142,8 @@ class JevJudge:
 
     Every answer is checked against the pin, so `model` is the version that actually
     judged the run, not only the one requested. `usage` totals Jev's billed tokens; the
-    splitter totals its own.
+    splitter totals its own. Safe to call from several threads at once: the usage total is
+    updated under a lock, so no billed token is lost to a race.
     """
 
     def __init__(
@@ -152,6 +154,7 @@ class JevJudge:
         self.splitter = splitter
         self._headers = {"Authorization": f"Bearer {api_key}"}
         self._client = client or httpx.Client(timeout=60)
+        self._usage_lock = threading.Lock()
 
     @property
     def splitter_model(self) -> str:
@@ -190,6 +193,7 @@ class JevJudge:
                 f"Asked for {self.model}, answered by {data['model']}. Judgments from two "
                 "versions are not one measurement."
             )
-        for field in self.usage:
-            self.usage[field] += data["usage"][field]
+        with self._usage_lock:
+            for field in self.usage:
+                self.usage[field] += data["usage"][field]
         return data["answers"]["judgment"]

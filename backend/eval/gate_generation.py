@@ -13,7 +13,8 @@ unchanged. A run below a Floor publishes nothing.
     uv run --frozen python eval/gate_generation.py --publish --output judged.json
 
 Needs OPENAI_CI_API_KEY (generation and the claim splitter) and JEV_API_KEY (the Judge):
-CI's own keys, never production's. A run costs a few cents.
+CI's own keys, never production's. A run costs a few cents. Cases are answered and
+judged eight at a time (`--workers`), so a run takes minutes.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ from dotenv import load_dotenv
 
 from eval.generation import (  # (needs the sys.path line above)
     FLOORS,
+    add_workers_argument,
     format_report,
     gate_failures,
     openai_generator,
@@ -47,7 +49,7 @@ from eval.splitter import OpenAISplitter
 REQUIRED_KEYS = ("OPENAI_CI_API_KEY", "JEV_API_KEY")
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--publish",
@@ -55,7 +57,12 @@ def main() -> int:
         help="Publish the held-out results as the Shipped Arm section when the gate passes.",
     )
     parser.add_argument("--output", type=Path, help="Also write the judged run here, as JSON.")
-    args = parser.parse_args()
+    add_workers_argument(parser)
+    return parser.parse_args(argv)
+
+
+def main() -> int:
+    args = parse_args()
 
     load_dotenv()
     missing = [key for key in REQUIRED_KEYS if not os.environ.get(key)]
@@ -82,7 +89,9 @@ def main() -> int:
         verdict = "declined" if result["declined"] else f"{len(result['sentences'])} factual"
         print(f"  {result['id']}: {verdict}", flush=True)
 
-    run = run_generation(cases, pipeline.retrieve, generate, judge=judge, on_case=on_case)
+    run = run_generation(
+        cases, pipeline.retrieve, generate, judge=judge, on_case=on_case, workers=args.workers
+    )
     print()
     print(format_report(run))
     print(f"\nGeneration usage: {run['usage']}")
