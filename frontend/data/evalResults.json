@@ -1,8 +1,8 @@
 {
   "schemaVersion": 4,
-  "generatedAt": "2026-10-11T20:19:45+00:00",
-  "commit": "7b1e5aa",
-  "runUrl": null,
+  "generatedAt": "2026-10-12T17:53:40+00:00",
+  "commit": "15db05d",
+  "runUrl": "https://github.com/dwest1507/portfolio/actions/runs/38286766752",
   "corpusChunks": 158,
   "goldenQuestions": 43,
   "split": "holdout",
@@ -129,8 +129,8 @@
         }
       },
       "latencyBand": {
-        "warm": "~10ms",
-        "load": "~100ms"
+        "warm": "~100ms",
+        "load": "~1s"
       }
     },
     {
@@ -193,8 +193,8 @@
         }
       },
       "latencyBand": {
-        "warm": "~10ms",
-        "load": "~100ms"
+        "warm": "~100ms",
+        "load": "~1s"
       }
     },
     {
@@ -257,8 +257,8 @@
         }
       },
       "latencyBand": {
-        "warm": "~100ms",
-        "load": "~100ms"
+        "warm": "~1s",
+        "load": "~1s"
       }
     },
     {
@@ -321,8 +321,8 @@
         }
       },
       "latencyBand": {
-        "warm": "~10ms",
-        "load": "~100ms"
+        "warm": "~1s",
+        "load": "~1s"
       }
     },
     {
@@ -386,7 +386,7 @@
       },
       "latencyBand": {
         "warm": "~10ms",
-        "load": "~1s"
+        "load": "~100ms"
       }
     },
     {
@@ -450,7 +450,7 @@
       },
       "latencyBand": {
         "warm": "~10ms",
-        "load": "~1s"
+        "load": "~100ms"
       }
     },
     {
