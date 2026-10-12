@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/dwest1507/portfolio/compare/portfolio-v1.4.0...portfolio-v1.4.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **ci:** publish eval results as the eval-publisher GitHub App ([15db05d](https://github.com/dwest1507/portfolio/commit/15db05d52d3958d26efbb2b424319532929f8231))
+* **ci:** publish eval results as the eval-publisher GitHub App ([9a31868](https://github.com/dwest1507/portfolio/commit/9a31868a02b07934c2be994ba25b5c03661555c9)), closes [#63](https://github.com/dwest1507/portfolio/issues/63)
+
 ## [1.4.0](https://github.com/dwest1507/portfolio/compare/portfolio-v1.3.1...portfolio-v1.4.0) (2026-10-12)
 
 
