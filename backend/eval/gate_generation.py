@@ -7,8 +7,8 @@ Floors record (eval/floors/generation.json, ADR-0007, ADR-0012). Fact Recall and
 Contradictions are printed but not gated.
 
 Before anything is paid for, the record's fingerprint is checked against the Golden Set
-and the instrument (Judge version and questions, splitter, generation model, reasoning
-effort). A mismatch fails first, with "Floors stale: Recalibrate", and nothing is run.
+and the instrument (Judge version, questions and filler cutoff, splitter and its reasoning
+effort, generation model, reasoning effort). A mismatch fails first, with "Floors stale: Recalibrate", and nothing is run.
 
 With --publish, the held-out cases of the same run are published as the Shipped Arm
 section of frontend/data/generationResults.json, unless the rounded measurement is

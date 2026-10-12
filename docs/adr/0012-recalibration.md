@@ -20,8 +20,8 @@ because what it measures with changed.
 - **Triggers: the Golden Set or the instrument, never the system.** A Recalibration is
   required when the Golden Set changes (cases added or removed; a question, Relevant
   Phrase, Required Fact or `answerable` edited) or the instrument does (Judge version,
-  Judge question wording, splitter model, generation model, reasoning effort, metric
-  definitions). Corpus, prompt, chunking and retrieval-code changes are never triggers:
+  Judge question wording, the Judge's filler cutoff `FACTUAL_BELOW`, splitter model and
+  its reasoning effort, generation model, reasoning effort, metric definitions). Corpus, prompt, chunking and retrieval-code changes are never triggers:
   they are what the gates exist to judge, and a Floor that followed them could never catch
   one.
 - **The same-change rule.** A Recalibration happens in the change that caused it, so any
@@ -48,7 +48,10 @@ because what it measures with changed.
   by case id, covering exactly what can move that gate's metrics:
   - retrieval: question, Relevant Phrases, `answerable`;
   - generation: question, Required Facts, `answerable`, plus the Judge version, the Judge
-    questions, the splitter model, the generation model and the reasoning effort.
+    questions, the Judge's filler cutoff (`FACTUAL_BELOW`), the splitter model and its
+    reasoning effort, the generation model and the reasoning effort. The cutoff and the
+    splitter's effort were added on 2026-10-11 (#91, owner decision): they decide which
+    sentences count and what claims get judged.
 
   Separate fingerprints mean a free retrieval label repair never forces a paid generation
   study, and a Required Fact edit never stales the retrieval Floors.

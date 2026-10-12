@@ -1143,8 +1143,10 @@ follows from the inputs beside it.
 
 The fingerprint covers what can move a generation metric: each case's question, Required
 Facts and `answerable`, sorted by case id, plus the instrument: the Judge version, the
-wording of every Judge question, the splitter model, and the generation model and
-reasoning effort. Relevant Phrases are left out, so a retrieval label repair never forces
+wording of every Judge question, the Judge's filler cutoff (`FACTUAL_BELOW`), the splitter
+model and its reasoning effort, and the generation model and reasoning effort. The cutoff
+and the splitter's effort decide which sentences count and what claims get judged, so
+changing either is a new instrument too. Relevant Phrases are left out, so a retrieval label repair never forces
 a paid study, and the retrieval fingerprint leaves out Required Facts and the instrument.
 
 A change to any of these is a Recalibration, in the same change: five generations of the

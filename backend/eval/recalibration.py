@@ -114,20 +114,24 @@ GENERATION_RULE = (
 def generation_instrument() -> dict:
     """What the generation gate measures with today: a change to any of it is a Recalibration.
 
-    The Judge version, the wording of every Judge question, the model that splits
-    sentences into claims, and the generation model and reasoning effort the gate answers
-    with (production's defaults). Imported here, not at the top, so the retrieval gate
-    never loads the generation harness.
+    The Judge version, the wording of every Judge question, the Judge's filler cutoff
+    (`FACTUAL_BELOW`), the model that splits sentences into claims and its reasoning
+    effort, and the generation model and reasoning effort the gate answers with
+    (production's defaults). The cutoff and the splitter's effort decide which sentences
+    count and what claims get judged, so changing either is a new instrument (owner
+    decision, 2026-10-11, #91). Imported here, not at the top, so the retrieval gate never
+    loads the generation harness.
     """
     from eval.judge import (
         CONVEYS_QUESTION,
         DECLINES_QUESTION,
+        FACTUAL_BELOW,
         FACTUAL_QUESTION,
         JEV_MODEL,
         SUPPORT_QUESTION,
     )
     from eval.run_generation import OPENAI_MODEL, OPENAI_REASONING_EFFORT
-    from eval.splitter import SPLITTER_MODEL
+    from eval.splitter import SPLITTER_MODEL, SPLITTER_REASONING_EFFORT
 
     return {
         "judge": JEV_MODEL,
@@ -138,6 +142,8 @@ def generation_instrument() -> dict:
             "declines": DECLINES_QUESTION,
         },
         "splitter": SPLITTER_MODEL,
+        "splitterReasoningEffort": SPLITTER_REASONING_EFFORT,
+        "factualBelow": FACTUAL_BELOW,
         "generationModel": OPENAI_MODEL,
         "reasoningEffort": OPENAI_REASONING_EFFORT,
     }

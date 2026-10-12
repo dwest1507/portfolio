@@ -191,6 +191,8 @@ INSTRUMENT = {
     "judge": "jev-1.13.0",
     "judgeQuestions": {"declines": {"type": "noul", "instructions": "Does `answer` decline?"}},
     "splitter": "gpt-6-luna",
+    "splitterReasoningEffort": "low",
+    "factualBelow": 0.2,
     "generationModel": "gpt-6-luna",
     "reasoningEffort": "low",
 }
@@ -223,6 +225,8 @@ class TestGenerationFingerprint:
             ("judge", "jev-1.14.0"),
             ("judgeQuestions", {"declines": {"type": "noul", "instructions": "Reworded?"}}),
             ("splitter", "gpt-6.1-sol"),
+            ("splitterReasoningEffort", "medium"),
+            ("factualBelow", 0.3),
             ("generationModel", "gpt-6.1-sol"),
             ("reasoningEffort", "medium"),
         ],
@@ -253,6 +257,26 @@ class TestGenerationFingerprint:
         assert generation_fingerprint(CASES, generation_instrument()) != before
         assert retrieval_fingerprint(CASES) == retrieval_fingerprint(copy.deepcopy(CASES))
 
+    @pytest.mark.parametrize(
+        ("module", "name", "value"),
+        [
+            ("eval.splitter", "SPLITTER_REASONING_EFFORT", "medium"),
+            ("eval.judge", "FACTUAL_BELOW", 0.3),
+        ],
+    )
+    def test_a_change_to_what_counts_as_a_claim_stales_the_generation_floors(
+        self, monkeypatch, module, name, value
+    ):
+        """Owner decision, 2026-10-11 (#91): the splitter's reasoning effort and the
+        Judge's filler cutoff change which sentences count and what claims get judged, so
+        either is a new instrument."""
+        import importlib
+
+        before = generation_fingerprint(CASES, generation_instrument())
+        monkeypatch.setattr(importlib.import_module(module), name, value)
+
+        assert generation_fingerprint(CASES, generation_instrument()) != before
+
     def test_a_relevant_phrase_edit_stales_only_the_retrieval_floors(self):
         """Story 88: a free retrieval label repair never forces a paid generation study."""
         edited = copy.deepcopy(CASES)
@@ -264,9 +288,9 @@ class TestGenerationFingerprint:
         )
 
     def test_the_current_instrument_is_the_one_the_gate_measures_with(self):
-        from eval.judge import DECLINES_QUESTION, JEV_MODEL
+        from eval.judge import DECLINES_QUESTION, FACTUAL_BELOW, JEV_MODEL
         from eval.run_generation import OPENAI_MODEL, OPENAI_REASONING_EFFORT
-        from eval.splitter import SPLITTER_MODEL
+        from eval.splitter import SPLITTER_MODEL, SPLITTER_REASONING_EFFORT
 
         instrument = generation_instrument()
 
@@ -274,6 +298,8 @@ class TestGenerationFingerprint:
         assert instrument["judgeQuestions"]["declines"] == DECLINES_QUESTION
         assert set(instrument["judgeQuestions"]) == {"supports", "factual", "conveys", "declines"}
         assert instrument["splitter"] == SPLITTER_MODEL
+        assert instrument["splitterReasoningEffort"] == SPLITTER_REASONING_EFFORT
+        assert instrument["factualBelow"] == FACTUAL_BELOW
         assert instrument["generationModel"] == OPENAI_MODEL
         assert instrument["reasoningEffort"] == OPENAI_REASONING_EFFORT
 
