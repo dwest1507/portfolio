@@ -28,7 +28,7 @@ uv run pytest tests/ -v --cov=app
 | High | `FilterBar` | Filters update visible cards; "All" resets; active state styling |
 | High | `ProjectsSection` | Correct cards shown/hidden after filter selection |
 | High | `ChatbotWidget` | Open/close toggle; message display; input handling; error state |
-| High | `ChatInput` | Debounce (3s); 50-message limit enforcement; empty input prevention |
+| High | `ChatInput` | Debounce (3s); 50-message limit enforcement; empty input prevention; the logging notice renders under the input |
 | Medium | `ProjectCard` | Renders title, description, tags, and links |
 | Medium | `ChatMessage` | User vs assistant message rendering |
 | Low | `Header` | Nav links render; mobile menu works |
@@ -47,7 +47,7 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | `POST /api/chat` | Valid request returns streamed response |
 | High | `POST /api/chat` | Empty message → 400 |
 | High | `POST /api/chat` | Message > 500 chars → 400 |
-| High | `POST /api/chat` | Groq API error → 500 with safe message |
+| High | `POST /api/chat` | OpenAI API error → error event in the stream with a safe message |
 | High | RAG pipeline | Served retrieval works with no model weights and no FAISS index present |
 | High | RAG pipeline | An off-topic query returns no context rather than the least-bad chunks |
 | High | RAG pipeline | Hybrid search returns relevant chunks (measured arm) |
@@ -58,21 +58,40 @@ All suites also run in CI on every PR (`.github/workflows/frontend-ci.yml`,
 | High | RAG pipeline | Prompt construction includes context and history |
 | High | Prompt | An empty context is stated, not left as a bare `Context:` heading |
 | High | Eval harness | Every published arm has a retriever, and vice versa |
-| High | Eval harness | Only the shipped arm is gated; a run that gates nothing fails |
 | High | Eval harness | The recorded dev/holdout split matches the rule, and the rule cannot move a case when the set grows |
 | High | Eval publish | A tie on the gating metric is rendered and worded as a tie, not a lead for production |
 | High | Eval publish | A CI-attested run replaces a locally published one; the takeover happens only once |
 | Medium | Rate limiting | Exceeding 30 req/min → 429 |
-| Medium | Chunking | Correct chunk sizes with overlap |
+| High | Chunking | Each source format yields one chunk per Q&A pair, project section and resume role, with its heading; an over-long unit splits by sentence with the heading repeated; the committed sources still parse into their structure, and a source that loses it fails the build |
 | High | PII guard | No phone number or street address in the committed index or any indexed source, including the project MDX |
 | High | PII asymmetry | Broad detector catches bare digit runs; precise redactor leaves metrics and IDs untouched |
 | High | Tokenizer | Stemming unifies "engineer"/"engineering"; stopwords dropped; "R" survives |
 | High | RRF fusion | Agreement between retrievers wins; weights shift order; no item zeroed; a BM25-only hit reaches the candidate set |
 | Medium | Eval metrics | recall@k, hit@k, MRR, nDCG@k computed correctly |
-| High | Eval arms | Every published arm has a retriever and vice versa; `bm25+rerank` never touches the dense stage |
-| High | Eval gate | The shipped arm is what is gated; a run that gates nothing fails; a single split cannot be gated |
+| High | Eval arms | Every published arm has a retriever and vice versa; `bm25+rerank` never touches the dense stage; `bm25+onnx-rerank-20` hands the ONNX cross-encoder 20 candidates whatever the cutoff; every arm is a Candidate or Reference Arm, the torch arms are Reference Arms, and no Candidate Arm loads a torch model |
+| High | ONNX retrieval | ONNX dense search ranks by inner product with the precomputed Corpus embeddings and needs no torch model or FAISS index; ONNX hybrid fuses BM25 as `hybrid` does; ONNX re-ranking orders by the ONNX cross-encoder; the embedder mean-pools real tokens only; stale ONNX embeddings raise; the served path imports neither onnxruntime nor tokenizers |
+| High | Eval gate | The shipped arm is what is gated, against the Floors in its record; a stale record fails first with "Floors stale: Recalibrate" and compares no metric; a run that gates nothing fails; a single split cannot be gated |
+| High | Recalibration | The retrieval fingerprint is stable when cases are reordered, changes with a question, Relevant Phrase, `answerable` or case added or removed, and ignores Required Facts, split and category; the retrieval rule reproduces its worked example (0.865, n = 111 → 0.845); the recalibrate command writes the rule, inputs, fingerprint and commit, and refuses a non-shipped arm |
+| High | Committed Floors record | The retrieval record's fingerprint matches the committed Golden Set; its Floors follow from its inputs by its rule; it floors every gated metric over every answerable case; only the recalibrate command writes it |
+| High | Generation Recalibration | The generation fingerprint is stable when cases are reordered and changes with a question, Required Fact, `answerable`, Judge version, Judge question, splitter, generation model or reasoning effort; a Required Fact edit or Judge question change stales only the generation Floors, a Relevant Phrase edit only the retrieval Floors; the recalibrate command reproduces its worked example from five fake judged runs, refuses any other number of runs, and refuses runs that skip a case |
+| High | Generation gate | A stale record fails first with "Floors stale: Recalibrate" and nothing is generated or judged; a record without a fingerprint is stale; otherwise the run passes or fails on the record's Floors |
+| High | Committed generation record | Its steps and Floors follow from its inputs by the rule; it floors every gated metric and steps every published one; the publisher rounds to its steps; a stale record fails the check the committed record faces. and the committed record matches the committed Golden Set and instrument |
 | High | Golden splits | dev and holdout partition the set, and the recorded split still matches the documented hash rule |
+| High | Out-of-Scope Cases | Excluded from retrieval scoring by their `answerable: false` label and counted in the summary; a broken label on an answerable case still fails; malformed generation fields are rejected |
 | High | Published run | The published document reports the held-out split, and a changed split counts as a new measurement |
+| High | Generation harness | Each case records its answer, retrieved chunks, billed usage and answering model; answers are handed over as recorded so a stopped run can resume; with several workers, results keep case order, are handed over on the calling thread, an error starts no further case, and billed usage totals match a serial run |
+| High | Generation judging | Filler is dropped; one supporting chunk is enough; each Contradiction is listed with its sentence and chunk; Declines and Out-of-Scope Cases are never judged for support; Decline accuracy in both directions; Fact Recall, where a declined fair question conveys none of its facts; list items and table rows are judged as self-contained claims; a stored record is judged without regenerating |
+| High | Jev adapter | Every request names `jev-1.13.0`; an answer from any other version is refused; one question per judgment |
+| High | Generation prompt | The gate's OpenAI generator sends exactly the model, messages, reasoning effort and `max_completion_tokens` the chat endpoint sends, and the gate measures production's default model |
+| High | OpenAI generator | Sends the production prompt, the reasoning effort and no temperature; reports billed usage and the answering model |
+| High | Judge validation | Every hand-labelled sentence is one the splitter produces from its stored answer; agreement is counted as Faithfulness counts a sentence; a Contradiction listed or missed is a disagreement; compound and single sentences are counted apart; Decline labels are whole answers from a Golden Set case, held out by that case's Split, scored for agreement with every disagreement listed, left out while draft unless asked for, and held to ≥ 0.9 held-out agreement on the median of three runs |
+| High | Run-to-run spread | Each metric's range across runs per split; each metric's rounding step is the smallest round step covering its own range; a Floor sits twice the range (at least one of its metric's steps) below the lowest run, rounded down |
+| High | Free-tier throttle | Calls are paced to a tokens-per-minute limit by billed tokens; a call that could pass the token budget is never made |
+| High | `POST /api/chat` | Production streams the configured OpenAI model with the eval's reasoning effort and completion cap, and no temperature |
+| High | OpenAI client | Answers streamed without an injected client share one client per process; an injected client is used instead |
+| High | Model config | `OPENAI_MODEL` overrides the model; unset, it is `gpt-6-luna`, the model ADR-0008 chose |
+| High | Daily cap | Past `DAILY_REQUEST_CAP`, the stream is the polite "resting for today" message, OpenAI and retrieval are never called, and the count resets on the next UTC day |
+| High | Visitor query log | Each question is logged with its retrieved-chunk count and nothing else — no IP, history or answer; an Empty Context logs 0; a capped request is not logged |
 | Medium | `GET /api/health` | Returns 200 `{ "status": "ok" }` |
 
 Test files are in `backend/tests/`. Fixtures (including mock indexes) are defined
@@ -116,16 +135,18 @@ uv run pytest tests -q \
 ## Retrieval Evaluation
 
 Unit tests check that retrieval code behaves as written; they cannot tell you
-whether retrieval is any *good*. That is measured separately by an 87-question
-golden set scored on hit@5, recall@5, MRR, and nDCG@5, and gated in CI:
+whether retrieval is any *good*. That is measured separately by the 111 answerable
+questions of the golden set scored on hit@5, recall@5, MRR, and nDCG@5, and gated in CI:
 
 ```bash
 make eval        # all arms (downloads ~500MB of models on first run)
 make eval-fast   # BM25 arm only — no model download
 ```
 
-The golden set is split 54 dev / 33 held-out across three query categories (`direct`,
-`paraphrase`, `conceptual`). Decisions are made against `dev`; the
+The answerable cases are split 68 dev / 43 held-out across three query categories
+(`direct`, `paraphrase`, `conceptual`). A further 20 Out-of-Scope Cases, which the corpus
+cannot answer, are skipped by the retrieval harness and kept for the generation eval.
+Decisions are made against `dev`; the
 published table reports `holdout`, so no number on the public page is the score of a
 configuration chosen using those same questions.
 

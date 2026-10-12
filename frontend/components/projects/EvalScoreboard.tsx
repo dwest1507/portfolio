@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   evalRun,
   leadingArmIds,
@@ -8,10 +8,17 @@ import {
   sampleLabel,
   verdictLine,
   type EvalArm,
+  type EvalRun,
 } from '@/data/evalResults'
 
 function format(value: number | undefined): string {
   return value === undefined ? '—' : value.toFixed(3)
+}
+
+/** Questions won and lost against the shipped arm. The shipped arm itself has no entry. */
+function wonLost(arm: EvalArm, category: string): string {
+  const vs = category === 'all' ? arm.vsShipped : arm.vsShippedByCategory?.[category]
+  return vs ? `${vs.won} won · ${vs.lost} lost` : '—'
 }
 
 function categoryLabel(cat: string): string {
@@ -24,20 +31,34 @@ function categoryLabel(cat: string): string {
 /**
  * The measured run, rendered.
  *
- * Every claim here is derived from `evalResults.json`: which arm leads each column, and
- * the verdict line beneath the table. Nothing about the outcome is written by hand, so the
- * component cannot contradict its own numbers and needs no edit when the numbers move, an
- * arm is added, or the shipped configuration changes.
+ * Every claim here is derived from `evalResults.json`: which arm leads each column, how
+ * many questions each arm won and lost against production, and the verdict line beneath
+ * the table. Nothing about the outcome is written by hand, so the component cannot
+ * contradict its own numbers and needs no edit when the numbers move, an arm is added, or
+ * the shipped configuration changes.
+ *
+ * Only Candidate Arms are shown (ADR-0009): each torch Reference Arm scored identically to
+ * its ONNX twin, so the references repeated rows a reader could not act on. The highlight
+ * and the verdict are computed over the shown arms alone, so neither can point at a row
+ * that is not on the page.
+ *
+ * `run` defaults to the published run; it is a prop only so tests can render fixtures.
  */
-export default function EvalScoreboard() {
+export default function EvalScoreboard({ run: fullRun = evalRun }: { run?: EvalRun }) {
   const [activeCategory, setActiveCategory] = useState<string>('all')
-  const metrics = evalRun.metricNames
-  const categories = ['all', ...(evalRun.categories ?? [])]
+  // Prefixes the key's ids, which each row header points at with aria-describedby.
+  const keyId = useId()
+  const run: EvalRun = {
+    ...fullRun,
+    arms: fullRun.arms.filter((arm) => arm.eligibility === 'candidate'),
+  }
+  const metrics = run.metricNames
+  const categories = ['all', ...(run.categories ?? [])]
 
   // Sets, not single ids: every arm tied for a column's best is highlighted, so the
   // caption's "Best score per column in blue" stays true when two arms tie.
   const winners = Object.fromEntries(
-    metrics.map((m) => [m, new Set(leadingArmIds(m, evalRun.arms, activeCategory))])
+    metrics.map((m) => [m, new Set(leadingArmIds(m, run.arms, activeCategory))])
   )
 
   const getMetric = (arm: EvalArm, m: string) => {
@@ -82,22 +103,24 @@ export default function EvalScoreboard() {
             </div>
           </div>
           <span className="font-mono text-[9px] tracking-widest text-[#8a8f98]">
-            {sampleLabel(evalRun, activeCategory)} · {evalRun.corpusChunks} chunks
+            {sampleLabel(run, activeCategory)} · {run.corpusChunks} chunks
           </span>
         </div>
 
         {/* Wide content scrolls inside its own container rather than the page */}
         <div className="overflow-x-auto bg-[#0a0a0c]">
-          <table className="w-full min-w-[34rem] border-collapse text-left">
+          <table className="w-full min-w-[36rem] border-collapse text-left">
             <caption className="sr-only">
               Retrieval quality by pipeline configuration, measured on{' '}
-              {sampleLabel(evalRun, activeCategory)}.
+              {sampleLabel(run, activeCategory)}.
             </caption>
             <thead>
               <tr className="border-b border-white/[0.06]">
+                {/* The configuration column stays pinned while the numbers scroll
+                    sideways on a narrow screen, so every row stays identifiable. */}
                 <th
                   scope="col"
-                  className="px-4 py-3 font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+                  className="sticky left-0 z-10 bg-[#0a0a0c] px-4 py-3 font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
                 >
                   CONFIGURATION
                 </th>
@@ -105,20 +128,46 @@ export default function EvalScoreboard() {
                   <th
                     key={m}
                     scope="col"
-                    className="px-4 py-3 text-right font-mono text-[9px] tracking-widest text-[#8a8f98]/60"
+                    className="px-3 py-3 text-right font-mono text-[9px] tracking-widest whitespace-nowrap text-[#8a8f98]/60"
                   >
                     {metricLabel(m)}
                   </th>
                 ))}
+                {/* Raw disagreement, so a reader can see what the verdict rests on without
+                    reading any statistics (ADR-0006). */}
+                <th
+                  scope="col"
+                  className="px-3 py-3 text-right font-mono text-[9px] tracking-widest whitespace-nowrap text-[#8a8f98]/60"
+                >
+                  VS PRODUCTION
+                </th>
+                {/* Bands rather than timings: a raw timing moves between runs and
+                    machines, its order of magnitude does not. Both bands share one
+                    column so the table fits the article's width. */}
+                <th
+                  scope="col"
+                  title="Typical time per question once loaded (95th percentile) · time to load the configuration's indexes and models"
+                  className="px-3 py-3 text-right font-mono text-[9px] tracking-widest whitespace-nowrap text-[#8a8f98]/60"
+                >
+                  LATENCY · LOAD
+                </th>
               </tr>
             </thead>
             <tbody>
-              {evalRun.arms.map((arm: EvalArm) => (
+              {run.arms.map((arm: EvalArm) => (
                 <tr
                   key={arm.id}
-                  className="border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02]"
+                  data-arm={arm.id}
+                  className="group border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02]"
                 >
-                  <th scope="row" className="px-4 py-3 align-top font-normal">
+                  {/* Opaque because it is sticky: the numbers scroll underneath it.
+                      The arm's description lives in the key below and is read from
+                      there. */}
+                  <th
+                    scope="row"
+                    aria-describedby={`${keyId}-${arm.id}-description ${keyId}-${arm.id}-technical`}
+                    className="sticky left-0 z-10 bg-[#0a0a0c] px-4 py-3 align-top font-normal group-hover:bg-[#0e0e10]"
+                  >
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="text-sm text-[#ededef]">{arm.label}</span>
                       {arm.shipped && (
@@ -127,12 +176,6 @@ export default function EvalScoreboard() {
                         </span>
                       )}
                     </span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-[#8a8f98]">
-                      {arm.description}
-                    </span>
-                    <span className="mt-1 block font-mono text-[10px] leading-relaxed text-[#8a8f98]/50">
-                      {arm.technical}
-                    </span>
                   </th>
                   {metrics.map((m) => {
                     const isBest = winners[m].has(arm.id)
@@ -140,7 +183,7 @@ export default function EvalScoreboard() {
                     return (
                       <td
                         key={m}
-                        className={`px-4 py-3 text-right align-top font-mono text-sm tabular-nums ${
+                        className={`px-3 py-3 text-right align-top font-mono text-sm tabular-nums ${
                           isBest ? 'text-[#0ea5e9]' : 'text-[#8a8f98]'
                         }`}
                       >
@@ -149,6 +192,16 @@ export default function EvalScoreboard() {
                       </td>
                     )
                   })}
+                  <td className="px-3 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
+                    {wonLost(arm, activeCategory)}
+                  </td>
+                  <td className="px-3 py-3 text-right align-top font-mono text-xs whitespace-nowrap text-[#8a8f98] tabular-nums">
+                    <span>{arm.latencyBand.warm}</span>
+                    <span aria-hidden className="text-[#8a8f98]/40">
+                      {' · '}
+                    </span>
+                    <span>{arm.latencyBand.load}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -158,17 +211,50 @@ export default function EvalScoreboard() {
         {/* The verdict is computed from the table above it, never typed. */}
         <div className="border-t border-white/[0.06] bg-white/[0.03] px-4 py-3">
           <p className="text-sm leading-relaxed text-[#ededef]">
-            {verdictLine(evalRun, activeCategory)}
+            {verdictLine(run, activeCategory)}
           </p>
         </div>
+
+        {/* What each configuration is. Kept out of the rows so each row stays short
+            and the whole table, header included, fits on one screen. */}
+        <section
+          aria-labelledby={`${keyId}-heading`}
+          className="border-t border-white/[0.06] px-4 py-4"
+        >
+          <h3
+            id={`${keyId}-heading`}
+            className="mb-3 font-mono text-[8px] tracking-[0.3em] text-[#8a8f98]/40 uppercase"
+          >
+            Configurations
+          </h3>
+          <dl className="space-y-3">
+            {run.arms.map((arm: EvalArm) => (
+              <div key={arm.id}>
+                <dt className="text-sm text-[#ededef]">{arm.label}</dt>
+                <dd
+                  id={`${keyId}-${arm.id}-description`}
+                  className="mt-0.5 text-xs leading-relaxed text-[#8a8f98]"
+                >
+                  {arm.description}
+                </dd>
+                <dd
+                  id={`${keyId}-${arm.id}-technical`}
+                  className="mt-1 font-mono text-[10px] leading-relaxed text-[#8a8f98]/50"
+                >
+                  {arm.technical}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       </div>
 
       <figcaption className="mt-3 text-xs leading-relaxed text-[#8a8f98]">
-        Best score per column in blue. This table and the sentence above it are generated from the
-        evaluation harness.{' '}
+        Best score per column in blue. Only configurations that could run in production are shown.
+        This table and the sentence above it are generated from the evaluation harness.{' '}
         {/* Only claimed when the run actually measured the held-out portion — which portion
             gets published is the harness's call, not this component's. */}
-        {evalRun.split === 'holdout' && (
+        {run.split === 'holdout' && (
           <>
             The questions are the held-out portion of the labelled set: no configuration here was
             chosen against them, so these are measurements rather than the score of whatever won on
@@ -176,17 +262,17 @@ export default function EvalScoreboard() {
           </>
         )}
         Measured at{' '}
-        {evalRun.runUrl ? (
+        {run.runUrl ? (
           <a
-            href={evalRun.runUrl}
+            href={run.runUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#0ea5e9] underline decoration-[#0ea5e9]/30 underline-offset-4 transition-all duration-150 hover:decoration-[#0ea5e9]"
           >
-            commit {evalRun.commit}
+            commit {run.commit}
           </a>
         ) : (
-          <span className="font-mono">commit {evalRun.commit}</span>
+          <span className="font-mono">commit {run.commit}</span>
         )}
         .
       </figcaption>

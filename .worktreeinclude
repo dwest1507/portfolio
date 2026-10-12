@@ -1,0 +1,3 @@
+# Gitignored files that `claude --worktree` copies into each new worktree.
+backend/.env
+frontend/.env.local

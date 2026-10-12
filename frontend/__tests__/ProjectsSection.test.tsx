@@ -41,6 +41,7 @@ describe('ProjectsSection', () => {
 
     expect(screen.getByRole('heading', { name: 'Chat with Nietzsche' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Baby Names Explorer' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'This Portfolio' })).not.toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: 'Generate Music with AI' })
     ).not.toBeInTheDocument()

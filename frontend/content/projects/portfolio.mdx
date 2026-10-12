@@ -28,13 +28,25 @@ The thresholds sit _below_ measured performance with headroom for noise. They ar
 
 ## The current results
 
-Everything in this table is generated. The harness runs in CI, writes its results to a file, and commits them; this page renders that file. The sentence underneath the table — which configuration is in production, and which one is actually winning — is derived from the numbers rather than written by me.
+Everything in this table is generated. The harness runs in CI, writes its results to a file, and commits them; this page renders that file. The sentence underneath the table — which configuration is in production, and whether any other one is distinguishably better or worse — is derived from the numbers rather than written by me. On a few dozen held-out questions, a lead of one or two questions is noise, so a configuration is only called ahead or behind when the questions it disagrees with production on are too lopsided to be chance. The last column shows that raw disagreement: how many questions each configuration got right that production missed, and the reverse.
 
 <EvalScoreboard />
 
 That last part is deliberate, and it is the only way I could find to publish results honestly over time. If I wrote the conclusion by hand, it would be a claim about one afternoon that slowly stopped being true, and I would be the last person to notice. Generating it means the page cannot flatter the architecture I happened to build: when the simplest configuration beats the elaborate one, the page says so, on its own, until I fix it.
 
 It also means this write-up does not need rewriting when the system changes. The numbers move, the verdict follows them, and the prose around it stays true because it never claimed to know the answer.
+
+## How well it answers
+
+Retrieval only says whether the right text reached the model. It does not say whether the answer was right, stayed inside that text, or declined when it should have. A second harness measures that: it asks the chatbot every held-out question, splits each answer into claims, and has a separate judge model, pinned to an exact version, check each claim against the retrieved text one passage at a time. Before I trusted the judge, I checked it against sentences I had labelled by hand, and it failed the first time.
+
+<GenerationScoreboard />
+
+Faithfulness and decline accuracy gate every change that could alter an answer: the prompt, the retrieval code, the documents and the questions. Unlike retrieval, the same commit does not give the same answers twice, so I ran it three times, set the floors below the observed spread, and round each published score to a step that noise alone cannot move.
+
+The retrieval table can only say which configuration finds the right text more often. Whether that changes what visitors are told is a question for this harness, so a separate run, triggered by hand, answers the same questions through every configuration that could ship. A configuration replaces keyword search only if its answers convey distinguishably more of the facts they should, without being distinguishably less faithful or worse at declining, and stays within about a tenth of a second per query. I decide on one set of questions and publish another, so the table below confirms the choice rather than makes it.
+
+<GenerationComparison />
 
 ## What the evaluation changed
 
@@ -62,7 +74,7 @@ The corpus is small, and much of it is written as anticipated questions with ans
 
 That bias cuts directly against the conclusion I drew from it, which is why the retired configurations are still measured rather than deleted from the harness: the result that told me to remove them is the same result I expect to reverse as the corpus grows past the point where the questions and the documents share vocabulary.
 
-I would rather state that plainly than let a table imply more than it earned. The full write-up of the method, the biases, and what is still unmeasured — generation faithfulness, refusal behaviour on out-of-scope questions, adversarial robustness — is in the repository.
+I would rather state that plainly than let a table imply more than it earned. The full write-up of the method, the biases, and what is still unmeasured — adversarial robustness, and multi-turn conversations — is in the repository.
 
 ## Skills Demonstrated
 

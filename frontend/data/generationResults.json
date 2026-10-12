@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "shippedArm": {
+    "generatedAt": "2026-10-11T17:47:36+00:00",
+    "commit": "94a7b95",
+    "runUrl": null,
+    "split": "holdout",
+    "arm": "bm25",
+    "armLabel": "Keyword only",
+    "generationModel": "gpt-6-luna",
+    "reasoningEffort": "low",
+    "judge": "jev-1.13.0",
+    "splitter": "gpt-6-luna",
+    "corpusChunks": 123,
+    "questions": 39,
+    "answerable": 33,
+    "outOfScope": 6,
+    "metrics": {
+      "factRecall": 0.7,
+      "faithfulness": 0.95,
+      "declineAccuracy": 1.0
+    },
+    "steps": {
+      "factRecall": 0.1,
+      "faithfulness": 0.05,
+      "declineAccuracy": 0.005
+    },
+    "costPerAnswerUsd": 0.0001
+  },
+  "comparison": null
+}

@@ -1,0 +1,95 @@
+{
+  "gate": "generation",
+  "writtenBy": "eval/recalibrate.py generation — never edit by hand (ADR-0012)",
+  "rule": "five judged runs of the Shipped Arm over the full Golden Set; step = the smallest of 0.005/0.01/0.02/0.05/0.1 no smaller than the metric's held-out range; Floor = lowest run − max(2 × range, step) over all cases, rounded down to the step",
+  "arm": "bm25",
+  "inputs": {
+    "runs": [
+      {
+        "generated": "0e8b406ff5863114ebe3ed582cd298211465c6ff",
+        "judged": "6dead1d"
+      },
+      {
+        "generated": "0e8b406ff5863114ebe3ed582cd298211465c6ff",
+        "judged": "6dead1d"
+      },
+      {
+        "generated": "6dead1d",
+        "judged": "6dead1d"
+      },
+      {
+        "generated": "6dead1d",
+        "judged": "6dead1d"
+      },
+      {
+        "generated": "6dead1d",
+        "judged": "6dead1d"
+      }
+    ],
+    "holdout": {
+      "factRecall": {
+        "values": [
+          0.651786,
+          0.633929,
+          0.642857,
+          0.651786,
+          0.633929
+        ],
+        "range": 0.017857
+      },
+      "faithfulness": {
+        "values": [
+          0.96,
+          0.951807,
+          0.934211,
+          0.974026,
+          0.987013
+        ],
+        "range": 0.052802
+      },
+      "declineAccuracy": {
+        "values": [
+          0.897959,
+          0.918367,
+          0.897959,
+          0.897959,
+          0.897959
+        ],
+        "range": 0.020408
+      }
+    },
+    "all": {
+      "faithfulness": {
+        "values": [
+          0.954338,
+          0.948113,
+          0.955882,
+          0.971698,
+          0.945813
+        ],
+        "range": 0.025885
+      },
+      "declineAccuracy": {
+        "values": [
+          0.900763,
+          0.916031,
+          0.908397,
+          0.900763,
+          0.908397
+        ],
+        "range": 0.015267
+      }
+    }
+  },
+  "steps": {
+    "factRecall": 0.02,
+    "faithfulness": 0.1,
+    "declineAccuracy": 0.05
+  },
+  "floors": {
+    "faithfulness": 0.8,
+    "declineAccuracy": 0.85
+  },
+  "fingerprint": "sha256:e27d36616c2f04074e36e5ea4e352f3506043911ba5317e97c66e8291f7eba67",
+  "commit": "6dead1d"
+}

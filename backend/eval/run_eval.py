@@ -12,20 +12,36 @@ MRR, and nDCG@k so the arms can be compared directly:
     rerank       hybrid candidates re-ordered by the cross-encoder
     bm25+rerank  keyword candidates re-ordered by the cross-encoder, no dense stage
 
+and three Candidate Arms that run their models on ONNX Runtime instead of torch, so
+production could ship them (ADR-0009). The five above are Reference Arms:
+
+    onnx-dense           `dense` with the same embedding model on ONNX Runtime
+    onnx-hybrid          `hybrid` with onnx-dense as its dense stage
+    bm25+onnx-rerank-20  20 keyword candidates re-ordered by an ONNX cross-encoder
+
 Usage:
     uv run python eval/run_eval.py                      # all arms
     uv run python eval/run_eval.py --arms bm25          # no model download
-    uv run python eval/run_eval.py --check              # exit 1 below thresholds
+    uv run python eval/run_eval.py --check              # exit 1 if stale or below a Floor
     uv run python eval/run_eval.py --json results.json  # machine-readable output
     uv run python eval/run_eval.py --publish            # refresh the published results
 
-A chunk counts as relevant when its text contains any of the case's
-`relevant_phrases`. Labelling by phrase rather than chunk ID keeps the golden
+A chunk counts as relevant when any of the case's `relevant_phrases` appears in
+its text beginning at the start of a word (`no` does not match "know"; `mentor`
+does match "mentoring"). Labelling by phrase rather than chunk ID keeps the golden
 set valid when the corpus is re-chunked.
 
 The golden set is split into `dev` and `holdout` portions (see golden_set.json).
 Decide things on `dev`; `holdout` is what gets published, so a published number is
 never a number something was tuned against. `--split` selects which portion runs.
+
+Each arm is also timed: warm p50/p95 per query and the time to load its indexes and
+models. The CLI and --json output show those raw timings; --publish records only their
+Latency Bands (see publish.latency_band).
+
+Out-of-Scope Cases (`answerable: false`) are questions the corpus cannot answer. They
+exist for the generation eval and are skipped here by that label, then counted in the
+summary line, rather than tripping the "matches no chunk" error.
 """
 
 from __future__ import annotations
@@ -35,6 +51,7 @@ import json
 import math
 import re
 import sys
+import time
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -44,10 +61,17 @@ sys.path.insert(0, str(BACKEND_ROOT))
 from eval.publish import (  # (needs the sys.path line above)
     ARMS,
     build_results_document,
+    latency_band,
     shipped_arm_id,
     update_markdown_block,
     verdict_line,
     write_results_document,
+)
+from eval.recalibration import (
+    RETRIEVAL_FLOORS_PATH,
+    STALE,
+    read_record,
+    retrieval_fingerprint,
 )
 
 GOLDEN_SET_PATH = Path(__file__).resolve().parent / "golden_set.json"
@@ -57,36 +81,34 @@ GOLDEN_SET_PATH = Path(__file__).resolve().parent / "golden_set.json"
 RESULTS_PATH = REPO_ROOT / "frontend" / "data" / "evalResults.json"
 EVALUATION_DOC_PATH = REPO_ROOT / "docs" / "evaluation.md"
 
-# Regression floors for `--check`. Not targets — they sit below measured
-# performance so real regressions fail CI while ordinary noise does not.
-#
-# The gate is hit@5 and MRR, deliberately NOT recall@5. recall@5 is reported
-# because it is informative, but it is a poor gate here: several golden
-# questions have more than five relevant chunks, so their recall@5 is capped
-# below 1.0 by construction and the aggregate can never reach a high floor.
-# hit@5 ("did any grounding text reach the model?") is what actually determines
-# whether the LLM can answer, and MRR captures how far up the list it landed.
-#
-# The floors sit below measured performance with headroom for noise, so a real
-# regression fails the build while ordinary variation does not. They are floors,
-# never targets: tuning a parameter until a floor is cleared is fitting to the
-# golden set. See docs/evaluation.md.
-_FLOORS = {"hit@5": 0.85, "mrr": 0.75}
-
-# Keyed by metric name at the default cutoff. `--check` is only meaningful at
-# that cutoff, which check_thresholds() enforces rather than silently comparing
-# a hit@20 against a floor calibrated for hit@5.
+# Regression Floors for `--check` live in eval/floors/retrieval.json, not here. Only
+# `eval/recalibrate.py retrieval` writes them, by a fixed rule, when the Golden Set or the
+# instrument changes (ADR-0012). They are Floors, never targets: tuning a parameter until
+# a Floor is cleared is fitting to the Golden Set. See docs/evaluation.md.
+# Floors are keyed by metric name at the default cutoff. `--check` is only meaningful
+# at that cutoff, which check_floors() enforces rather than silently comparing a hit@20
+# against a Floor derived for hit@5.
 DEFAULT_TOP_K = 5
 
 # The metric the published verdict is decided on: "did any grounding text reach the
 # model?" is what determines whether the LLM can answer at all.
 GATING_METRIC = f"hit@{DEFAULT_TOP_K}"
 
+# The metrics the gate defends with a Floor, at the default cutoff. Deliberately not
+# recall@5: several Golden cases have more than five relevant chunks, so their recall@5
+# is capped below 1.0 by construction. hit@5 ("did any grounding text reach the model?")
+# decides whether the LLM can answer, and MRR how far up the list it landed.
+GATED_METRICS = (GATING_METRIC, "mrr")
+
 # Golden-set portions. "all" is not a third portion, it is both of them together.
 SPLITS = ("all", "dev", "holdout")
 
 # Query Categories: lexical and conceptual relationship of questions to the Corpus.
 VALID_CATEGORIES = ("direct", "paraphrase", "conceptual")
+
+# Case Origins: whether a case was written by hand or derived from a real visitor's
+# question. A case without one was authored.
+VALID_ORIGINS = ("authored", "visitor")
 
 # The two splits that are not interchangeable, and why each is what it is.
 #
@@ -102,19 +124,15 @@ VALID_CATEGORIES = ("direct", "paraphrase", "conceptual")
 PUBLISHED_SPLIT = "holdout"
 GATED_SPLIT = "all"
 
-# Gated arms, keyed by ID. Only the SHIPPED arm is gated, and it is looked up rather
-# than named so the gate follows production when the shipped arm changes.
+# Only the SHIPPED arm is gated, and it is looked up rather than named so the gate
+# follows production when the shipped arm changes.
 #
 # Every other arm is measured and published as a baseline for comparison, not defended
-# as a quality bar. Two reasons that is the right line to draw. A floor is there to stop
-# a change degrading what a visitor is actually served, and nothing is served by an arm
-# production does not run. And floors are calibrated against a corpus: when the corpus
-# grows, floors on four arms means four constants to re-justify, and a constant nudged
-# to make a build pass is the magic number this file exists to argue against.
+# as a quality bar. A Floor is there to stop a change degrading what a visitor is
+# actually served, and nothing is served by an arm production does not run (ADR-0004).
 #
 # `--check` names every ungated arm explicitly, and a run that gates nothing is a
 # failure, so this cannot quietly become a gate over nothing.
-THRESHOLDS: dict[str, dict[str, float]] = {shipped_arm_id(): dict(_FLOORS)}
 
 
 def metric_names_for(top_k: int) -> list[str]:
@@ -131,18 +149,78 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
+def _phrase_pattern(phrase: str) -> re.Pattern[str]:
+    """A phrase matches where it begins a word, and may end mid-word.
+
+    The start is anchored so `no` cannot match inside "know" and `R:` cannot match
+    inside "ER:". The end is left open so a label can name a stem: `mentor` still
+    matches "mentoring" and `rate limit` still matches "rate limiting".
+    """
+    return re.compile(r"(?<![a-z0-9])" + re.escape(_normalize(phrase)))
+
+
 def is_relevant(chunk_text: str, phrases: list[str]) -> bool:
     haystack = _normalize(chunk_text)
-    return any(_normalize(p) in haystack for p in phrases)
+    return any(_phrase_pattern(p).search(haystack) for p in phrases)
 
 
 def relevant_ids(chunks: list[dict], phrases: list[str]) -> set[int]:
     return {i for i, c in enumerate(chunks) if is_relevant(c["text"], phrases)}
 
 
+# The largest share of the Corpus a single Relevant Phrase may mark relevant. Above it
+# the phrase hands every arm a hit whatever it retrieved, which is a labelling defect
+# rather than a label. A broad phrase that is nonetheless correct (the current
+# employer's name) goes on the allow-list in golden_set.json rather than raising this.
+MAX_PHRASE_SHARE = 0.15
+
+
+def overbroad_phrases(chunks: list[dict], cases: list[dict], allowed: list[str]) -> list[dict]:
+    """Every Relevant Phrase matching more than MAX_PHRASE_SHARE of `chunks`, unless allowed.
+
+    Each finding names the phrase, its share of the Corpus, and the cases that use it.
+    """
+    allowed_normalized = {_normalize(p) for p in allowed}
+    cases_by_phrase: dict[str, list[str]] = {}
+    for case in cases:
+        for phrase in case.get("relevant_phrases", []):
+            cases_by_phrase.setdefault(phrase, []).append(case["id"])
+
+    findings = []
+    for phrase, case_ids in cases_by_phrase.items():
+        if _normalize(phrase) in allowed_normalized:
+            continue
+        share = len(relevant_ids(chunks, [phrase])) / len(chunks)
+        if share > MAX_PHRASE_SHARE:
+            findings.append({"phrase": phrase, "share": share, "cases": case_ids})
+    return findings
+
+
 # ---------------------------------------------------------------------------
 # Golden-set splits
 # ---------------------------------------------------------------------------
+
+
+def is_answerable(case: dict) -> bool:
+    """False for an Out-of-Scope Case: one the Corpus cannot answer. Defaults to True."""
+    return case.get("answerable", True)
+
+
+def answerable_cases(cases: list[dict]) -> list[dict]:
+    """The cases retrieval is scored on.
+
+    An Out-of-Scope Case has no Relevant Phrases, so there is nothing for retrieval to
+    find; it is scored only on whether the answer Declines (see the generation harness).
+    It is excluded here by its own label rather than by the "matches no chunk" error, so
+    that error still fails loudly when an answerable case's label is broken.
+    """
+    return [c for c in cases if is_answerable(c)]
+
+
+def describe_cases(cases: list[dict]) -> str:
+    """How many cases are scored for retrieval, and how many were skipped as out of scope."""
+    answerable = len(answerable_cases(cases))
+    return f"{answerable} answerable + {len(cases) - answerable} out-of-scope"
 
 
 def select_cases(cases: list[dict], split: str) -> list[dict]:
@@ -162,11 +240,52 @@ def select_cases(cases: list[dict], split: str) -> list[dict]:
             f"{', '.join(unlabelled)}. Every case belongs to exactly one of dev/holdout."
         )
 
-    unlabelled_category = [c["id"] for c in cases if c.get("category") not in VALID_CATEGORIES]
+    # An Out-of-Scope Case carries no category: a Query Category describes how a
+    # question's phrasing relates to the Corpus, and it has no such relationship.
+    unlabelled_category = [
+        c["id"] for c in answerable_cases(cases) if c.get("category") not in VALID_CATEGORIES
+    ]
     if unlabelled_category:
         raise ValueError(
             "Golden cases carry no valid category: "
             f"{', '.join(unlabelled_category)}. Every case belongs to one of {', '.join(VALID_CATEGORIES)}."
+        )
+
+    unknown_origin = [c["id"] for c in cases if c.get("origin", "authored") not in VALID_ORIGINS]
+    if unknown_origin:
+        raise ValueError(
+            "Golden cases carry no valid origin: "
+            f"{', '.join(unknown_origin)}. Expected one of {', '.join(VALID_ORIGINS)}."
+        )
+
+    unlabelled_phrases = [c["id"] for c in answerable_cases(cases) if not c.get("relevant_phrases")]
+    if unlabelled_phrases:
+        raise ValueError(
+            "Answerable golden cases carry no Relevant Phrases: "
+            f"{', '.join(unlabelled_phrases)}. Label them, or mark a question the Corpus "
+            "cannot answer `answerable: false`."
+        )
+
+    # Fact Recall is the share of a case's Required Facts an answer conveys: a case
+    # with none could never be scored, and would drop out of that metric unnoticed.
+    unlabelled_facts = [c["id"] for c in answerable_cases(cases) if not c.get("required_facts")]
+    if unlabelled_facts:
+        raise ValueError(
+            "Answerable golden cases carry no Required Facts: "
+            f"{', '.join(unlabelled_facts)}. Write the facts a correct answer conveys, or "
+            "mark a question the Corpus cannot answer `answerable: false`."
+        )
+
+    labelled_out_of_scope = [
+        c["id"]
+        for c in cases
+        if not is_answerable(c) and (c.get("relevant_phrases") or c.get("required_facts"))
+    ]
+    if labelled_out_of_scope:
+        raise ValueError(
+            "Out-of-Scope cases carry labels: "
+            f"{', '.join(labelled_out_of_scope)}. A question the Corpus cannot answer has "
+            "no Relevant Phrases or Required Facts."
         )
 
     if split == "all":
@@ -195,8 +314,7 @@ def reciprocal_rank(retrieved: list[int], relevant: set[int], k: int) -> float:
     """Reciprocal rank of the first relevant chunk within the top k.
 
     Truncated at k like every other metric here. An untruncated MRR measured on
-    a --top-k 20 run is not comparable to the thresholds, which were calibrated
-    at k=5.
+    a --top-k 20 run is not comparable to the Floors, which were derived at k=5.
     """
     for rank, doc_id in enumerate(retrieved[:k], start=1):
         if doc_id in relevant:
@@ -223,6 +341,12 @@ def ndcg_at_k(retrieved: list[int], relevant: set[int], k: int) -> float:
 # ---------------------------------------------------------------------------
 
 
+#: The candidate pool of `bm25+onnx-rerank-20`: fixed, not a multiple of the cutoff. The
+#: 2×k pool of the older re-ranking arms can only recover chunks BM25 already put in its
+#: top 10, and widening it is a new Arm rather than an edit to theirs (ADR-0009).
+RERANK_POOL = 20
+
+
 def _retrievers(pipeline, top_k: int) -> dict:
     """How each arm retrieves, keyed by the same IDs as ARM_SPECS.
 
@@ -241,12 +365,19 @@ def _retrievers(pipeline, top_k: int) -> dict:
 
         return run
 
+    def onnx_reranked_from_pool(question: str) -> list[int]:
+        candidates = pipeline.sparse_search(question, top_k=RERANK_POOL)
+        return pipeline.onnx_rerank(question, candidates, top_k=top_k)
+
     return {
         "bm25": lambda q: pipeline.sparse_search(q, top_k=top_k),
         "dense": lambda q: pipeline.dense_search(q, top_k=top_k),
         "hybrid": lambda q: pipeline.hybrid_search(q, top_k=top_k),
         "rerank": reranked(pipeline.hybrid_search),
         "bm25+rerank": reranked(pipeline.sparse_search),
+        "onnx-dense": lambda q: pipeline.onnx_dense_search(q, top_k=top_k),
+        "onnx-hybrid": lambda q: pipeline.onnx_hybrid_search(q, top_k=top_k),
+        "bm25+onnx-rerank-20": onnx_reranked_from_pool,
     }
 
 
@@ -270,16 +401,62 @@ def retrievers_for_arms(pipeline, top_k: int) -> dict:
     return retrievers
 
 
-def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
-    """Run every case through one retrieval arm and average the metrics."""
+#: What each arm loads on top of the chunks and BM25 index every pipeline reads at
+#: construction, named by the RAGPipeline attribute that loads it on first use.
+_ARM_LOADS: dict[str, tuple[str, ...]] = {
+    "bm25": (),
+    "dense": ("faiss_index", "embedder"),
+    "hybrid": ("faiss_index", "embedder"),
+    "rerank": ("faiss_index", "embedder", "cross_encoder"),
+    "bm25+rerank": ("cross_encoder",),
+    "onnx-dense": ("onnx_embeddings", "onnx_embedder"),
+    "onnx-hybrid": ("onnx_embeddings", "onnx_embedder"),
+    "bm25+onnx-rerank-20": ("onnx_cross_encoder",),
+}
+
+
+def measure_load(arm: str, build=None, clock=time.perf_counter) -> float:
+    """Seconds from nothing loaded to `arm` ready for its first query.
+
+    Timed on a fresh pipeline, so a model an earlier arm already loaded is loaded again
+    and counted here too. Call it after the arm has been evaluated, so a first-ever run
+    has already downloaded the weights: the band reports loading, not the network.
+    """
+    build = build or build_pipeline
+    start = clock()
+    pipeline = build()
+    for attribute in _ARM_LOADS[arm]:
+        getattr(pipeline, attribute)
+    return clock() - start
+
+
+def percentile(values: list[float], p: float) -> float:
+    """Nearest-rank percentile: the smallest value at least `p`% of `values` do not exceed."""
+    ordered = sorted(values)
+    return ordered[max(math.ceil(p / 100 * len(ordered)) - 1, 0)]
+
+
+def evaluate_arm(
+    pipeline, arm: str, cases: list[dict], top_k: int, clock=time.perf_counter
+) -> dict:
+    """Run every case through one retrieval arm, averaging the metrics and timing each query.
+
+    One untimed query runs first: the models load lazily, so an arm's first query is a
+    model load rather than a warm query (see `measure_load` for that cost).
+    """
     retrievers = retrievers_for_arms(pipeline, top_k)
     if arm not in retrievers:
         raise ValueError(f"Unknown arm: {arm}")
     retrieve = retrievers[arm]
 
     per_case = []
+    timings = []
 
-    for case in cases:
+    scored = answerable_cases(cases)
+    if scored:
+        retrieve(scored[0]["question"])
+
+    for case in scored:
         relevant = relevant_ids(pipeline.chunks, case["relevant_phrases"])
         if not relevant:
             raise ValueError(
@@ -287,7 +464,9 @@ def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
                 "Fix the phrases or rebuild the index."
             )
 
+        start = clock()
         retrieved = retrieve(case["question"])
+        timings.append(clock() - start)
 
         per_case.append(
             {
@@ -316,6 +495,8 @@ def evaluate_arm(pipeline, arm: str, cases: list[dict], top_k: int) -> dict:
         "summary": summary,
         "by_category": by_category,
         "cases": per_case,
+        # Raw seconds, for the CLI and --json output. Only bands are published.
+        "latency": {"p50": percentile(timings, 50), "p95": percentile(timings, 95)},
     }
 
 
@@ -347,66 +528,117 @@ def format_table(results: list[dict], top_k: int) -> str:
     return "\n".join(lines)
 
 
-def check_thresholds(results: list[dict], top_k: int, split: str = GATED_SPLIT) -> int:
-    """Gate the run against THRESHOLDS. Returns a process exit code.
+def format_latency_table(results: list[dict]) -> str:
+    """Raw timings beside the Latency Bands they publish as.
+
+    The raw numbers appear here and in --json output only: they move between runs and
+    runners, so the published document carries the bands alone.
+    """
+    headers = ["arm", "p50 ms", "p95 ms", "load s", "warm band", "load band"]
+    rows = [
+        [
+            r["arm"],
+            f"{r['latency']['p50'] * 1000:.2f}",
+            f"{r['latency']['p95'] * 1000:.2f}",
+            f"{r['latency']['load']:.3f}",
+            latency_band(r["latency"]["p95"]),
+            latency_band(r["latency"]["load"]),
+        ]
+        for r in results
+    ]
+    widths = [max(len(row[i]) for row in [headers, *rows]) for i in range(len(headers))]
+    lines = [
+        "  ".join(h.ljust(w) for h, w in zip(headers, widths)),
+        "  ".join("-" * w for w in widths),
+    ]
+    lines += ["  ".join(v.ljust(w) for v, w in zip(row, widths)) for row in rows]
+    return "\n".join(lines)
+
+
+def check_floors(
+    results: list[dict],
+    top_k: int,
+    golden_cases: list[dict],
+    split: str = GATED_SPLIT,
+    record: dict | None = None,
+) -> int:
+    """Gate the run against the retrieval Floors record. Returns a process exit code.
+
+    `golden_cases` is the whole committed Golden Set, whatever split ran, and `record`
+    defaults to the committed one (eval/floors/retrieval.json).
+
+    A record whose fingerprint no longer matches the Golden Set fails first, on its own,
+    with "Floors stale: Recalibrate": its Floors were derived on a set that no longer
+    exists, so comparing against them would be neither a pass nor a regression.
 
     Three ways a run can look gated without being gated. The first two were real
     behaviour once; the third is what a `--split` flag would have introduced:
 
-    1. An arm with no THRESHOLDS entry (``dense``) contributed no checks, so a
-       dense-only ``--check`` run compared nothing and still printed "OK". A run
-       in which *nothing* was gated is now a failure, and any ungated arm is
-       named explicitly rather than passing in silence.
-    2. Floors are calibrated at k=5. Comparing them against metrics measured at
-       another cutoff is meaningless, so a non-default ``--top-k`` cannot be
-       gated.
-    3. Floors are calibrated on the whole golden set. A single split is a smaller,
+    1. An ungated arm (``dense``) contributed no checks, so a dense-only ``--check``
+       run compared nothing and still printed "OK". A run in which *nothing* was gated
+       is now a failure, and any ungated arm is named explicitly rather than passing in
+       silence.
+    2. Floors are derived at k=5. Comparing them against metrics measured at another
+       cutoff is meaningless, so a non-default ``--top-k`` cannot be gated.
+    3. Floors are derived on the whole golden set. A single split is a smaller,
        noisier sample against the same absolute numbers, so gating one would fail
        the build on sampling noise or pass a real regression by luck.
     """
+    record = record if record is not None else read_record(RETRIEVAL_FLOORS_PATH)
+    expected = retrieval_fingerprint(golden_cases)
+    if record["fingerprint"] != expected:
+        print(
+            f"\nFAIL — {STALE}. The Golden Set no longer matches the retrieval Floors "
+            f"record (record {record['fingerprint'][:19]}…, Golden Set {expected[:19]}…). "
+            "Run `uv run --frozen python eval/recalibrate.py retrieval` in this same "
+            "change (ADR-0012)."
+        )
+        return 1
+
     if top_k != DEFAULT_TOP_K:
         print(
-            f"\nFAIL — --check is calibrated for --top-k {DEFAULT_TOP_K}, got {top_k}. "
-            "Re-run at the default cutoff, or update THRESHOLDS deliberately."
+            f"\nFAIL — --check is derived for --top-k {DEFAULT_TOP_K}, got {top_k}. "
+            "Re-run at the default cutoff."
         )
         return 1
 
     if split != GATED_SPLIT:
         print(
-            f"\nFAIL — --check is calibrated on the {GATED_SPLIT} golden set, got "
-            f"--split {split}. A split is a smaller sample against the same floors."
+            f"\nFAIL — --check Floors are derived on the {GATED_SPLIT} golden set, got "
+            f"--split {split}. A split is a smaller sample against the same Floors."
         )
         return 1
 
+    floors_by_arm = {shipped_arm_id(): record["floors"]}
     failures: list[str] = []
     gated: list[str] = []
     ungated: list[str] = []
 
     for r in results:
-        thresholds = THRESHOLDS.get(r["arm"])
-        if not thresholds:
+        floors = floors_by_arm.get(r["arm"])
+        if not floors:
             ungated.append(r["arm"])
             continue
         gated.append(r["arm"])
-        for metric, floor in thresholds.items():
+        for metric, floor in floors.items():
             actual = r["summary"][metric]
             if actual < floor:
                 failures.append(f"{r['arm']}.{metric} = {actual:.3f} < {floor:.3f}")
 
     if ungated:
-        print(f"\nNOT GATED — no thresholds configured for: {', '.join(ungated)}")
+        print(f"\nNOT GATED — no Floors for: {', '.join(ungated)}")
 
     if failures:
-        print("\nFAIL — retrieval quality below threshold:")
+        print("\nFAIL — retrieval quality below its Floors:")
         for f in failures:
             print(f"  {f}")
         return 1
 
     if not gated:
-        print("\nFAIL — --check ran but gated nothing. No evaluated arm has thresholds.")
+        print("\nFAIL — --check ran but gated nothing. No evaluated arm has Floors.")
         return 1
 
-    print(f"\nOK — all gated arms ({', '.join(gated)}) meet their thresholds.")
+    print(f"\nOK — all gated arms ({', '.join(gated)}) meet their Floors.")
     return 0
 
 
@@ -436,7 +668,7 @@ def main() -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Exit non-zero if any evaluated arm falls below its threshold.",
+        help="Exit non-zero if the Floors record is stale, or the Shipped Arm falls below a Floor.",
     )
     parser.add_argument("--json", type=Path, help="Write full per-case results to this path.")
     parser.add_argument(
@@ -459,11 +691,16 @@ def main() -> int:
     pipeline = build_pipeline()
     print(
         f"Corpus: {len(pipeline.chunks)} chunks | "
-        f"Golden set: {len(cases)} questions ({args.split})\n"
+        f"Golden set: {describe_cases(cases)} questions ({args.split})\n"
     )
 
     results = [evaluate_arm(pipeline, arm, cases, args.top_k) for arm in args.arms]
+    # After every arm has run, so any model weights are already downloaded.
+    for r in results:
+        r["latency"]["load"] = measure_load(r["arm"])
     print(format_table(results, args.top_k))
+    print(f"\nLatency ({len(answerable_cases(cases))} warm queries per arm)")
+    print(format_latency_table(results))
 
     all_categories = sorted({cat for r in results for cat in r.get("by_category", {})})
     for cat in all_categories:
@@ -519,7 +756,7 @@ def main() -> int:
         document = build_results_document(
             results,
             corpus_chunks=len(pipeline.chunks),
-            golden_questions=len(cases),
+            golden_questions=len(answerable_cases(cases)),
             top_k=args.top_k,
             gating_metric=GATING_METRIC,
             split=args.split,
@@ -541,7 +778,7 @@ def main() -> int:
         print(f"Verdict: {verdict_line(document)}")
 
     if args.check:
-        return check_thresholds(results, args.top_k, args.split)
+        return check_floors(results, args.top_k, golden["cases"], args.split)
 
     return 0
 

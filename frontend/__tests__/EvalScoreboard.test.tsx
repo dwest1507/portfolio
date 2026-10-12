@@ -8,13 +8,21 @@ import {
   sampleLabel,
   shippedArm,
   verdictLine,
+  type EvalArm,
   type EvalRun,
 } from '@/data/evalResults'
+
+/** The table row for one arm. Keyed off the id, since labels need not be unique. */
+function rowFor(armId: string): HTMLElement {
+  const row = document.querySelector<HTMLElement>(`tr[data-arm="${armId}"]`)
+  if (!row) throw new Error(`no row for arm ${armId}`)
+  return row
+}
 
 /** A run with two arms, shaped exactly like the generated file. */
 function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: '2026-09-04T00:00:00+00:00',
     commit: 'abc1234',
     runUrl: 'https://example.test/run/1',
@@ -33,11 +41,19 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
         description: 'Word matching.',
         technical: 'BM25.',
         shipped: false,
+        eligibility: 'candidate',
         metrics: { 'hit@5': 1.0, mrr: 0.5 },
         byCategory: {
           direct: { 'hit@5': 1.0, mrr: 0.5 },
           paraphrase: { 'hit@5': 0.6, mrr: 0.3 },
         },
+        mrrInterval: [0.35, 0.65],
+        vsShipped: { won: 4, lost: 2, outcome: 'indistinguishable' },
+        vsShippedByCategory: {
+          direct: { won: 4, lost: 0, outcome: 'indistinguishable' },
+          paraphrase: { won: 0, lost: 2, outcome: 'indistinguishable' },
+        },
+        latencyBand: { warm: '~1ms', load: '~10ms' },
       },
       {
         id: 'rerank',
@@ -45,25 +61,65 @@ function makeRun(overrides: Partial<EvalRun> = {}): EvalRun {
         description: 'Two-stage.',
         technical: 'Cross-encoder.',
         shipped: true,
+        eligibility: 'candidate',
         metrics: { 'hit@5': 0.9, mrr: 0.8 },
         byCategory: {
           direct: { 'hit@5': 0.9, mrr: 0.8 },
           paraphrase: { 'hit@5': 0.95, mrr: 0.85 },
         },
+        mrrInterval: [0.7, 0.9],
+        vsShipped: null,
+        vsShippedByCategory: null,
+        latencyBand: { warm: '~100ms', load: '~10s' },
       },
     ],
     ...overrides,
   }
 }
 
+/** The arms the page shows: only those that could ship (ADR-0009). */
+const shownArms = evalRun.arms.filter((a) => a.eligibility === 'candidate')
+
 describe('EvalScoreboard', () => {
-  it('renders a row for every measured arm', () => {
+  it('renders a row for every Candidate Arm', () => {
     render(<EvalScoreboard />)
-    for (const arm of evalRun.arms) {
-      // Keyed off the description, which is unique per arm — labels need not be.
-      const row = screen.getByText(arm.description).closest('tr')!
-      expect(within(row).getByText(arm.label)).toBeInTheDocument()
-      expect(within(row).getByText(arm.technical)).toBeInTheDocument()
+    for (const arm of shownArms) {
+      expect(within(rowFor(arm.id)).getByText(arm.label)).toBeInTheDocument()
+    }
+  })
+
+  it('leaves Reference Arms off the page', () => {
+    render(<EvalScoreboard />)
+    for (const arm of evalRun.arms.filter((a) => a.eligibility === 'reference')) {
+      expect(document.querySelector(`tr[data-arm="${arm.id}"]`)).toBeNull()
+      expect(screen.queryByText(arm.description)).not.toBeInTheDocument()
+    }
+  })
+
+  it('keeps descriptions out of the rows, so each row stays one line tall', () => {
+    render(<EvalScoreboard />)
+    for (const arm of shownArms) {
+      const row = rowFor(arm.id)
+      expect(within(row).queryByText(arm.description)).not.toBeInTheDocument()
+      expect(within(row).queryByText(arm.technical)).not.toBeInTheDocument()
+    }
+  })
+
+  it('describes every arm in a key beneath the table', () => {
+    render(<EvalScoreboard />)
+    const key = within(screen.getByRole('region', { name: 'Configurations' }))
+    for (const arm of shownArms) {
+      expect(key.getByText(arm.description)).toBeInTheDocument()
+      expect(key.getByText(arm.technical)).toBeInTheDocument()
+    }
+  })
+
+  it("reads each arm's description to a screen reader on its row header", () => {
+    render(<EvalScoreboard />)
+    for (const arm of shownArms) {
+      expect(within(rowFor(arm.id)).getByRole('rowheader')).toHaveAccessibleDescription(
+        `${arm.description} ${arm.technical}`
+      )
     }
   })
 
@@ -78,8 +134,8 @@ describe('EvalScoreboard', () => {
 
   it('shows each score to three decimal places', () => {
     render(<EvalScoreboard />)
-    const arm = evalRun.arms[0]
-    const row = screen.getByText(arm.description).closest('tr')!
+    const arm = shownArms[0]
+    const row = rowFor(arm.id)
     for (const metric of evalRun.metricNames) {
       expect(within(row).getByText(arm.metrics[metric].toFixed(3))).toBeInTheDocument()
     }
@@ -89,13 +145,13 @@ describe('EvalScoreboard', () => {
     render(<EvalScoreboard />)
     const shipped = shippedArm()
     if (!shipped) return
-    const row = screen.getByText(shipped.description).closest('tr')!
+    const row = rowFor(shipped.id)
     expect(within(row).getByText('IN PRODUCTION')).toBeInTheDocument()
   })
 
-  it('renders the generated verdict rather than a hand-written claim', () => {
+  it('renders the generated verdict over the arms it shows', () => {
     render(<EvalScoreboard />)
-    expect(screen.getByText(verdictLine())).toBeInTheDocument()
+    expect(screen.getByText(verdictLine({ ...evalRun, arms: shownArms }))).toBeInTheDocument()
   })
 
   it('reports the corpus and the measured sample', () => {
@@ -121,9 +177,9 @@ describe('EvalScoreboard', () => {
 
   it('marks the winning score in each column for screen readers', () => {
     render(<EvalScoreboard />)
-    // One marker per arm tied for a column's best, not one per column: two arms
-    // currently tie on hit@5, and the sighted reader sees both highlighted.
-    const expected = evalRun.metricNames.reduce((n, m) => n + leadingArmIds(m).length, 0)
+    // One marker per shown arm tied for a column's best, not one per column, and never
+    // for a hidden Reference Arm: the best score in a column must be one on the page.
+    const expected = evalRun.metricNames.reduce((n, m) => n + leadingArmIds(m, shownArms).length, 0)
     expect(screen.getAllByText('(best)')).toHaveLength(expected)
   })
 
@@ -155,8 +211,8 @@ describe('EvalScoreboard', () => {
       'false'
     )
 
-    for (const arm of evalRun.arms) {
-      const row = screen.getByText(arm.description).closest('tr')!
+    for (const arm of shownArms) {
+      const row = rowFor(arm.id)
       for (const metric of evalRun.metricNames) {
         const catVal = arm.byCategory['paraphrase']?.[metric]
         if (catVal !== undefined) {
@@ -164,6 +220,119 @@ describe('EvalScoreboard', () => {
         }
       }
     }
+  })
+})
+
+describe('EvalScoreboard won/lost column', () => {
+  it('shows questions won and lost against production for every other arm', () => {
+    render(<EvalScoreboard run={makeRun()} />)
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
+    expect(headers).toContain('VS PRODUCTION')
+
+    const bm25 = rowFor('bm25')
+    expect(within(bm25).getByText('4 won · 2 lost')).toBeInTheDocument()
+    // The shipped arm is the reference, not a contestant against itself.
+    const shipped = rowFor('rerank')
+    expect(within(shipped).getByText('—')).toBeInTheDocument()
+  })
+
+  it("switches to the category's own counts with the category filter", async () => {
+    const { userEvent } = await import('@testing-library/user-event')
+    const user = userEvent.setup()
+    render(<EvalScoreboard run={makeRun()} />)
+
+    await user.click(screen.getByRole('tab', { name: /paraphrase/i }))
+
+    const bm25 = rowFor('bm25')
+    expect(within(bm25).getByText('0 won · 2 lost')).toBeInTheDocument()
+  })
+
+  it('does not publish the MRR interval on the page', () => {
+    // ADR-0006: bootstrap intervals belong to docs/evaluation.md only.
+    render(<EvalScoreboard run={makeRun()} />)
+    expect(screen.queryByText(/0\.350/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/95%/)).not.toBeInTheDocument()
+  })
+})
+
+describe('EvalScoreboard Latency Band column', () => {
+  it("shows each arm's warm and load Latency Bands in one column", () => {
+    render(<EvalScoreboard run={makeRun()} />)
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
+    expect(headers).toContain('LATENCY · LOAD')
+
+    const bm25 = within(rowFor('bm25'))
+    expect(bm25.getByText('~1ms')).toBeInTheDocument()
+    expect(bm25.getByText('~10ms')).toBeInTheDocument()
+
+    const rerank = within(rowFor('rerank'))
+    expect(rerank.getByText('~100ms')).toBeInTheDocument()
+    expect(rerank.getByText('~10s')).toBeInTheDocument()
+  })
+
+  it('keeps the same bands under a category filter, since latency is not per category', async () => {
+    const { userEvent } = await import('@testing-library/user-event')
+    const user = userEvent.setup()
+    render(<EvalScoreboard run={makeRun()} />)
+
+    await user.click(screen.getByRole('tab', { name: /paraphrase/i }))
+
+    const rerank = within(rowFor('rerank'))
+    expect(rerank.getByText('~100ms')).toBeInTheDocument()
+    expect(rerank.getByText('~10s')).toBeInTheDocument()
+  })
+})
+
+/** Adds a Reference Arm that would lead every column and beat production. */
+function withReference(run: EvalRun): EvalRun {
+  run.arms.push({
+    ...run.arms[0],
+    id: 'torch-dense',
+    label: 'Torch semantic',
+    description: 'Not shippable.',
+    technical: 'Torch.',
+    eligibility: 'reference',
+    metrics: { 'hit@5': 1.0, mrr: 0.99 },
+    byCategory: {
+      direct: { 'hit@5': 1.0, mrr: 0.99 },
+      paraphrase: { 'hit@5': 1.0, mrr: 0.99 },
+    },
+    vsShipped: { won: 9, lost: 0, outcome: 'ahead' },
+  })
+  return run
+}
+
+describe('EvalScoreboard eligibility', () => {
+  it('shows only arms that could ship', () => {
+    render(<EvalScoreboard run={withReference(makeRun())} />)
+    expect(document.querySelector('tr[data-arm="torch-dense"]')).toBeNull()
+    expect(screen.queryByText('Not shippable.')).not.toBeInTheDocument()
+    expect(rowFor('bm25')).toBeInTheDocument()
+    expect(rowFor('rerank')).toBeInTheDocument()
+  })
+
+  it('needs no eligibility badge, since every row shown could ship', () => {
+    render(<EvalScoreboard run={makeRun()} />)
+    expect(screen.queryByText('CANDIDATE')).not.toBeInTheDocument()
+    expect(screen.queryByText('REFERENCE')).not.toBeInTheDocument()
+  })
+
+  it('highlights the best shown score, never a hidden Reference Arm', () => {
+    render(<EvalScoreboard run={withReference(makeRun())} />)
+    // Hidden torch-dense leads both columns; among shown arms bm25 leads hit@5 and
+    // rerank leads MRR.
+    expect(within(rowFor('bm25')).getByText('(best)')).toBeInTheDocument()
+    expect(within(rowFor('rerank')).getByText('(best)')).toBeInTheDocument()
+  })
+
+  it('leaves a hidden Reference Arm out of the verdict', () => {
+    render(<EvalScoreboard run={withReference(makeRun())} />)
+    expect(
+      screen.getByText(
+        'Production runs Re-ranked. Across the 20 held-out questions, no other arm is ' +
+          'distinguishable from it on hit@5.'
+      )
+    ).toBeInTheDocument()
   })
 })
 
@@ -205,51 +374,95 @@ describe('leadingArmIds', () => {
   })
 })
 
+/** A third arm, so a verdict can name arms on both sides of the shipped one. */
+function withDense(run: EvalRun, vsShipped: EvalArm['vsShipped']): EvalRun {
+  run.arms.push({
+    ...run.arms[0],
+    id: 'dense',
+    label: 'Meaning only',
+    description: 'Semantic matching.',
+    vsShipped,
+  })
+  return run
+}
+
 describe('verdictLine', () => {
-  it('names both configurations when the shipped arm is not winning', () => {
-    const line = verdictLine(makeRun())
-    expect(line).toBe(
-      'Production runs Re-ranked. On the current corpus, Keyword only leads on hit@5 ' +
-        '(1.000 vs 0.900).'
+  it('says no arm is distinguishable, and names the sample, when the split is balanced', () => {
+    // Keyword only scores 0.100 higher on hit@5, which the old verdict called a lead.
+    // Four questions won and two lost is well inside sampling noise.
+    expect(verdictLine(makeRun())).toBe(
+      'Production runs Re-ranked. Across the 20 held-out questions, no other arm is ' +
+        'distinguishable from it on hit@5.'
     )
   })
 
-  it('produces category-aware verdict line', () => {
+  it('names an arm that is distinguishably ahead, with its won/lost counts', () => {
     const run = makeRun()
-    expect(verdictLine(run, 'paraphrase')).toBe(
-      'Production runs Re-ranked, which also leads on hit@5 (0.950).'
-    )
-  })
-
-  it('heals into a statement of agreement when the shipped arm wins', () => {
-    // The reason the sentence is generated: fixing the architecture fixes the prose.
-    const run = makeRun()
-    run.arms[1].metrics['hit@5'] = 1.0
-    run.arms[0].metrics['hit@5'] = 0.8
-    expect(verdictLine(run)).toBe('Production runs Re-ranked, which also leads on hit@5 (1.000).')
-  })
-
-  it('calls a tie a tie rather than a win for production', () => {
-    // The shipped arm is listed first, so a positional tie-break would report every
-    // tie as a lead. Production must not be flattered by list order.
-    const run = makeRun()
-    run.arms[1].metrics['hit@5'] = 1.0
+    run.arms[0].vsShipped = { won: 8, lost: 0, outcome: 'ahead' }
     expect(verdictLine(run)).toBe(
-      'Production runs Re-ranked, tied for the lead on hit@5 (1.000) with Keyword only.'
+      'Production runs Re-ranked. Across the 20 held-out questions, Keyword only ' +
+        '(won 8, lost 0) is distinguishably ahead of it on hit@5.'
     )
+  })
+
+  it('names an arm that is distinguishably behind', () => {
+    const run = makeRun()
+    run.arms[0].vsShipped = { won: 1, lost: 9, outcome: 'behind' }
+    expect(verdictLine(run)).toBe(
+      'Production runs Re-ranked. Across the 20 held-out questions, Keyword only ' +
+        '(won 1, lost 9) is distinguishably behind it on hit@5.'
+    )
+  })
+
+  it('names arms on both sides in one sentence', () => {
+    const run = withDense(makeRun(), { won: 0, lost: 7, outcome: 'behind' })
+    run.arms[0].vsShipped = { won: 8, lost: 0, outcome: 'ahead' }
+    expect(verdictLine(run)).toBe(
+      'Production runs Re-ranked. Across the 20 held-out questions, Keyword only ' +
+        '(won 8, lost 0) is distinguishably ahead of it on hit@5, and Meaning only ' +
+        '(won 0, lost 7) is behind it.'
+    )
+  })
+
+  it('joins several arms on the same side', () => {
+    const run = withDense(makeRun(), { won: 6, lost: 0, outcome: 'ahead' })
+    run.arms[0].vsShipped = { won: 8, lost: 0, outcome: 'ahead' }
+    expect(verdictLine(run)).toBe(
+      'Production runs Re-ranked. Across the 20 held-out questions, Keyword only ' +
+        '(won 8, lost 0) and Meaning only (won 6, lost 0) are distinguishably ahead of it ' +
+        'on hit@5.'
+    )
+  })
+
+  it("follows the category filter, using that category's own disagreements", () => {
+    const run = makeRun()
+    run.arms[0].vsShippedByCategory!.direct = { won: 7, lost: 0, outcome: 'ahead' }
+    expect(verdictLine(run, 'direct')).toBe(
+      'Production runs Re-ranked. Across the 15 held-out direct questions, Keyword only ' +
+        '(won 7, lost 0) is distinguishably ahead of it on hit@5.'
+    )
+    expect(verdictLine(run, 'paraphrase')).toBe(
+      'Production runs Re-ranked. Across the 5 held-out paraphrase questions, no other arm ' +
+        'is distinguishable from it on hit@5.'
+    )
+  })
+
+  it('names a run over the whole set without calling it held out', () => {
+    expect(verdictLine(makeRun({ split: 'all' }))).toContain('Across all 20 questions,')
   })
 
   it('says so plainly when no arm is flagged as shipped', () => {
     const run = makeRun()
     run.arms.forEach((a) => (a.shipped = false))
-    expect(verdictLine(run)).toContain('No arm is flagged as shipped')
+    expect(verdictLine(run)).toBe(
+      'No arm is flagged as shipped, so no arm is compared against production.'
+    )
   })
 
-  it('tolerates an arm missing a metric the run reports', () => {
+  it('says so when the shipped arm is the only one measured', () => {
     const run = makeRun()
-    delete run.arms[0].metrics['hit@5']
-    expect(() => verdictLine(run)).not.toThrow()
-    expect(leadingArm('hit@5', run.arms).id).toBe('rerank')
+    run.arms = [run.arms[1]]
+    expect(verdictLine(run)).toBe('Production runs Re-ranked. No other arm was measured.')
   })
 })
 
@@ -277,8 +490,25 @@ describe('sampleLabel', () => {
 })
 
 describe('the generated results file', () => {
-  it('is schemaVersion 3', () => {
-    expect(evalRun.schemaVersion).toBe(3)
+  it('is schemaVersion 4', () => {
+    expect(evalRun.schemaVersion).toBe(4)
+  })
+
+  it('compares every arm but the shipped one against production', () => {
+    for (const arm of evalRun.arms) {
+      if (arm.shipped) {
+        expect(arm.vsShipped).toBeNull()
+        continue
+      }
+      expect(arm.vsShipped).toEqual({
+        won: expect.any(Number),
+        lost: expect.any(Number),
+        outcome: expect.stringMatching(/^(ahead|behind|indistinguishable)$/),
+      })
+      for (const category of evalRun.categories) {
+        expect(arm.vsShippedByCategory?.[category]).toBeDefined()
+      }
+    }
   })
 
   it('publishes the portion no configuration was chosen against', () => {
@@ -294,8 +524,8 @@ describe('the generated results file', () => {
   it('publishes categoryCounts matching the holdout split', () => {
     expect(evalRun.categoryCounts).toBeDefined()
     expect(evalRun.categoryCounts?.direct).toBe(22)
-    expect(evalRun.categoryCounts?.paraphrase).toBe(5)
-    expect(evalRun.categoryCounts?.conceptual).toBe(6)
+    expect(evalRun.categoryCounts?.paraphrase).toBe(11)
+    expect(evalRun.categoryCounts?.conceptual).toBe(10)
   })
 
   it('flags exactly one arm as shipped', () => {
@@ -320,6 +550,22 @@ describe('the generated results file', () => {
         }
       }
     }
+  })
+
+  it('gives every arm a warm and a load Latency Band, and no raw timing', () => {
+    const band = /^~(1|10|100)ms$|^~(1|10)s$/
+    for (const arm of evalRun.arms) {
+      expect(arm.latencyBand.warm).toMatch(band)
+      expect(arm.latencyBand.load).toMatch(band)
+    }
+    expect(JSON.stringify(evalRun)).not.toMatch(/p50|p95/)
+  })
+
+  it('marks every arm as a Candidate or Reference Arm, and the shipped arm as a Candidate', () => {
+    for (const arm of evalRun.arms) {
+      expect(['candidate', 'reference']).toContain(arm.eligibility)
+    }
+    expect(shippedArm()?.eligibility).toBe('candidate')
   })
 
   it('carries both registers of description for every arm', () => {

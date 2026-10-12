@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Set required env vars before importing the app
-os.environ.setdefault("GROQ_API_KEY", "test_key")
+os.environ.setdefault("OPENAI_API_KEY", "test_key")
 os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:3000")
 
 
@@ -49,7 +49,7 @@ def mock_pipeline():
 
 @pytest.fixture
 def client(mock_pipeline):
-    """TestClient with mocked RAG pipeline and Groq."""
+    """TestClient with a mocked RAG pipeline; each test mocks OpenAI itself."""
     # Imported inside the fixture so that tests which never touch the HTTP layer
     # (tokenizer, fusion, PII, chunking) can be collected and run without
     # importing FastAPI.

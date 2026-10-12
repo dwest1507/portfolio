@@ -2,3 +2,5 @@
 *.code-workspace
 
 docs/prep
+# Local eval run records (paid generation and judging output; the committed Floors record is the source of truth)
+.eval-runs/

@@ -3,6 +3,7 @@
 import json
 import os
 import pickle
+import re
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -15,105 +16,263 @@ import pytest
 # ---------------------------------------------------------------------------
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from build_index import _chunk_text, _snap_overlap_to_word_boundary, _strip_mdx
+from build_index import (
+    CHUNK_SIZE,
+    MDX_DIR,
+    QA_PATH,
+    RESUME_PATH,
+    _strip_mdx,
+    chunk_document,
+    load_documents,
+    project_titles,
+)
+
+QA_FIXTURE = """# Chatbot Q&A — David West
+
+> This document is the primary knowledge source for the chatbot.
+
+---
+
+## About David
+
+**Where is David based?**
+I work in the Metro-Detroit area in Michigan.
+
+**What kinds of AI problems is David most excited to work on?**
+
+**What industries has David worked in?**
+I've worked in the defense industry since college.
+
+It started at **TACOM**, then [Booz Allen](https://www.boozallen.com).
+
+---
+
+## Technical Skills
+
+### Languages
+
+**What programming languages does David know?**
+Python, R, Typescript, and SQL.
+"""
 
 
-def test_chunk_text_respects_max_size():
-    # Build multi-paragraph text with sentence endings (realistic input)
-    para = "David is an experienced AI engineer. " * 10  # ~370 chars
-    long_text = "\n\n".join([para] * 8)  # 8 paragraphs, ~3000 chars total
-    chunks = _chunk_text(long_text, source="test")
-    # Allow up to 1.3× CHUNK_SIZE due to overlap
-    assert all(len(c["text"]) <= 1300 for c in chunks), "Chunks must stay near size limit"
+def test_the_question_document_yields_one_chunk_per_question_and_answer():
+    chunks = chunk_document(QA_FIXTURE, source="qa")
+
+    assert chunks == [
+        {
+            "text": "Where is David based?\nI work in the Metro-Detroit area in Michigan.",
+            "source": "qa",
+        },
+        {
+            "text": "What industries has David worked in?\n"
+            "I've worked in the defense industry since college.\n"
+            "It started at TACOM, then Booz Allen.",
+            "source": "qa",
+        },
+        {
+            "text": "What programming languages does David know?\nPython, R, Typescript, and SQL.",
+            "source": "qa",
+        },
+    ]
 
 
-def test_chunk_text_preserves_source():
-    chunks = _chunk_text("Hello world.\n\nSecond paragraph.", source="resume")
-    assert all(c["source"] == "resume" for c in chunks)
+def test_an_over_long_question_and_answer_splits_by_sentence_with_the_question_repeated():
+    question = "Why is David looking for a new opportunity?"
+    sentences = [
+        f"Reason number {i} is a complete sentence about his career goals." for i in range(40)
+    ]
+    text = f"**{question}**\n{' '.join(sentences)}\n"
+
+    chunks = chunk_document(text, source="qa")
+
+    assert len(chunks) > 1
+    assert all(len(c["text"]) <= CHUNK_SIZE for c in chunks)
+    assert all(c["text"].startswith(question + "\n") for c in chunks)
+    # Every sentence lands in exactly one piece, whole and in order.
+    answers = [c["text"].removeprefix(question + "\n") for c in chunks]
+    assert " ".join(answers) == " ".join(sentences)
 
 
-def test_chunk_text_produces_overlap():
-    """Last chars of chunk N should appear at start of chunk N+1."""
-    # Create text that forces at least 2 chunks
-    para_a = "A " * 600  # 1200 chars — exceeds CHUNK_SIZE alone
-    para_b = "B " * 600
-    text = para_a.strip() + "\n\n" + para_b.strip()
-    chunks = _chunk_text(text, source="test")
-    assert len(chunks) >= 2
-    # Overlap: chunk[1] should start with tail of chunk[0] content
-    first_end = chunks[0]["text"][-80:]
-    assert first_end[:5] in chunks[1]["text"]
+PROJECT_FIXTURE = """## Overview
+
+Chat with Nietzsche is a conversational AI over his complete works.
+
+## The RAG Pipeline
+
+1. **Hybrid search**: FAISS and BM25 over roughly 7,300 chunks.
+2. **Re-ranking**: it uses a cross-encoder.
+
+```python
+print("code is not prose")
+```
+
+### Why re-rank
+
+Shared vocabulary is not relevance.
+"""
 
 
-def test_chunk_text_overlap_snaps_to_word_boundary():
-    """Overlap prefix must not begin with a mid-word fragment."""
-    text = (
-        ("David has extensive experience in software architecture. " * 20)
-        + "\n\n"
-        + ("Next section about artificial intelligence and computer vision projects. " * 10)
+def test_a_project_write_up_yields_one_chunk_per_section_headed_by_project_and_section():
+    chunks = chunk_document(
+        PROJECT_FIXTURE, source="project:nietzsche-chat", title="Chat with Nietzsche"
     )
-    chunks = _chunk_text(text, source="test")
-    assert len(chunks) >= 2
-    for i in range(1, len(chunks)):
-        assert not chunks[i]["text"].startswith("ensive"), "Must not slice 'extensive' mid-word"
-        assert chunks[i]["text"].startswith("extensive"), "Must snap backward to word start"
+
+    assert chunks == [
+        {
+            "text": "Chat with Nietzsche — Overview\n"
+            "Chat with Nietzsche is a conversational AI over his complete works.",
+            "source": "project:nietzsche-chat",
+        },
+        {
+            "text": "Chat with Nietzsche — The RAG Pipeline\n"
+            "1. Hybrid search: FAISS and BM25 over roughly 7,300 chunks.\n"
+            "2. Re-ranking: it uses a cross-encoder.\n"
+            "Why re-rank\n"
+            "Shared vocabulary is not relevance.",
+            "source": "project:nietzsche-chat",
+        },
+    ]
 
 
-def test_snap_overlap_to_word_boundary_edge_cases():
-    """Test boundary snapping behavior across all edge cases."""
-    # 1. Short text (len <= overlap_chars)
-    assert _snap_overlap_to_word_boundary("short text", overlap_chars=20) == "short text"
+RESUME_FIXTURE = """DAVID P WEST
+Waterford, MI  ●  someone@example.com
+SUMMARY
+I'm a Lead AI Engineer.
 
-    # 2. Cut lands exactly on whitespace or preceded by whitespace
-    prev = "word1 word2 word3 word4"
-    # len = 23. If overlap = 11: start = 12. prev[11] is ' ', prev[12] is 'w' ('word3 word4')
-    assert _snap_overlap_to_word_boundary(prev, overlap_chars=11) == "word3 word4"
+EXPERIENCE
 
-    # 3. Cut lands mid-word (snaps backward to include full word)
-    prev = "David has extensive experience"
-    # len = 30. "experience" is 10 chars. If overlap = 6 ("rience"), start = 24.
-    # Snaps backward to start of "experience"
-    assert _snap_overlap_to_word_boundary(prev, overlap_chars=6) == "experience"
+AI Engineer, Lead
+January 2026 – Present (40 Hrs/Week)
+Booz Allen Hamilton
+Royal Oak MI Office
 
-    # 4. Unbroken string > max_lookback (40 chars) falls back to forward snap
-    long_unbroken = "a" * 50
-    prev = f"intro {long_unbroken} outro"
-    # overlap cuts inside long_unbroken, looking back 40 chars finds no space.
-    # Falls back to forward snap (next space is before 'outro')
-    overlap = _snap_overlap_to_word_boundary(prev, overlap_chars=len("outro") + 25, max_lookback=10)
-    assert overlap == "outro"
-
-    # 5. Unbroken string with no whitespace anywhere after start
-    prev = "start " + ("b" * 60)
-    overlap = _snap_overlap_to_word_boundary(prev, overlap_chars=30, max_lookback=10)
-    assert overlap == ""
+Notable projects:
+Extract information from 260k old paper records.
 
 
-def test_committed_chunks_have_no_mid_word_overlap_cuts():
-    """Invariant: committed chunks.json must not have any overlap beginning mid-word."""
-    chunks_path = Path(__file__).resolve().parent.parent / "indexes" / "chunks.json"
-    if not chunks_path.exists():
-        pytest.skip("indexes/chunks.json does not exist")
+Operations Research Analyst (GS-1515-11)
+May 2020 – January 2021 (40 Hrs/Week)
+Army Tank-Automotive & Armaments Command
+Program Executive Office: Ground Combat Systems
 
-    with open(chunks_path) as f:
-        chunks = json.load(f)
+Maintain a self-made Excel cost model.
 
-    corrupted = []
-    for i in range(1, len(chunks)):
-        prev = chunks[i - 1]["text"]
-        curr = chunks[i]["text"]
-        # Find overlap prefix in curr that matches a suffix of prev
-        for length in range(min(150, len(prev)), 10, -1):
-            tail = prev[-length:]
-            if curr.startswith(tail):
-                start_in_prev = len(prev) - length
-                if start_in_prev > 0 and not prev[start_in_prev - 1].isspace():
-                    corrupted.append((i, prev[start_in_prev - 5 : start_in_prev + 10]))
-                break
+Develop a database for a Continuous Process Improvement (CPI) project.
 
-    assert not corrupted, (
-        f"Found {len(corrupted)} chunks with mid-word overlap cuts in chunks.json: {corrupted[:5]}"
+EDUCATION\t\t\t
+
+Western Michigan University (WMU)
+GPA: 3.57
+"""
+
+
+def test_the_resume_yields_one_chunk_per_section_and_per_role():
+    chunks = chunk_document(RESUME_FIXTURE, source="resume")
+
+    assert [c["text"] for c in chunks] == [
+        "Resume — David P West\nWaterford, MI  ●  someone@example.com",
+        "Resume — Summary\nI'm a Lead AI Engineer.",
+        (
+            "Booz Allen Hamilton — AI Engineer, Lead\n"
+            "January 2026 – Present (40 Hrs/Week)\n"
+            "Royal Oak MI Office\n"
+            "Notable projects:\n"
+            "Extract information from 260k old paper records."
+        ),
+        (
+            "Army Tank-Automotive & Armaments Command — Operations Research Analyst (GS-1515-11)\n"
+            "May 2020 – January 2021 (40 Hrs/Week)\n"
+            "Program Executive Office: Ground Combat Systems\n"
+            "Maintain a self-made Excel cost model.\n"
+            "Develop a database for a Continuous Process Improvement (CPI) project."
+        ),
+        "Resume — Education\nWestern Michigan University (WMU)\nGPA: 3.57",
+    ]
+    assert {c["source"] for c in chunks} == {"resume"}
+
+
+# The committed sources. A formatting change that a rule no longer recognises must fail
+# here rather than quietly index a document as one giant Chunk, or drop part of it. The
+# expected structure is counted from the raw files with deliberately looser patterns than
+# the chunker's, so the two can disagree.
+
+
+def _committed_chunks(source: str) -> list[dict]:
+    doc = next(d for d in load_documents() if d["source"] == source)
+    return chunk_document(doc["text"], doc["source"], doc.get("title"))
+
+
+def _headings(chunks: list[dict]) -> list[str]:
+    """Each distinct heading, in order: an over-long unit's pieces share one."""
+    return list(dict.fromkeys(c["text"].split("\n", 1)[0] for c in chunks))
+
+
+def test_the_committed_question_document_parses_into_its_questions():
+    # A question whose next non-blank line is not prose has no answer yet, and is skipped.
+    lines = [line for line in QA_PATH.read_text(encoding="utf-8").splitlines() if line.strip()]
+    questions = [
+        line.strip().strip("*")
+        for line, after in zip(lines, lines[1:] + [""])
+        if line.startswith("**") and after and not after.startswith(("**", "#", "---"))
+    ]
+
+    chunks = _committed_chunks("qa")
+
+    assert len(questions) > 50
+    assert _headings(chunks) == questions
+    assert all("**" not in c["text"] and "\n" in c["text"].strip() for c in chunks)
+
+
+@pytest.mark.parametrize("path", sorted(MDX_DIR.glob("*.mdx")), ids=lambda p: p.stem)
+def test_each_committed_project_write_up_parses_into_its_sections(path: Path):
+    title = project_titles()[path.stem]
+    sections = [
+        line.removeprefix("## ").strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith("## ")
+    ]
+
+    chunks = _committed_chunks(f"project:{path.stem}")
+
+    assert len(sections) > 1
+    assert _headings(chunks) == [f"{title} — {s}" for s in sections]
+
+
+def test_the_committed_resume_parses_into_its_sections_and_roles():
+    raw = RESUME_PATH.read_text(encoding="utf-8")
+    date_ranges = [
+        line for line in raw.splitlines() if re.search(r"\d{4}\s*[–-]\s*(?:Present|[A-Z])", line)
+    ]
+
+    headings = _headings(_committed_chunks("resume"))
+    roles = [h for h in headings if not h.startswith("Resume — ")]
+
+    for section in ("Summary", "Technical Skills", "Education", "Leadership"):
+        assert f"Resume — {section}" in headings
+    assert len(roles) == len(date_ranges) > 1
+    assert all(
+        employer in {"Booz Allen Hamilton", "Army Tank-Automotive & Armaments Command"}
+        for employer in (h.split(" — ")[0] for h in roles)
     )
+
+
+@pytest.mark.parametrize(
+    ("source", "title"),
+    [("qa", None), ("project:nietzsche-chat", "Chat with Nietzsche"), ("resume", None)],
+)
+def test_a_document_that_has_lost_its_structure_fails_the_build(source, title):
+    """Questions no longer bold, headings demoted, a resume reflowed: index nothing quietly."""
+    with pytest.raises(ValueError, match="no structure"):
+        chunk_document("Some prose that has lost every heading.\n", source, title)
+
+
+def test_no_committed_chunk_exceeds_the_size_limit_except_one_whole_sentence():
+    for doc in load_documents():
+        for chunk in chunk_document(doc["text"], doc["source"], doc.get("title")):
+            if len(chunk["text"]) > CHUNK_SIZE:
+                body = chunk["text"].split("\n", 1)[1]
+                assert len(re.split(r"(?<=[.!?])\s+", body)) == 1, chunk["text"][:80]
 
 
 def test_strip_mdx_removes_code_blocks():
@@ -211,6 +370,94 @@ def test_reranking_orders_by_cross_encoder_score(fake_indexes):
 
     # The candidate that got score 0.9 (chunk ID 2) should be first
     assert reranked[0] == 2
+
+
+# ---------------------------------------------------------------------------
+# ONNX Runtime retrieval (the Candidate Arms)
+# ---------------------------------------------------------------------------
+
+
+def _onnx_pipeline(indexes_dir, embeddings, query_vector=None, scores=None):
+    """A pipeline whose ONNX models are fakes and whose ONNX corpus embeddings are given."""
+    from app.rag.pipeline import RAGPipeline
+
+    np.save(indexes_dir / "onnx_embeddings.npy", np.asarray(embeddings, dtype=np.float32))
+    embedder = MagicMock()
+    embedder.encode.return_value = np.asarray([query_vector or [1.0, 0.0]], dtype=np.float32)
+    cross_encoder = MagicMock()
+    cross_encoder.predict.return_value = np.asarray(scores or [], dtype=np.float32)
+    return RAGPipeline(
+        indexes_dir=indexes_dir, onnx_embedder=embedder, onnx_cross_encoder=cross_encoder
+    )
+
+
+def test_onnx_dense_search_ranks_chunks_by_similarity_to_the_query(fake_indexes):
+    indexes_dir, _chunks = fake_indexes
+    pipeline = _onnx_pipeline(indexes_dir, [[0.0, 1.0], [0.6, 0.8], [1.0, 0.0]])
+
+    assert pipeline.onnx_dense_search("q", top_k=2) == [2, 1]
+
+
+def test_onnx_dense_search_needs_no_torch_model_or_faiss_index(fake_indexes):
+    """A Candidate Arm must run with neither: that is what makes it shippable."""
+    indexes_dir, _chunks = fake_indexes
+    (indexes_dir / "faiss.index").unlink()
+    pipeline = _onnx_pipeline(indexes_dir, [[0.0, 1.0], [0.6, 0.8], [1.0, 0.0]])
+
+    assert pipeline.onnx_dense_search("q", top_k=3) == [2, 1, 0]
+    assert pipeline._embedder is None and pipeline._cross_encoder is None
+
+
+def test_onnx_hybrid_search_fuses_the_keyword_ranking_into_the_dense_one(fake_indexes):
+    """The same fusion as `hybrid`: BM25 lifts a chunk the dense ranking put last."""
+    indexes_dir, _chunks = fake_indexes
+    # Dense ranks chunk 1 ("...FAISS and BM25.") last; only BM25 matches "FAISS".
+    pipeline = _onnx_pipeline(indexes_dir, [[1.0, 0.0], [0.0, 1.0], [0.9, 0.1]])
+    assert pipeline.onnx_dense_search("FAISS", top_k=3) == [0, 2, 1]
+
+    assert pipeline.onnx_hybrid_search("FAISS", top_k=3) == [0, 1, 2]
+
+
+def test_onnx_rerank_orders_candidates_by_the_onnx_cross_encoder(fake_indexes):
+    indexes_dir, _chunks = fake_indexes
+    pipeline = _onnx_pipeline(indexes_dir, [[1.0, 0.0]] * 3, scores=[0.1, 2.5, -1.0])
+
+    assert pipeline.onnx_rerank("q", [0, 1, 2], top_k=2) == [1, 0]
+    assert pipeline._cross_encoder is None, "the torch cross-encoder is never loaded"
+
+
+def test_stale_onnx_embeddings_raise_for_the_harness(fake_indexes):
+    indexes_dir, chunks = fake_indexes
+    pipeline = _onnx_pipeline(indexes_dir, [[1.0, 0.0]] * (len(chunks) + 1))
+
+    with pytest.raises(ValueError, match="Index mismatch"):
+        _ = pipeline.onnx_embeddings
+
+
+def test_the_onnx_embedder_mean_pools_real_tokens_and_normalizes():
+    """Padding positions carry hidden states too; averaging them in would make a short
+    text's embedding depend on the longest text in its batch."""
+    from types import SimpleNamespace
+
+    from app.rag.onnx_models import OnnxEmbedder
+
+    tokenizer = MagicMock()
+    tokenizer.encode_batch.return_value = [
+        SimpleNamespace(ids=[5, 6, 0], attention_mask=[1, 1, 0], type_ids=[0, 0, 0]),
+    ]
+    session = MagicMock()
+    session.get_inputs.return_value = [
+        SimpleNamespace(name="input_ids"),
+        SimpleNamespace(name="attention_mask"),
+    ]
+    # Two real tokens averaging to (3, 4); the padding state would drag it elsewhere.
+    session.run.return_value = [np.array([[[2.0, 4.0], [4.0, 4.0], [100.0, -100.0]]])]
+
+    embedding = OnnxEmbedder(tokenizer, session).encode(["short text"])
+
+    np.testing.assert_allclose(embedding, [[0.6, 0.8]], rtol=1e-6)
+    sent = session.run.call_args.args[1]
+    assert set(sent) == {"input_ids", "attention_mask"}, "only the inputs the model declares"
 
 
 def test_retrieve_returns_top_k(fake_indexes):
@@ -390,7 +637,9 @@ import sys
 
 class Guard:
     def find_spec(self, name, path=None, target=None):
-        if name.split(".")[0] in {"faiss", "sentence_transformers", "torch", "transformers"}:
+        if name.split(".")[0] in {
+            "faiss", "sentence_transformers", "torch", "transformers", "onnxruntime", "tokenizers"
+        }:
             raise AssertionError(f"{name} must not be imported to serve a request")
         return None
 
@@ -412,7 +661,7 @@ print("ok")
         cwd=str(Path(__file__).resolve().parent.parent),
         env={
             **os.environ,
-            "GROQ_API_KEY": "test_key",
+            "OPENAI_API_KEY": "test_key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
         },
     )

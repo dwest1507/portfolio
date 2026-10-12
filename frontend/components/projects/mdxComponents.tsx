@@ -1,6 +1,8 @@
 import type { ReactNode, HTMLAttributes, AnchorHTMLAttributes, TdHTMLAttributes } from 'react'
 import EvalScoreboard from './EvalScoreboard'
 import FindingsLog from './FindingsLog'
+import GenerationComparison from './GenerationComparison'
+import GenerationScoreboard from './GenerationScoreboard'
 
 type Block = HTMLAttributes<HTMLElement> & { children?: ReactNode }
 type Anchor = AnchorHTMLAttributes<HTMLAnchorElement> & { children?: ReactNode }
@@ -225,7 +227,10 @@ export const mdxComponents = {
   table: Table,
   th: Th,
   td: Td,
-  // Available to MDX write-ups as <EvalScoreboard /> and <FindingsLog />
+  // Available to MDX write-ups as <EvalScoreboard />, <GenerationScoreboard />,
+  // <GenerationComparison /> and <FindingsLog />
   EvalScoreboard,
+  GenerationScoreboard,
+  GenerationComparison,
   FindingsLog,
 }

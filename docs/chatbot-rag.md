@@ -1,6 +1,6 @@
 # AI Chatbot & RAG Pipeline
 
-The chatbot answers recruiter questions about David's experience, skills, and projects using a Retrieval-Augmented Generation (RAG) pipeline backed by Groq for LLM inference.
+The chatbot answers recruiter questions about David's experience, skills, and projects using a Retrieval-Augmented Generation (RAG) pipeline backed by OpenAI for LLM inference.
 
 ## User Experience
 
@@ -10,6 +10,7 @@ The chatbot answers recruiter questions about David's experience, skills, and pr
 - Welcome message: *"Hi! I'm David's AI assistant. Ask me anything about his experience, skills, or projects."*
 - Chat history persists for the browser session (cleared on tab close)
 - Max 50 messages per session; 1 message per 3 seconds (client-side debounce)
+- A one-line notice under the input: *"Questions are logged anonymously and answered by OpenAI."* — see [Visitor Query Log](#visitor-query-log)
 
 ## Index Build (Offline)
 
@@ -40,13 +41,23 @@ make build-index
    not silently redacted, it fails the test, and the source gets fixed. That is
    the stated order of operations — the sources should be clean to begin with,
    and redaction is only the backstop.
-2. **Chunk** — ~200–300 token chunks with overlap snapped outward to word boundaries; paragraph-based splitting to preserve complete thoughts without mid-word word truncation
-3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk
+2. **Chunk** — cut along each source's structure by `chunk_document`: one chunk per
+   question-and-answer pair in `docs/chatbot-questions.md`, one per `##` section of each
+   project write-up headed `<project title> — <section>` (titles from
+   `frontend/data/projects.ts`), and one per resume section or role headed
+   `<employer> — <role>`. A unit over 1,000 characters is split at line and sentence
+   boundaries with its heading repeated on every piece. A source that no longer parses
+   into its structure fails the build. See
+   [ADR-0011](adr/0011-structure-aware-chunking.md).
+3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk,
+   and the same model's ONNX export, run on ONNX Runtime, generates a second set for the
+   Candidate Arms
 4. **Index** — Builds a FAISS index (vector search) and a BM25 index (keyword search).
    BM25 terms are lowercased, stopword-filtered, and Snowball-stemmed by
    `app/rag/tokenize.py` — the same tokenizer the query path uses, so index and
    query terms always agree.
-5. **Save** — Writes `backend/indexes/faiss.index`, `bm25.pkl`, and `chunks.json`
+5. **Save** — Writes `backend/indexes/faiss.index`, `onnx_embeddings.npy`, `bm25.pkl`,
+   and `chunks.json`
 
 The indexes are committed to the repo. `chunks.json` and `bm25.pkl` are loaded into memory
 at FastAPI startup; `faiss.index` is not, because the served pipeline does not use it —
@@ -78,7 +89,8 @@ Prompt construction
 (system + context + history)
     │
     ▼
-Groq API (GROQ_MODEL env var)
+OpenAI API (OPENAI_MODEL env var, default gpt-6-luna;
+reasoning effort low, no temperature)
 Streaming SSE response
 ```
 
@@ -122,7 +134,67 @@ Conversation history:
 |-------|-------|
 | Client-side | 50 messages/session, 1 message/3 seconds |
 | FastAPI (`slowapi`) | 30 requests/minute per IP |
-| Groq backstop | 14,400 requests/day, 30 req/min (free tier) |
+| FastAPI (global daily cap) | `DAILY_REQUEST_CAP` requests/UTC day across all visitors (default 1,000); past it the reply is a polite "resting for today" message, not an error |
+| OpenAI project budget | Hard monthly limit set in OpenAI's dashboard — the backstop ([deployment.md](deployment.md#step-2a--the-openai-project-key-and-budget)) |
+
+## Visitor Query Log
+
+Each chat request that reaches retrieval writes one JSON line to stdout, which Railway
+collects with the service logs ([ADR-0010](adr/0010-visitor-queries-logged-with-notice.md)):
+
+```json
+{"event": "visitor_query", "question": "Where is David based?", "chunks_retrieved": 5}
+```
+
+That is the whole record: the question text and the number of chunks retrieved for it. No
+IP address, no conversation history, no answer. It is written before generation, so a
+question still counts when the model call fails. A request turned away by the daily cap is
+not logged: nothing was retrieved for it, and a record would count as an Empty Context.
+`backend/app/visitor_log.py` writes it; the chat tests pin its contents.
+
+**Production runs uvicorn with `--no-access-log`** (the `CMD` in `backend/Dockerfile`).
+Uvicorn's access log prints a `POST /api/chat` line with the client's address right after
+each `visitor_query` line, which would link a logged question to an IP despite the record
+itself carrying none. Errors and startup messages are still logged. `make dev-backend`
+keeps the access log; nothing local is collected.
+
+### Empty Context rate
+
+The share of logged questions with `chunks_retrieved` of 0: production's Empty Context
+rate, which BM25-only retrieval used to assume rather than measure. Save the service logs
+to a file (Railway dashboard → backend service → **Logs**, filtered on `visitor_query`, or
+`railway logs` from the Railway CLI) and run:
+
+```bash
+grep -o '{"event": "visitor_query".*}' visitor-log.txt \
+  | jq -s '{questions: length,
+            empty_context: map(select(.chunks_retrieved == 0)) | length}
+           | .rate = (if .questions > 0 then .empty_context / .questions else null end)'
+```
+
+`grep -o` pulls the record out of any prefix the log viewer adds (a timestamp, a level)
+and drops everything else. Railway keeps logs only for its
+plan's retention window, so export them before they age out if a longer period is wanted.
+
+### Promoting a logged question into the Golden Set
+
+A logged question never enters the repository on its own (ADR-0010, ADR-0003). Promoting
+one is a manual, reviewed act:
+
+1. **Read it.** Pick questions that are about David or his work, or that are a fair
+   Out-of-Scope question. Skip spam, tests and anything that is not a real question.
+2. **Scrub it.** Remove anything that could identify the visitor or a third party —
+   names, employers, emails, phone numbers, locations. Rephrase only as far as scrubbing
+   requires; the point is the visitor's own phrasing.
+3. **Label it** like any other case ([evaluation.md](evaluation.md#method)): a
+   Query Category and `relevant_phrases` for an answerable question, plus
+   `required_facts` written from the question and the Corpus only; or `answerable: false`
+   with no labels for an Out-of-Scope Case. Write the labels without any Arm's results in
+   view.
+4. **Mark it** `"origin": "visitor"`, so results on real visitor questions can be reported
+   separately.
+5. **Commit it in a reviewed batch**, as for authored cases. The hash rule assigns its
+   Split; never move it by hand.
 
 ## Error Handling
 
@@ -133,18 +205,23 @@ Conversation history:
 
 | Purpose | Model | Where it runs |
 |---------|-------|---------------|
-| LLM | `openai/gpt-oss-120b` via Groq, overridable with `GROQ_MODEL` | Production |
-| Embedding | `sentence-transformers/all-mpnet-base-v2` | Index build + eval only |
-| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Eval only |
+| LLM | `gpt-6-luna` via OpenAI (chosen by [ADR-0008](adr/0008-generation-moves-to-openai.md)'s rule), overridable with `OPENAI_MODEL` | Production |
+| Embedding | `sentence-transformers/all-mpnet-base-v2`, on torch and on ONNX Runtime | Index build + eval only |
+| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2`, on torch and on ONNX Runtime | Eval only |
 
-Neither model is installed in the production image: `faiss-cpu` and `sentence-transformers`
-live in the `dev` dependency group, which the Dockerfile's `uv sync --no-dev` skips.
+Neither model is installed in the production image: `faiss-cpu`, `sentence-transformers`,
+`onnxruntime`, `tokenizers` and `huggingface-hub` live in the `dev` dependency group, which
+the Dockerfile's `uv sync --no-dev` skips. The ONNX Runtime versions back the Candidate
+Arms, which could ship without torch if one is ever chosen
+([ADR-0009](adr/0009-shipped-arm-selection-rule.md)).
 
 ## Environment Variables
 
 | Variable | Where | Description |
 |----------|-------|-------------|
-| `GROQ_API_KEY` | Railway (backend) | Groq API key |
+| `OPENAI_API_KEY` | Railway (backend) | Production's OpenAI key (CI uses its own, `OPENAI_CI_API_KEY`) |
+| `OPENAI_MODEL` | Railway (backend) | Optional; defaults to `gpt-6-luna` |
+| `DAILY_REQUEST_CAP` | Railway (backend) | Optional; global chat requests per UTC day, default 1,000 |
 | `CHAT_API_URL` | Vercel (frontend) | URL of the FastAPI backend |
 | `ALLOWED_ORIGINS` | Railway (backend) | CORS allowed origins (Vercel URL) |
 
@@ -172,7 +249,9 @@ discarded at zero. Rank position is scale-free and has neither problem.
 
 ## Evaluation
 
-Retrieval quality is measured against an 87-question golden set across three query
-categories (`direct`, `paraphrase`, `conceptual`) and gated in CI.
+Retrieval quality is measured against the 111 answerable questions of the golden set across
+three query categories (`direct`, `paraphrase`, `conceptual`) and gated in CI. The golden
+set also holds 20 Out-of-Scope Cases, which retrieval skips and the generation eval scores
+on whether the answer Declines.
 See [docs/evaluation.md](docs/evaluation.md) for how the harness works, the regression
 floors it enforces, and the findings that shaped the pipeline.

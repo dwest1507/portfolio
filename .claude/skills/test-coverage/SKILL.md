@@ -55,11 +55,11 @@ Backend tests use `pytest` with FastAPI's synchronous `TestClient`. The `conftes
 - **`mock_pipeline`** — a `MagicMock` of `RAGPipeline` with `retrieve` returning sample chunks; avoids loading real ML models
 - **`client`** — a `TestClient` with `get_pipeline` patched in both `app.rag.pipeline` and `app.routes.chat`
 
-**Groq streaming helper** (defined in `test_chat.py`):
+**OpenAI streaming helper** (defined in `test_chat.py`):
 
 ```python
-def _mock_groq_stream(tokens: list[str]):
-    """Build an async mock that yields token chunks like the real Groq stream."""
+def _mock_openai_stream(tokens: list[str]):
+    """Build an async mock that yields token chunks like the real OpenAI stream."""
     async def _stream():
         for token in tokens:
             chunk = MagicMock()
@@ -76,8 +76,8 @@ def _mock_groq_stream(tokens: list[str]):
 ```python
 # Endpoint — happy path with streamed response
 def test_valid_request_streams_response(client, mock_pipeline):
-    mock_groq = _mock_groq_stream(["Hello", " world"])
-    with patch("app.routes.chat.AsyncGroq", return_value=mock_groq):
+    mock_openai = _mock_openai_stream(["Hello", " world"])
+    with patch("app.llm.AsyncOpenAI", return_value=mock_openai):
         response = client.post("/api/chat", json={"message": "What is David's background?"})
     assert response.status_code == 200
     tokens = _parse_data_stream(response.text)
@@ -88,11 +88,11 @@ def test_empty_message_returns_422(client):
     response = client.post("/api/chat", json={"message": ""})
     assert response.status_code == 422
 
-# Groq error — stream signals error via data stream protocol (HTTP 200, error event in body)
-def test_groq_error_yields_error_event(client, mock_pipeline):
-    mock_groq = AsyncMock()
-    mock_groq.chat.completions.create = AsyncMock(side_effect=Exception("API down"))
-    with patch("app.routes.chat.AsyncGroq", return_value=mock_groq):
+# OpenAI error — stream signals error via data stream protocol (HTTP 200, error event in body)
+def test_openai_error_yields_error_event(client, mock_pipeline):
+    mock_openai = AsyncMock()
+    mock_openai.chat.completions.create = AsyncMock(side_effect=Exception("API down"))
+    with patch("app.llm.AsyncOpenAI", return_value=mock_openai):
         response = client.post("/api/chat", json={"message": "Hello"})
     assert '3:"Generation failed"' in response.text
 
@@ -115,7 +115,7 @@ def test_hybrid_search_returns_chunks(fake_indexes):
 Always test:
 - Success path (correct response shape, correct status code)
 - Validation errors (422 for bad input — handled by Pydantic)
-- Error propagation (Groq failure → error event in stream body, not HTTP 500)
+- Error propagation (OpenAI failure → error event in stream body, not HTTP 500)
 - RAG pipeline methods: search, re-ranking, prompt construction
 
 ### 4. Write Frontend Tests
@@ -181,8 +181,8 @@ cd frontend && npm run test -- --run
 ## Rules
 
 1. **Test behavior, not implementation** — assert on outputs and side-effects, not internal state.
-2. **No real ML models in tests** — mock `SentenceTransformer`, `CrossEncoder`, and `AsyncGroq`. Use the `fake_indexes` fixture (tmp_path) for FAISS/BM25 tests.
-3. **No real Groq API calls** — always patch `app.routes.chat.AsyncGroq`.
+2. **No real ML models in tests** — mock `SentenceTransformer`, `CrossEncoder`, and `AsyncOpenAI`. Use the `fake_indexes` fixture (tmp_path) for FAISS/BM25 tests.
+3. **No real OpenAI API calls** — always patch `app.llm.AsyncOpenAI`.
 4. **Static components need no tests** — only test components with conditional rendering, state, or user interactions.
 5. **One test file per source file** — `test_chat.py` covers `routes/chat.py`; `test_rag.py` covers `rag/pipeline.py` and `scripts/build_index.py`.
 

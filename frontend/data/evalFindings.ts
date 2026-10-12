@@ -45,6 +45,96 @@ export interface Finding {
 /** Newest first. */
 export const findings: Finding[] = [
   {
+    id: 'onnx-matches-torch',
+    date: '2026-10-12',
+    title: 'Swapping torch for ONNX Runtime changed no retrieval score, only the speed',
+    observed:
+      'Run on ONNX Runtime instead of torch, semantic search and hybrid search scored ' +
+      'identically on all four metrics for 68 of 68 development questions (158 chunks): ' +
+      'the embeddings agreed to a cosine similarity of 0.9999999, and the re-ranker put ' +
+      'every candidate in the same order. The runtime changed only the cost. The ONNX ' +
+      'models load in about a second rather than a tenth of one, and the ONNX re-ranker ran ' +
+      '5–9× slower than torch.',
+    changed:
+      'Each torch Reference Arm was a duplicate row of an arm that could ship, so the ' +
+      'scoreboard now shows only the arms that could ship. The torch arms are still ' +
+      'measured, and their results stay in the evaluation docs.',
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#onnx-runtime-reproduces-the-torch-models-it-does-not-run-them-as-fast',
+  },
+  {
+    id: 'shipped-arm-decision',
+    date: '2026-10-11',
+    title: 'No shippable model changed the answers enough to replace keyword search',
+    observed:
+      'Each arm that could ship (keyword search, ONNX semantic search, ONNX hybrid, and ' +
+      'keyword search re-ranked by an ONNX cross-encoder) retrieved for every golden ' +
+      'question, gpt-6-luna answered from what it retrieved, and the pinned Judge scored ' +
+      'the answers. On the 82 development cases (152 Required Facts), every arm was ' +
+      'indistinguishable from keyword search on Fact Recall: the most lopsided split, ' +
+      'hybrid’s 20 facts gained to 15 lost, has a sign-test p of 0.50. They were also ' +
+      'indistinguishable on Faithfulness and Decline accuracy. The 49 held-out cases (112 ' +
+      'Required Facts) gave the same result. The re-ranking arm came closest there (12 ' +
+      'gained, 4 lost, p = 0.077), and its ~1s warm Latency Band rules it out anyway. This ' +
+      'is not a win for keyword search; with this many cases the arms cannot be told apart.',
+    changed:
+      'Keyword search stays the shipped arm by ADR-0009’s default, so the shipped flag, the ' +
+      'production dependencies and the image are unchanged. Telling these arms apart needs ' +
+      'more of the paraphrase, conceptual and visitor questions they disagree on.',
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#result-no-candidate-arm-qualifies-keyword-search-stays-shipped',
+  },
+  {
+    id: 'generation-model-chosen',
+    date: '2026-10-11',
+    title: 'The cheapest OpenAI model answered more faithfully than the Groq model it replaces',
+    observed:
+      'Given the exact chunks the Groq baseline answered from, gpt-6-luna and Groq differed ' +
+      'on 10 held-out answers where only one of them wrote an unsupported sentence. Every ' +
+      'one was Groq’s, a split a sign test rules out as chance (Faithfulness 0.762 → 0.986). ' +
+      'gpt-6.1-sol conveyed more Required Facts (Fact Recall 0.782 vs 0.701) but was ' +
+      'indistinguishable from Luna on Faithfulness and Decline accuracy, at about 22× the ' +
+      'cost per answer ($0.0028 vs $0.00012). The decision was made on dev, and held-out gave ' +
+      'the same answer.',
+    changed:
+      'Chose gpt-6-luna as the production generation model under the written rule ' +
+      '(cheapest unless distinguishably worse; Fact Recall alone never justifies an ' +
+      'upgrade), and added a replay mode so candidate models answer from stored contexts.',
+    move: {
+      metric: 'Faithfulness',
+      before: 0.762,
+      after: 0.986,
+      arm: 'Groq gpt-oss-120b → gpt-6-luna, Keyword only, held-out (39 questions)',
+    },
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#choosing-the-generation-model',
+  },
+  {
+    id: 'structure-aware-chunking',
+    date: '2026-10-11',
+    title: 'Cutting the corpus along its sources’ structure moved no arm beyond noise',
+    observed:
+      'Re-chunking the corpus from ~1,000-character packs into one chunk per question and ' +
+      'answer, project section and resume role (123 chunks to 157) was measured on the 54 ' +
+      'development questions. Keyword search gained four questions and lost one, including ' +
+      '“Where is David based?”, which had missed although its answer chunk contained the ' +
+      'question. No arm’s gains and losses were lopsided enough to rule out chance (exact sign ' +
+      'test, p ≥ 0.375). Its five remaining misses are vocabulary gaps — “study in college” ' +
+      'against “Major: Biochemistry”, “national defense vetting” against “security clearance” — ' +
+      'that no stemmer bridges.',
+    changed:
+      'The index build has one chunking entry point with one rule per source, every chunk ' +
+      'carries the heading that says what it is about, and a source that stops parsing into ' +
+      'its structure now fails the build instead of indexing as one block. The tokenizer was ' +
+      'left alone: no miss that survived re-chunking is a tokenizer problem. The floors were ' +
+      're-checked, not edited — over the whole golden set keyword search cleared them at ' +
+      'hit@5 0.885 and MRR 0.752, against 0.85 and 0.75.',
+    move: {
+      metric: 'hit@5',
+      before: 0.852,
+      after: 0.907,
+      arm: 'Keyword only (development questions, all 54)',
+    },
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/evaluation.md#chunks-cut-along-source-structure-moved-no-arm-beyond-noise',
+  },
+  {
     id: 'query-categories-evaluated',
     date: '2026-09-13',
     title: 'Query categories revealed where dense and re-ranking models beat keyword search',

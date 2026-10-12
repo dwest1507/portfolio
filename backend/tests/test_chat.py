@@ -1,11 +1,16 @@
 """Tests for POST /api/chat."""
 
 import json
+import logging
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.daily_cap import RESTING_MESSAGE, DailyCap
+from app.llm import MAX_TOKENS, REASONING_EFFORT
 
-def _mock_groq_stream(tokens: list[str]):
-    """Build an async mock that yields token chunks like the real Groq stream."""
+
+def _mock_openai_stream(tokens: list[str]):
+    """Build an async mock that yields token chunks like the real OpenAI stream."""
 
     async def _stream():
         for token in tokens:
@@ -57,9 +62,9 @@ def test_missing_message_field_returns_422(client):
 
 def test_valid_request_streams_response(client, mock_pipeline):
     tokens = ["David", " is", " an", " AI", " Engineer."]
-    mock_groq = _mock_groq_stream(tokens)
+    mock_openai = _mock_openai_stream(tokens)
 
-    with patch("app.llm.AsyncGroq", return_value=mock_groq):
+    with patch("app.llm.AsyncOpenAI", return_value=mock_openai):
         response = client.post(
             "/api/chat",
             json={"message": "What is David's background?"},
@@ -72,21 +77,21 @@ def test_valid_request_streams_response(client, mock_pipeline):
 
 
 def test_response_content_type(client, mock_pipeline):
-    mock_groq = _mock_groq_stream(["ok"])
-    with patch("app.llm.AsyncGroq", return_value=mock_groq):
+    mock_openai = _mock_openai_stream(["ok"])
+    with patch("app.llm.AsyncOpenAI", return_value=mock_openai):
         response = client.post("/api/chat", json={"message": "Hello"})
     assert "text/plain" in response.headers["content-type"]
 
 
 def test_stream_ends_with_finish_marker(client, mock_pipeline):
-    mock_groq = _mock_groq_stream(["done"])
-    with patch("app.llm.AsyncGroq", return_value=mock_groq):
+    mock_openai = _mock_openai_stream(["done"])
+    with patch("app.llm.AsyncOpenAI", return_value=mock_openai):
         response = client.post("/api/chat", json={"message": "Hello"})
     assert 'd:{"finishReason": "stop"}' in response.text
 
 
 def test_conversation_history_is_forwarded(client, mock_pipeline):
-    """History should be included in the messages sent to Groq."""
+    """History should be included in the messages sent to OpenAI."""
     captured_messages = []
 
     async def _fake_create(**kwargs):
@@ -98,15 +103,15 @@ def test_conversation_history_is_forwarded(client, mock_pipeline):
 
         return _empty()
 
-    mock_groq = AsyncMock()
-    mock_groq.chat.completions.create = AsyncMock(side_effect=_fake_create)
+    mock_openai = AsyncMock()
+    mock_openai.chat.completions.create = AsyncMock(side_effect=_fake_create)
 
     history = [
         {"role": "user", "content": "What are your skills?"},
         {"role": "assistant", "content": "Python, FastAPI, FAISS..."},
     ]
 
-    with patch("app.llm.AsyncGroq", return_value=mock_groq):
+    with patch("app.llm.AsyncOpenAI", return_value=mock_openai):
         client.post(
             "/api/chat",
             json={"message": "Tell me more", "history": history},
@@ -131,10 +136,10 @@ def test_rag_context_included_in_system_prompt(client, mock_pipeline):
 
         return _empty()
 
-    mock_groq = AsyncMock()
-    mock_groq.chat.completions.create = AsyncMock(side_effect=_fake_create)
+    mock_openai = AsyncMock()
+    mock_openai.chat.completions.create = AsyncMock(side_effect=_fake_create)
 
-    with patch("app.llm.AsyncGroq", return_value=mock_groq):
+    with patch("app.llm.AsyncOpenAI", return_value=mock_openai):
         client.post("/api/chat", json={"message": "What is David's background?"})
 
     system_msg = next(m for m in captured_messages if m["role"] == "system")
@@ -142,17 +147,188 @@ def test_rag_context_included_in_system_prompt(client, mock_pipeline):
     assert "AI Engineer" in system_msg["content"] or "David" in system_msg["content"]
 
 
+def _capturing_openai(captured: dict):
+    """An OpenAI client whose streamed completion records its request and yields nothing."""
+
+    async def _fake_create(**kwargs):
+        captured.update(kwargs)
+
+        async def _empty():
+            return
+            yield
+
+        return _empty()
+
+    mock_openai = AsyncMock()
+    mock_openai.chat.completions.create = AsyncMock(side_effect=_fake_create)
+    return mock_openai
+
+
+def test_production_streams_the_configured_model_with_the_eval_sampling_settings(
+    client, mock_pipeline
+):
+    """Visitors are served what the generation eval measures (ADR-0007, ADR-0008).
+
+    The configured model answers, streamed, with the pinned reasoning effort and the
+    shared completion cap. No temperature is sent: OpenAI's reasoning models reject any
+    but the default, so the reasoning effort is what production and the eval pin instead
+    (ADR-0007 amendment, 2026-10-10).
+    """
+    captured = {}
+    with (
+        patch("app.llm.AsyncOpenAI", return_value=_capturing_openai(captured)),
+        patch("app.llm.OPENAI_MODEL", "sentinel-model"),
+    ):
+        client.post("/api/chat", json={"message": "What is David's background?"})
+
+    assert captured["model"] == "sentinel-model"
+    assert captured["stream"] is True
+    assert captured["reasoning_effort"] == REASONING_EFFORT
+    assert captured["max_completion_tokens"] == MAX_TOKENS
+    assert "temperature" not in captured
+
+
 # ---------------------------------------------------------------------------
-# Groq API error
+# Global daily cap
 # ---------------------------------------------------------------------------
 
 
-def test_groq_error_yields_error_event(client, mock_pipeline):
-    """When Groq fails, the stream signals an error via the data stream protocol."""
-    mock_groq = AsyncMock()
-    mock_groq.chat.completions.create = AsyncMock(side_effect=Exception("API down"))
+class _Clock:
+    """A settable UTC date, so a test can move the cap into tomorrow."""
 
-    with patch("app.llm.AsyncGroq", return_value=mock_groq):
+    def __init__(self, today: date):
+        self.today = today
+
+    def __call__(self) -> date:
+        return self.today
+
+
+def test_requests_past_the_daily_cap_get_the_resting_message(client, mock_pipeline):
+    """A paid model behind an anonymous endpoint: past the cap, nothing reaches OpenAI.
+
+    The visitor is told the assistant is resting rather than shown an error, and the
+    stream still ends normally so the frontend renders it as an ordinary reply.
+    """
+    mock_openai = _mock_openai_stream(["Answered."])
+    with (
+        patch("app.routes.chat.daily_cap", DailyCap(limit=1)),
+        patch("app.llm.AsyncOpenAI", return_value=mock_openai),
+    ):
+        first = client.post("/api/chat", json={"message": "Hello"})
+        second = client.post("/api/chat", json={"message": "Hello again"})
+
+    assert _parse_data_stream(first.text) == ["Answered."]
+    assert second.status_code == 200
+    assert _parse_data_stream(second.text) == [RESTING_MESSAGE]
+    assert 'd:{"finishReason": "stop"}' in second.text
+    assert "resting for today" in RESTING_MESSAGE
+    assert mock_openai.chat.completions.create.await_count == 1
+
+
+def test_the_daily_cap_skips_retrieval_once_reached(client, mock_pipeline):
+    """A capped request does no work at all, not even the cheap retrieval step."""
+    with patch("app.routes.chat.daily_cap", DailyCap(limit=0)):
+        client.post("/api/chat", json={"message": "Hello"})
+
+    mock_pipeline.retrieve.assert_not_called()
+
+
+def test_the_daily_cap_resets_on_the_next_utc_day(client, mock_pipeline):
+    clock = _Clock(date(2026, 10, 11))
+    with patch("app.routes.chat.daily_cap", DailyCap(limit=1, today=clock)):
+        with patch("app.llm.AsyncOpenAI", return_value=_mock_openai_stream(["one"])):
+            client.post("/api/chat", json={"message": "Hello"})
+        capped = client.post("/api/chat", json={"message": "Hello"})
+
+        clock.today = date(2026, 10, 12)
+        with patch("app.llm.AsyncOpenAI", return_value=_mock_openai_stream(["two"])):
+            tomorrow = client.post("/api/chat", json={"message": "Hello"})
+
+    assert _parse_data_stream(capped.text) == [RESTING_MESSAGE]
+    assert _parse_data_stream(tomorrow.text) == ["two"]
+
+
+def test_the_daily_cap_is_configured_by_environment():
+    """The production cap comes from DAILY_REQUEST_CAP, so it can move without a deploy."""
+    from app.config import DAILY_REQUEST_CAP
+    from app.routes.chat import daily_cap
+
+    assert daily_cap.limit == DAILY_REQUEST_CAP
+
+
+# ---------------------------------------------------------------------------
+# Visitor query log (ADR-0010)
+# ---------------------------------------------------------------------------
+
+
+def _visitor_query_records(caplog) -> list[dict]:
+    """The visitor query records the chat route emitted, parsed from their JSON lines."""
+    return [json.loads(r.getMessage()) for r in caplog.records if r.name == "app.visitor_queries"]
+
+
+def test_each_question_is_logged_with_its_chunk_count_and_nothing_else(
+    client, mock_pipeline, caplog
+):
+    """ADR-0010: the question text and how many chunks were retrieved — no IP, no
+    history, no answer. The record is what a later Golden Set case may be drawn from."""
+    history = [
+        {"role": "user", "content": "PRIOR-QUESTION-SENTINEL"},
+        {"role": "assistant", "content": "PRIOR-ANSWER-SENTINEL"},
+    ]
+    caplog.set_level(logging.INFO, logger="app.visitor_queries")
+    with patch("app.llm.AsyncOpenAI", return_value=_mock_openai_stream(["ANSWER-SENTINEL"])):
+        client.post(
+            "/api/chat",
+            json={"message": "Where is David based?", "history": history},
+            headers={"X-Forwarded-For": "203.0.113.7"},
+        )
+
+    assert _visitor_query_records(caplog) == [
+        {"event": "visitor_query", "question": "Where is David based?", "chunks_retrieved": 3}
+    ]
+    logged = "\n".join(
+        r.getMessage() + repr(vars(r)) for r in caplog.records if r.name == "app.visitor_queries"
+    )
+    for leaked in (
+        "testclient",  # the test client's remote address
+        "203.0.113.7",
+        "PRIOR-QUESTION-SENTINEL",
+        "PRIOR-ANSWER-SENTINEL",
+        "ANSWER-SENTINEL",
+    ):
+        assert leaked not in logged
+
+
+def test_an_empty_context_is_logged_as_zero_chunks(client, mock_pipeline, caplog):
+    """A zero count is what the production Empty Context rate is computed from."""
+    mock_pipeline.retrieve.return_value = []
+    caplog.set_level(logging.INFO, logger="app.visitor_queries")
+    with patch("app.llm.AsyncOpenAI", return_value=_mock_openai_stream(["I don't know."])):
+        client.post("/api/chat", json={"message": "What is David's favourite colour?"})
+
+    assert [r["chunks_retrieved"] for r in _visitor_query_records(caplog)] == [0]
+
+
+def test_a_capped_request_is_not_logged(client, mock_pipeline, caplog):
+    """Nothing was retrieved for it, so a record would count as an Empty Context."""
+    caplog.set_level(logging.INFO, logger="app.visitor_queries")
+    with patch("app.routes.chat.daily_cap", DailyCap(limit=0)):
+        client.post("/api/chat", json={"message": "Hello"})
+
+    assert _visitor_query_records(caplog) == []
+
+
+# ---------------------------------------------------------------------------
+# OpenAI API error
+# ---------------------------------------------------------------------------
+
+
+def test_openai_error_yields_error_event(client, mock_pipeline):
+    """When OpenAI fails, the stream signals an error via the data stream protocol."""
+    mock_openai = AsyncMock()
+    mock_openai.chat.completions.create = AsyncMock(side_effect=Exception("API down"))
+
+    with patch("app.llm.AsyncOpenAI", return_value=mock_openai):
         response = client.post("/api/chat", json={"message": "Hello"})
 
     # HTTP 200 because the response already started streaming

@@ -1,0 +1,134 @@
+name: Generation gate
+
+# Answers the golden question set with the Shipped Arm, judges the answers, and fails if
+# Faithfulness or Decline accuracy drops below its Floor in backend/eval/floors/generation.json
+# (ADR-0007, ADR-0012), or fails first with "Floors stale: Recalibrate" when that record no
+# longer matches the Golden Set or the instrument. On pushes to main it
+# also publishes the held-out results to frontend/data/generationResults.json.
+#
+# Every run calls paid APIs (OpenAI and TypeSafe's Jev), so the path filter is narrower
+# than backend-ci.yml's: only what can change an answer. Dependency bumps (uv.lock,
+# pyproject.toml) and the rest of the backend do not trigger it.
+
+on:
+  # The two path lists are identical; change them together.
+  pull_request:
+    paths:
+      # Generation: the prompt, sampling settings and model configuration
+      - 'backend/app/llm.py'
+      - 'backend/app/config.py'
+      # Retrieval as production runs it, and the Corpus it runs over
+      - 'backend/app/rag/**'
+      - 'backend/indexes/**'
+      - 'backend/scripts/build_index.py'
+      - 'docs/resume.txt'
+      - 'docs/chatbot-questions.md'
+      - 'frontend/content/projects/**'
+      # The Golden Set, the generation Floors record, and the generation harness
+      - 'backend/eval/golden_set.json'
+      - 'backend/eval/floors/generation.json'
+      - 'backend/eval/recalibration.py'
+      - 'backend/eval/generation.py'
+      - 'backend/eval/judge.py'
+      - 'backend/eval/splitter.py'
+      - 'backend/eval/gate_generation.py'
+      - 'backend/eval/publish_generation.py'
+      - 'scripts/backend-generation-gate.sh'
+      - '.github/workflows/generation-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/app/llm.py'
+      - 'backend/app/config.py'
+      - 'backend/app/rag/**'
+      - 'backend/indexes/**'
+      - 'backend/scripts/build_index.py'
+      - 'docs/resume.txt'
+      - 'docs/chatbot-questions.md'
+      - 'frontend/content/projects/**'
+      - 'backend/eval/golden_set.json'
+      - 'backend/eval/floors/generation.json'
+      - 'backend/eval/recalibration.py'
+      - 'backend/eval/generation.py'
+      - 'backend/eval/judge.py'
+      - 'backend/eval/splitter.py'
+      - 'backend/eval/gate_generation.py'
+      - 'backend/eval/publish_generation.py'
+      - 'scripts/backend-generation-gate.sh'
+      - '.github/workflows/generation-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Kept in step with backend-ci.yml; see the note there.
+  UV_VERSION: "0.12.23"
+
+concurrency:
+  group: generation-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  gate:
+    name: Generation gate
+    runs-on: ubuntu-latest
+    # The gate answers and judges eight cases at a time (eval/gate_generation.py's
+    # --workers default): the gate step takes ~2.5 minutes on 131 cases (one at a time it
+    # took ~20). The rest is headroom for Jev's retries.
+    timeout-minutes: 10
+    # Only this job writes, and only on main.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: backend
+
+      # CI's own keys, separate from production's, so eval spend and visitor spend can be
+      # told apart (ADR-0008). The OpenAI key shares production's project and its hard
+      # monthly budget (docs/deployment.md). Pull requests measure and gate but never publish
+      # (ADR-0001).
+      - name: Generation quality gate
+        env:
+          OPENAI_CI_API_KEY: ${{ secrets.OPENAI_CI_API_KEY }}
+          JEV_API_KEY: ${{ secrets.JEV_CI_API_KEY }}
+          PUBLISH_EVAL: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && '1' || '0' }}
+          GENERATION_RUN_OUTPUT: ${{ runner.temp }}/generation-run.json
+        run: ./scripts/backend-generation-gate.sh
+
+      # Every answer, judgment and Contradiction, to review what the gate measured.
+      - name: Upload the judged run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generation-run
+          path: ${{ runner.temp }}/generation-run.json
+          if-no-files-found: ignore
+
+      # The commit touches only frontend/data/generationResults.json, which matches no
+      # path filter here, so it cannot retrigger this workflow.
+      - name: Publish measured results
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- frontend/data/generationResults.json; then
+            echo "Results unchanged after rounding; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/data/generationResults.json
+          git commit -m "chore(eval): publish generation results for ${GITHUB_SHA:0:7}" \
+            -m "Generated by the Generation gate job. See docs/adr/0007-generation-evaluation-harness.md."
+          # Rebase rather than force: another push may have landed while the gate ran.
+          git pull --rebase origin main
+          git push origin HEAD:main

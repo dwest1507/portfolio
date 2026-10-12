@@ -39,4 +39,8 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# --no-access-log: uvicorn's access log would print a "POST /api/chat" line with the
+# client's address right after each visitor_query line, linking a logged question to an
+# IP. ADR-0010 promises the visitor query log carries none, so production keeps no access
+# log at all. Errors and startup messages still go to the service logs.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --no-access-log"]

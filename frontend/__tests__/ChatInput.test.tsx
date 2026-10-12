@@ -69,4 +69,12 @@ describe('ChatInput', () => {
     render(<ChatInput {...baseProps} />)
     expect(screen.getByRole('textbox')).toHaveAttribute('maxLength', '500')
   })
+
+  it('tells visitors under the input that questions are logged anonymously and answered by OpenAI', () => {
+    render(<ChatInput {...baseProps} />)
+    const notice = screen.getByText('Questions are logged anonymously and answered by OpenAI.')
+    expect(
+      screen.getByRole('textbox').compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
 })

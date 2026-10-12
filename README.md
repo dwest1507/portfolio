@@ -2,7 +2,7 @@
 
 Personal portfolio website for David West, an AI Engineer with 5+ years of data science and AI experience. Features a dark, Linear-inspired design system and an AI-powered chatbot recruiters can use to ask questions about qualifications.
 
-**Stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · Python FastAPI · Groq
+**Stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · Python FastAPI · OpenAI
 
 **Deployed at:** Vercel (frontend) · Railway (backend)
 
@@ -37,7 +37,7 @@ make build-index
 Create `backend/.env` with your credentials:
 
 ```
-GROQ_API_KEY=your_key_here
+OPENAI_API_KEY=your_key_here
 ALLOWED_ORIGINS=http://localhost:3000
 ```
 
@@ -63,8 +63,9 @@ See [docs/architecture.md](docs/architecture.md) for the full system design and
 ## Key Features
 
 - **5 project showcases** with filterable cards and MDX detail pages — including a write-up of this site's own retrieval pipeline and eval results
-- **AI chatbot** — floating widget with streaming responses, powered by a RAG pipeline (BM25 retrieval, chosen over hybrid search and cross-encoder re-ranking by [measurement](docs/evaluation.md)) and Groq LLM
-- **Measured retrieval** — an 87-question golden set across three query categories scores the pipeline on hit@5, recall@5, MRR, and nDCG@5, gated in CI so retrieval quality cannot regress silently ([docs/evaluation.md](docs/evaluation.md))
+- **AI chatbot** — floating widget with streaming responses, powered by a RAG pipeline (BM25 retrieval, chosen over hybrid search and cross-encoder re-ranking by [measurement](docs/evaluation.md)) and OpenAI `gpt-6-luna`, itself chosen over the Groq model it replaced by measuring answers
+- **Measured retrieval** — 111 answerable golden questions across three query categories score the pipeline on hit@5, recall@5, MRR, and nDCG@5, gated in CI so retrieval quality cannot regress silently ([docs/evaluation.md](docs/evaluation.md))
+- **Measured answers** — every golden question is answered and scored by a pinned judge model for Faithfulness, Decline accuracy and Fact Recall; the first two gate generation-relevant PRs, and held-out results publish to the portfolio page with cost per answer
 - **Dark design system** — near-black surfaces, a single sky-blue accent (`#0ea5e9`), Inter for text with monospace micro-labels
 
 ---
@@ -77,6 +78,8 @@ make dev-backend     # FastAPI on :8000
 make test            # Run all tests (pytest + vitest)
 make eval            # Retrieval quality eval (all arms; downloads models)
 make eval-fast       # Retrieval eval, BM25 arm only (no model download)
+make generation-gate # Generation gate (paid API calls; needs keys in backend/.env)
+make generation-comparison # Candidate Arms through generation (paid; ~4 gate runs)
 make lint            # Ruff + ESLint + Prettier + tsc
 make ci-cd           # Run every CI check locally — same scripts CI runs
 make build-index     # Rebuild RAG search indexes
@@ -100,8 +103,9 @@ automated versioning and changelog generation.
    `CHANGELOG.md`.
 3. **Merge:** merging that PR creates the git tag and GitHub Release.
 
-Frontend (`frontend/package.json`) and backend (`backend/pyproject.toml`) share one
-synchronized version, tracked in `.release-please-manifest.json`.
+Frontend (`frontend/package.json`) and backend (`backend/pyproject.toml`, plus its entry
+in `backend/uv.lock`) share one synchronized version, tracked in
+`.release-please-manifest.json`.
 
 ---
 

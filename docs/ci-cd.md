@@ -29,6 +29,8 @@ Each check also has its own target for debugging a single failure:
 | `make backend-test` | `scripts/backend-test.sh` | backend-ci → test job |
 | `make security-audit` | `scripts/security-audit.sh all` | security → npm-audit + pip-audit jobs |
 | `make lighthouse` | `scripts/lighthouse.sh` | lighthouse workflow (needs Chrome) |
+| `make generation-gate` | `scripts/backend-generation-gate.sh` | generation-gate workflow (paid API calls; not part of `make ci-cd`) |
+| `make generation-comparison` | `scripts/backend-generation-comparison.sh` | generation-comparison workflow (paid API calls, about four gate runs; not part of `make ci-cd`) |
 
 What can't run locally: CodeQL, gitleaks, and dependency review are GitHub-hosted
 analyses inside `security.yml`. Everything else is script-for-script identical.
@@ -38,7 +40,9 @@ analyses inside `security.yml`. Everything else is script-for-script identical.
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
 | `frontend-ci.yml` | PRs and pushes to `main` touching `frontend/**`; manual dispatch | `scripts/frontend-quality.sh` (ESLint, Prettier, tsc), `frontend-test.sh` (Vitest), `frontend-build.sh` |
-| `backend-ci.yml` | PRs and pushes to `main` touching `backend/**`; manual dispatch | `scripts/backend-lint.sh` (ruff check + format), `backend-test.sh` (pytest, ML models mocked) |
+| `backend-ci.yml` | PRs and pushes to `main` touching `backend/**`; manual dispatch | `scripts/backend-lint.sh` (`uv lock --check`, ruff check + format), `backend-test.sh` (pytest, ML models mocked), `backend-eval.sh` (retrieval gate; publishes the held-out Measured Run on `main`) |
+| `generation-gate.yml` | PRs and pushes to `main` touching generation-relevant paths only (prompt and model config, retrieval code, indexes, Corpus sources, Golden Set, generation harness); manual dispatch | `scripts/backend-generation-gate.sh` — answers the Golden Set with the Shipped Arm, judges it, fails below the Faithfulness or Decline accuracy Floor in `backend/eval/floors/generation.json` (and fails first, before any paid call, with "Floors stale: Recalibrate" when that record no longer matches the Golden Set or the instrument); publishes the held-out results to `frontend/data/generationResults.json` on `main`. Paid: needs the `OPENAI_CI_API_KEY` and `JEV_CI_API_KEY` secrets |
+| `generation-comparison.yml` | Manual dispatch only | `scripts/backend-generation-comparison.sh` — answers the Golden Set on `dev` and `holdout` with every Candidate Arm (never a Reference Arm), judges it, and compares each Arm with the Shipped Arm by the sign test (ADR-0009). Uploads every judged run, `dev` included, as the `comparison-run` artifact; dispatched on `main`, publishes the held-out results as the `comparison` section of `frontend/data/generationResults.json`. Paid: same secrets as the generation gate |
 | `security.yml` | PRs, pushes to `main`, weekly cron | CodeQL (TS + Python), gitleaks secret scan, `scripts/security-audit.sh` (npm audit prod/high+, pip-audit), dependency review on PRs |
 | `lighthouse.yml` | PRs touching `frontend/**` | `scripts/lighthouse.sh` — Lighthouse CI against the production build; asserts ≥ 0.9 on accessibility / best-practices / SEO (performance warns) per `frontend/lighthouserc.json` |
 | `release.yml` | Pushes to `main` | [Release Please](https://github.com/googleapis/release-please) — maintains the release PR, then tags and publishes the GitHub Release when it merges |
@@ -46,6 +50,37 @@ analyses inside `security.yml`. Everything else is script-for-script identical.
 Node is pinned by `frontend/.nvmrc` and read via `node-version-file:` in every
 workflow — CI must resolve `package-lock.json` with the same npm major that generated
 it, or `npm ci` fails on peer dependencies.
+
+**The generation gate's path filter is narrower than `backend-ci.yml`'s on purpose.** Every
+run calls OpenAI and TypeSafe's Jev, so dependency bumps (`uv.lock`, `pyproject.toml`) and
+backend code that cannot change an answer do not trigger it. Its two path lists (`pull_request`
+and `push`) are identical; change them together. It uses CI's own keys, stored as the
+repository secrets `OPENAI_CI_API_KEY` and `JEV_CI_API_KEY`, never production's, so eval
+spend and visitor spend can be told apart (ADR-0008). `OPENAI_CI_API_KEY` is a key in the
+same OpenAI project as production's, so the project's $20 hard monthly budget caps CI and
+visitors together ([deployment.md](deployment.md#step-2a--the-openai-project-key-and-budget)). Locally, `make generation-gate` reads
+`OPENAI_CI_API_KEY` and `JEV_API_KEY` from `backend/.env`.
+
+Both generation workflows answer and judge eight cases at a time. The gate step takes about
+two and a half minutes on the 131-case Golden Set, so `generation-gate.yml` times out at
+10 minutes and `generation-comparison.yml` (four Arms) at 30, leaving room for Jev's
+retries. The gate's Floors (Faithfulness 0.80, Decline accuracy 0.85) and the publisher's
+rounding steps come from `backend/eval/floors/generation.json`, written only by
+`eval/recalibrate.py generation` from a five-run study
+([evaluation.md](evaluation.md#run-to-run-spread)); a change to the Golden Set's questions,
+Required Facts or `answerable`, or to the instrument, makes the gate fail "Floors stale:
+Recalibrate" until that study is rerun in the same change.
+
+uv is pinned the same way, for the same reason: `UV_VERSION` in `backend-ci.yml`,
+`generation-gate.yml` and `generation-comparison.yml` (and the `setup-uv` step in `security.yml`) matches the uv that last wrote `backend/uv.lock`, so CI
+and local development agree on the lockfile's format `revision`. Bump them together when
+you upgrade uv locally and re-lock.
+
+**The backend lockfile is never modified in CI.** Every backend script runs
+`uv run --frozen`, so a job measures exactly the committed `uv.lock`. A stale lockfile —
+one that no longer matches `pyproject.toml` — fails `uv lock --check` in the lint job on
+the PR that caused it. Before this, `uv run` silently re-locked during the eval, and the
+dirty `uv.lock` broke the publish step's `git pull --rebase` on every push to `main`.
 
 ## Making CI block deploys
 
@@ -80,12 +115,16 @@ release. Merging that PR is what cuts a release:
 
 - bumps the version in `frontend/package.json` and `backend/pyproject.toml`
   (the `# x-release-please-version` comment marks the line release-please rewrites)
+- bumps the `backend` package's own version inside `backend/uv.lock`, so the release PR
+  passes `uv lock --check`. This uses the `toml` extra-file updater with the JSONPath
+  `$.package[?(@.name.value=='backend')].version` — the `.value` is required, because
+  release-please's TOML parser wraps each value; `@.name=='backend'` silently matches nothing
 - writes the entry into `CHANGELOG.md`
 - updates `.release-please-manifest.json`
 - creates the `v<version>` tag and the GitHub Release
 
 Frontend and backend are versioned together as one unit — `release-type: simple` with
-both version files listed under `extra-files`. Commits that aren't conventional
+the version files listed under `extra-files`. Commits that aren't conventional
 (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:`, …) are ignored, so they never appear in
 the changelog and never trigger a bump. To force a specific version, add a
 `Release-As: X.Y.Z` footer to a commit on `main`.

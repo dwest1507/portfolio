@@ -19,6 +19,7 @@ from eval.publish import (
     END_MARKER,
     SCHEMA_VERSION,
     build_results_document,
+    latency_band,
     leading_arm,
     leading_arm_ids,
     render_markdown,
@@ -29,7 +30,13 @@ from eval.publish import (
 )
 
 
-def _raw(arm: str, hit: float, mrr: float, by_category: dict | None = None) -> dict:
+def _raw(
+    arm: str,
+    hit: float,
+    mrr: float,
+    by_category: dict | None = None,
+    latency: dict | None = None,
+) -> dict:
     summary = {"recall@5": 0.5, "hit@5": hit, "mrr": mrr, "ndcg@5": 0.6}
     return {
         "arm": arm,
@@ -37,7 +44,27 @@ def _raw(arm: str, hit: float, mrr: float, by_category: dict | None = None) -> d
         "summary": summary,
         "by_category": by_category if by_category is not None else {"direct": dict(summary)},
         "cases": [],
+        # Raw timings in seconds, as the harness reports them.
+        "latency": latency or {"p50": 0.000_1, "p95": 0.000_2, "load": 0.002},
     }
+
+
+def _scored(arm: str, hits: list[int], mrrs: list[float] | None = None) -> dict:
+    """An arm's raw output built from made-up per-case outcomes on the gating metric.
+
+    Case `q{i}` is hit by this arm when `hits[i]` is 1. Arms are compared question by
+    question, so two arms built from the same-length lists answer the same questions.
+    """
+    mrrs = mrrs if mrrs is not None else [float(h) for h in hits]
+    cases = [
+        {"id": f"q{i}", "category": "direct", "hit@5": float(h), "mrr": m}
+        for i, (h, m) in enumerate(zip(hits, mrrs, strict=True))
+    ]
+    hit = sum(hits) / len(hits)
+    mrr = sum(mrrs) / len(mrrs)
+    raw = _raw(arm, hit, mrr)
+    raw["cases"] = cases
+    return raw
 
 
 def _document(results=None, **kwargs) -> dict:
@@ -88,6 +115,22 @@ class TestArmSpecs:
     def test_arms_tuple_is_derived_from_the_specs(self):
         assert ARMS == tuple(ARM_SPEC_BY_ID)
 
+    def test_every_arm_is_a_candidate_or_a_reference(self):
+        assert {a.eligibility for a in ARM_SPECS} <= {"candidate", "reference"}
+
+    def test_the_torch_arms_are_reference_arms(self):
+        """ADR-0009: the torch-based Arms stay as baselines but cannot ship."""
+        for arm in ("dense", "hybrid", "rerank", "bm25+rerank"):
+            assert ARM_SPEC_BY_ID[arm].eligibility == "reference"
+
+    def test_the_shippable_arms_are_candidate_arms(self):
+        for arm in ("bm25", "onnx-dense", "onnx-hybrid", "bm25+onnx-rerank-20"):
+            assert ARM_SPEC_BY_ID[arm].eligibility == "candidate"
+
+    def test_the_shipped_arm_is_a_candidate_arm(self):
+        """Only Candidate Arms are eligible when the Shipped Arm is chosen."""
+        assert ARM_SPEC_BY_ID[shipped_arm_id()].eligibility == "candidate"
+
 
 # ---------------------------------------------------------------------------
 # The measured-run document
@@ -95,12 +138,13 @@ class TestArmSpecs:
 
 
 class TestResultsDocument:
-    def test_schema_version_is_3(self):
-        assert SCHEMA_VERSION == 3
+    def test_schema_version_is_4(self):
+        """Bumped when the document began carrying per-question comparisons (ADR-0006)."""
+        assert SCHEMA_VERSION == 4
 
     def test_carries_provenance_and_arm_metadata(self):
         doc = _document()
-        assert doc["schemaVersion"] == 3
+        assert doc["schemaVersion"] == 4
         assert doc["corpusChunks"] == 49
         assert doc["goldenQuestions"] == 55
         assert doc["gatingMetric"] == "hit@5"
@@ -118,13 +162,20 @@ class TestResultsDocument:
         assert rerank["shipped"] is False
         assert rerank["byCategory"]["direct"]["hit@5"] == 0.909
 
+    def test_each_arm_publishes_its_eligibility(self):
+        """The Scoreboard has to say which Arms could ship, or a Reference Arm's upper bound
+        reads as something on offer (ADR-0009)."""
+        doc = _document(results=[_raw("bm25", 1.0, 0.9), _raw("rerank", 0.9, 0.8)])
+        eligibility = {a["id"]: a["eligibility"] for a in doc["arms"]}
+        assert eligibility == {"bm25": "candidate", "rerank": "reference"}
+
     def test_carries_per_category_metrics_for_each_arm(self):
         bm25_cat = {
             "direct": {"recall@5": 0.8, "hit@5": 1.0, "mrr": 0.9, "ndcg@5": 0.85},
             "paraphrase": {"recall@5": 0.4, "hit@5": 0.6, "mrr": 0.5, "ndcg@5": 0.45},
         }
         doc = _document(results=[_raw("bm25", 0.9, 0.7, by_category=bm25_cat)])
-        assert doc["schemaVersion"] == 3
+        assert doc["schemaVersion"] == 4
         assert doc["categories"] == ["direct", "paraphrase"]
         bm25 = next(a for a in doc["arms"] if a["id"] == "bm25")
         assert bm25["byCategory"]["direct"]["hit@5"] == 1.0
@@ -132,9 +183,9 @@ class TestResultsDocument:
 
     def test_carries_category_counts(self):
         cases = [
-            {"id": "c1", "category": "direct"},
-            {"id": "c2", "category": "direct"},
-            {"id": "c3", "category": "paraphrase"},
+            {"id": "c1", "category": "direct", "hit@5": 1.0, "mrr": 1.0},
+            {"id": "c2", "category": "direct", "hit@5": 1.0, "mrr": 0.5},
+            {"id": "c3", "category": "paraphrase", "hit@5": 1.0, "mrr": 1.0},
         ]
         results = [_raw("bm25", 1.0, 0.9)]
         results[0]["cases"] = cases
@@ -150,6 +201,7 @@ class TestResultsDocument:
                     "top_k": 10,
                     "summary": {"recall@10": 0.8, "hit@10": 1.0, "mrr": 0.9, "ndcg@10": 0.8},
                     "cases": [],
+                    "latency": {"p50": 0.000_1, "p95": 0.000_2, "load": 0.002},
                 }
             ],
             top_k=10,
@@ -262,6 +314,21 @@ class TestResultsDocument:
         assert written is True
         assert json.loads(path.read_text(encoding="utf-8"))["split"] == "holdout"
 
+    def test_a_changed_disagreement_counts_as_a_new_measurement(self, tmp_path):
+        """Two runs can share every average and still disagree with the shipped arm on
+        different questions; the won/lost column is part of what was measured."""
+        path = tmp_path / "evalResults.json"
+        shipped = [1, 0, 1, 0]
+        write_results_document(
+            _document(results=[_scored("bm25", shipped), _scored("dense", [1, 0, 1, 0])]), path
+        )
+
+        swapped = _document(results=[_scored("bm25", shipped), _scored("dense", [0, 1, 0, 1])])
+        document, written = write_results_document(swapped, path)
+
+        assert written is True
+        assert _arm(document, "dense")["vsShipped"]["won"] == 2
+
     def test_a_moved_metric_is_published(self, tmp_path):
         path = tmp_path / "evalResults.json"
         write_results_document(_document(), path)
@@ -283,39 +350,254 @@ class TestResultsDocument:
 
 
 # ---------------------------------------------------------------------------
+# Latency Bands
+# ---------------------------------------------------------------------------
+
+
+class TestLatencyBand:
+    """A timing becomes its nearest power of ten, cut at the geometric midpoints
+    (√10 ≈ 3.162 times each band's centre), so a published band means the same thing
+    whichever machine measured it."""
+
+    @pytest.mark.parametrize(
+        ("seconds", "band"),
+        [
+            (0.0, "~1ms"),
+            (0.000_13, "~1ms"),
+            (0.001, "~1ms"),
+            (0.010, "~10ms"),
+            (0.100, "~100ms"),
+            (1.0, "~1s"),
+            (4.2, "~10s"),
+        ],
+    )
+    def test_maps_a_timing_to_its_order_of_magnitude(self, seconds, band):
+        assert latency_band(seconds) == band
+
+    @pytest.mark.parametrize(
+        ("below", "above", "lower_band", "upper_band"),
+        [
+            (0.003_16, 0.003_17, "~1ms", "~10ms"),
+            (0.031_6, 0.031_7, "~10ms", "~100ms"),
+            (0.316, 0.317, "~100ms", "~1s"),
+            (3.16, 3.17, "~1s", "~10s"),
+        ],
+    )
+    def test_cuts_at_the_geometric_midpoint(self, below, above, lower_band, upper_band):
+        assert latency_band(below) == lower_band
+        assert latency_band(above) == upper_band
+
+    def test_sub_millisecond_timings_share_the_lowest_band(self):
+        """Below a millisecond the runner's timer noise is the measurement."""
+        assert latency_band(0.000_001) == latency_band(0.002) == "~1ms"
+
+    def test_slower_than_the_top_band_stays_in_it(self):
+        assert latency_band(60.0) == "~10s"
+
+
+class TestPublishedLatency:
+    def test_each_arm_publishes_its_warm_and_load_bands(self):
+        doc = _document(
+            results=[
+                _raw("bm25", 1.0, 0.9, latency={"p50": 0.000_1, "p95": 0.000_2, "load": 0.002}),
+                _raw("rerank", 1.0, 0.9, latency={"p50": 0.030, "p95": 0.037, "load": 4.2}),
+            ]
+        )
+        assert _arm(doc, "bm25")["latencyBand"] == {"warm": "~1ms", "load": "~1ms"}
+        assert _arm(doc, "rerank")["latencyBand"] == {"warm": "~100ms", "load": "~10s"}
+
+    def test_raw_timings_are_not_published(self):
+        """Raw timings vary between runs and runners; only the band is a measurement."""
+        doc = _document(
+            results=[
+                _raw("bm25", 1.0, 0.9, latency={"p50": 0.000_123, "p95": 0.000_2, "load": 0.002})
+            ]
+        )
+        published = json.dumps(doc)
+        assert "p50" not in published and "p95" not in published
+        assert "0.000123" not in published
+
+    def test_timing_noise_within_a_band_is_not_a_new_measurement(self, tmp_path):
+        path = tmp_path / "evalResults.json"
+        write_results_document(
+            _document(
+                results=[_raw("bm25", 1.0, 0.9, latency={"p50": 0.011, "p95": 0.012, "load": 1.9})]
+            ),
+            path,
+        )
+        before = path.read_text(encoding="utf-8")
+
+        noisier = _raw("bm25", 1.0, 0.9, latency={"p50": 0.013, "p95": 0.015, "load": 2.4})
+        _, written = write_results_document(_document(results=[noisier]), path)
+
+        assert written is False
+        assert path.read_text(encoding="utf-8") == before
+
+    @pytest.mark.parametrize(
+        ("moved", "expected"),
+        [
+            ("p95", {"warm": "~100ms", "load": "~1s"}),
+            ("load", {"warm": "~10ms", "load": "~10s"}),
+        ],
+    )
+    def test_a_changed_band_is_a_new_measurement(self, tmp_path, moved, expected):
+        path = tmp_path / "evalResults.json"
+        timings = {"p50": 0.011, "p95": 0.012, "load": 1.9}
+        write_results_document(_document(results=[_raw("bm25", 1.0, 0.9, latency=timings)]), path)
+
+        slower = {**timings, moved: timings[moved] * 10}
+        document, written = write_results_document(
+            _document(results=[_raw("bm25", 1.0, 0.9, latency=slower)]), path
+        )
+
+        assert written is True
+        assert _arm(document, "bm25")["latencyBand"] == expected
+
+
+# ---------------------------------------------------------------------------
+# Comparison against the shipped arm
+# ---------------------------------------------------------------------------
+
+
+def _arm(doc: dict, arm_id: str) -> dict:
+    return next(a for a in doc["arms"] if a["id"] == arm_id)
+
+
+class TestComparisonAgainstShipped:
+    def test_a_lopsided_disagreement_puts_the_arm_ahead(self):
+        """Eight questions only `dense` hit, none only `bm25` hit: p ≈ 0.008."""
+        shipped = [0] * 8 + [1] * 25
+        doc = _document(results=[_scored("bm25", shipped), _scored("dense", [1] * 33)])
+
+        assert _arm(doc, "dense")["vsShipped"] == {"won": 8, "lost": 0, "outcome": "ahead"}
+
+    def test_a_lopsided_disagreement_the_other_way_puts_the_arm_behind(self):
+        """`dense` misses nine questions the shipped arm hits and wins one: p ≈ 0.021."""
+        shipped = [1] * 9 + [0] + [1] * 23
+        dense = [0] * 9 + [1] + [1] * 23
+        doc = _document(results=[_scored("bm25", shipped), _scored("dense", dense)])
+
+        assert _arm(doc, "dense")["vsShipped"] == {"won": 1, "lost": 9, "outcome": "behind"}
+
+    def test_a_balanced_disagreement_is_indistinguishable(self):
+        """The case the old verdict got wrong: 4 won, 2 lost is a 0.06 lead on hit@5 out of
+        33 questions — and p ≈ 0.69, well inside sampling noise."""
+        shipped = [1, 1, 0, 0, 0, 0] + [1] * 27
+        dense = [0, 0, 1, 1, 1, 1] + [1] * 27
+        doc = _document(results=[_scored("bm25", shipped), _scored("dense", dense)])
+
+        assert _arm(doc, "dense")["vsShipped"] == {
+            "won": 4,
+            "lost": 2,
+            "outcome": "indistinguishable",
+        }
+
+    def test_the_smallest_significant_split_is_six_to_nothing(self):
+        """Five discordant questions can never be significant (p = 0.0625 at 5–0), which is
+        why a 33-question sample rarely calls anything."""
+        five = _document(results=[_scored("bm25", [0] * 5 + [1]), _scored("dense", [1] * 6)])
+        six = _document(results=[_scored("bm25", [0] * 6), _scored("dense", [1] * 6)])
+
+        assert _arm(five, "dense")["vsShipped"]["outcome"] == "indistinguishable"
+        assert _arm(six, "dense")["vsShipped"]["outcome"] == "ahead"
+
+    def test_each_category_is_compared_on_its_own_questions(self):
+        """The page filters by Query Category, and its verdict follows the filter. A
+        category's verdict must rest on that category's disagreements alone."""
+        shipped = _scored("bm25", [0] * 6 + [1] * 4)
+        dense = _scored("dense", [1] * 6 + [0] * 1 + [1] * 3)
+        for raw in (shipped, dense):
+            for case in raw["cases"][6:]:
+                case["category"] = "paraphrase"
+        doc = _document(results=[shipped, dense])
+
+        assert _arm(doc, "dense")["vsShippedByCategory"] == {
+            "direct": {"won": 6, "lost": 0, "outcome": "ahead"},
+            "paraphrase": {"won": 0, "lost": 1, "outcome": "indistinguishable"},
+        }
+        assert _arm(doc, "bm25")["vsShippedByCategory"] is None
+
+    def test_the_shipped_arm_is_not_compared_with_itself(self):
+        doc = _document(results=[_scored("bm25", [1, 0]), _scored("dense", [1, 1])])
+        assert _arm(doc, "bm25")["vsShipped"] is None
+
+
+# ---------------------------------------------------------------------------
 # Derived claims
 # ---------------------------------------------------------------------------
 
 
 class TestVerdict:
-    def test_names_the_leader_when_the_shipped_arm_loses(self):
-        """The state the page was in before #23: production was not the best arm."""
-        doc = _document(results=[_raw("bm25", 0.909, 0.853), _raw("dense", 1.0, 0.892)])
-        line = verdict_line(doc)
-        assert "Production runs" in line
-        assert ARM_SPEC_BY_ID["bm25"].label in line
-        assert ARM_SPEC_BY_ID["dense"].label in line
-        assert "1.000 vs 0.909" in line
+    """The Verdict Line names an arm only when the sign test can tell it apart (ADR-0006)."""
 
-    def test_says_so_when_the_shipped_arm_also_leads(self):
-        """The point of generating this line: it healed when the architecture was fixed.
+    def test_says_no_arm_is_distinguishable_and_names_the_sample(self):
+        """The intended outcome on a 33-question sample, not a defect: dense leads by two
+        questions on hit@5 and the old verdict would have called that a lead."""
+        shipped = [1, 1, 0, 0, 0, 0] + [1] * 27
+        dense = [0, 0, 1, 1, 1, 1] + [1] * 27
+        doc = _document(
+            results=[_scored("bm25", shipped), _scored("dense", dense)],
+            golden_questions=33,
+            split="holdout",
+        )
+        assert verdict_line(doc) == (
+            "Production runs Keyword only. Across the 33 held-out questions, no other arm "
+            "is distinguishable from it on hit@5."
+        )
 
-        This is what the published verdict says today — the shipped arm is the leading
-        arm, because the shipped arm was chosen by the measurement.
-        """
-        line = verdict_line(_document())
-        assert "which also leads" in line
-        assert " vs " not in line
+    def test_names_an_arm_that_is_distinguishably_ahead(self):
+        shipped = [0] * 8 + [1] * 25
+        doc = _document(
+            results=[_scored("bm25", shipped), _scored("dense", [1] * 33)],
+            golden_questions=33,
+            split="holdout",
+        )
+        assert verdict_line(doc) == (
+            "Production runs Keyword only. Across the 33 held-out questions, Meaning only "
+            "(won 8, lost 0) is distinguishably ahead of it on hit@5."
+        )
 
-    def test_a_tie_on_the_gating_metric_is_named_not_claimed_as_a_lead(self):
-        """The shipped arm is first in ARM_SPECS, so a positional tie-break resolves
-        every tie in production's favour. On the published run `bm25` and `bm25+rerank`
-        both take hit@5, and the sentence has to say which."""
-        doc = _document(results=[_raw("bm25", 1.0, 0.892), _raw("bm25+rerank", 1.0, 0.85)])
-        line = verdict_line(doc)
-        assert "tied for the lead" in line
-        assert ARM_SPEC_BY_ID["bm25+rerank"].label in line
-        assert "which also leads" not in line
+    def test_names_an_arm_that_is_distinguishably_behind(self):
+        shipped = [1] * 9 + [0] + [1] * 23
+        dense = [0] * 9 + [1] + [1] * 23
+        doc = _document(
+            results=[_scored("bm25", shipped), _scored("dense", dense)],
+            golden_questions=33,
+            split="holdout",
+        )
+        assert verdict_line(doc) == (
+            "Production runs Keyword only. Across the 33 held-out questions, Meaning only "
+            "(won 1, lost 9) is distinguishably behind it on hit@5."
+        )
+
+    def test_names_arms_ahead_and_behind_and_leaves_out_the_indistinguishable(self):
+        """Labels contain commas ("Both combined, then re-ranked"), so each name is closed
+        by its won/lost counts rather than left to run into the next one."""
+        shipped = [1] * 7 + [0] * 7 + [1] * 19
+        rerank = [1] * 7 + [1] * 7 + [1] * 19  # wins the 7 the shipped arm missed
+        dense = [0] * 7 + [0] * 7 + [1] * 19  # loses the 7 the shipped arm hit
+        hybrid = [0, 0, 1, 1] + [1] * 3 + [0] * 7 + [1] * 19  # 2 won, 2 lost
+        doc = _document(
+            results=[
+                _scored("bm25", shipped),
+                _scored("dense", dense),
+                _scored("hybrid", hybrid),
+                _scored("rerank", rerank),
+                _scored("bm25+rerank", rerank),
+            ],
+            golden_questions=33,
+            split="holdout",
+        )
+        assert verdict_line(doc) == (
+            "Production runs Keyword only. Across the 33 held-out questions, "
+            "Both combined, then re-ranked (won 7, lost 0) and Keyword, then re-ranked "
+            "(won 7, lost 0) are distinguishably ahead of it on hit@5, and Meaning only "
+            "(won 0, lost 7) is behind it."
+        )
+
+    def test_names_the_sample_for_a_run_over_the_whole_set(self):
+        doc = _document(results=[_scored("bm25", [1, 0]), _scored("dense", [0, 1])])
+        assert "Across all 55 questions," in verdict_line(doc)
 
     def test_leading_arm_ids_returns_every_tied_arm(self):
         doc = _document(results=[_raw("bm25", 1.0, 0.5), _raw("rerank", 1.0, 0.99)])
@@ -341,7 +623,7 @@ class TestVerdict:
         """
         doc = _document(results=[_raw("bm25", 1.0, 0.9)])
         assert [a["id"] for a in doc["arms"]] == ["bm25"]
-        assert "which also leads" in verdict_line(doc)
+        assert verdict_line(doc) == "Production runs Keyword only. No other arm was measured."
 
 
 # ---------------------------------------------------------------------------
@@ -364,6 +646,65 @@ class TestMarkdown:
         assert "Measured on 49 chunks and 55 golden questions" in md
         # Column labels match the page's, so the two surfaces read identically.
         assert "| MRR |" in md and "| mrr |" not in md
+
+    def test_renders_won_and_lost_against_the_shipped_arm(self):
+        shipped = [0] * 8 + [1] * 25
+        dense = [1] * 8 + [0] * 2 + [1] * 23
+        md = render_markdown(_document(results=[_scored("bm25", shipped), _scored("dense", dense)]))
+        header = next(line for line in md.splitlines() if line.startswith("| Arm |"))
+        assert "| vs shipped (won / lost) |" in header
+        assert "| 8 / 2 |" in next(line for line in md.splitlines() if "`dense`" in line)
+        # The shipped arm is the reference, not a contestant against itself.
+        assert "| — |" in next(line for line in md.splitlines() if "`bm25`" in line)
+
+    def test_renders_each_arms_eligibility(self):
+        md = render_markdown(_document(results=[_raw("bm25", 1.0, 0.9), _raw("rerank", 0.9, 0.8)]))
+        lines = md.splitlines()
+        assert next(line for line in lines if line.startswith("| Arm |")).startswith(
+            "| Arm | Eligibility |"
+        )
+        assert "| `bm25` _(shipped)_ | Candidate |" in md
+        assert "| `rerank` | Reference |" in md
+
+    def test_renders_each_arms_latency_bands(self):
+        md = render_markdown(
+            _document(
+                results=[
+                    _raw("bm25", 1.0, 0.9, latency={"p50": 0.000_1, "p95": 0.000_2, "load": 0.002}),
+                    _raw("rerank", 1.0, 0.9, latency={"p50": 0.03, "p95": 0.037, "load": 4.2}),
+                ]
+            )
+        )
+        lines = md.splitlines()
+        header = next(line for line in lines if line.startswith("| Arm |"))
+        assert header.endswith("| Latency Band (warm p95) | Load band |")
+        assert next(line for line in lines if "`bm25`" in line).endswith("| ~1ms | ~1ms |")
+        assert next(line for line in lines if "`rerank`" in line).endswith("| ~100ms | ~10s |")
+        # Raw timings belong to the CLI and --json output, not the published block.
+        assert "0.037" not in md and "4.2" not in md
+
+    def test_renders_a_bootstrap_interval_for_mrr(self):
+        """An engineer judging a 0.03 MRR gap needs to see how wide MRR's own noise is."""
+        flat = _scored("bm25", [1] * 20, mrrs=[0.5] * 20)
+        spread = _scored("dense", [1] * 20, mrrs=[0.0, 1.0] * 10)
+        md = render_markdown(_document(results=[flat, spread]))
+
+        header = next(line for line in md.splitlines() if line.startswith("| Arm |"))
+        assert "| MRR 95% CI |" in header
+        # No variation between questions means no uncertainty to report.
+        assert "| 0.500–0.500 |" in next(line for line in md.splitlines() if "`bm25`" in line)
+
+        dense_row = next(line for line in md.splitlines() if "`dense`" in line)
+        interval = next(cell for cell in dense_row.split("|") if "–" in cell)
+        lo, hi = (float(x) for x in interval.strip().split("–"))
+        assert 0.0 < lo < 0.5 < hi < 1.0
+
+    def test_the_mrr_interval_is_reproducible(self):
+        """Resampling is seeded: a re-run over the same outcomes must not rewrite the doc."""
+        results = [_scored("bm25", [1] * 20, mrrs=[0.0, 1.0, 0.5, 0.25] * 5)]
+        assert render_markdown(_document(results=results)) == render_markdown(
+            _document(results=results)
+        )
 
     def test_provenance_names_a_held_out_sample_as_held_out(self):
         """A number measured on 22 questions nothing was tuned against is a different

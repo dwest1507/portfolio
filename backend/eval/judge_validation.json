@@ -1,0 +1,685 @@
+{
+  "description": "Hand labels for validating the Judge (ADR-0007): sentences under \"sentences\", and whole answers under \"declines\", each labelled with whether it Declines (#86). Decline labels are answers from the stored runs in \"declineRuns\", take heldOut from their Golden Set case's Split, and are measured against only once David has reviewed them and \"draft\" is false. Most sentences are ones the harness judges, taken from a stored answer, labelled against the chunks that answer was written from. Those marked heldOut were written by hand as unsupported sentences, labelled against their case's chunks before any of Jev's judgments of them were seen, and are kept out of tuning the Judge's questions until the final measurement. Chunk numbers in notes count from 1 in the record's order. See docs/evaluation.md.",
+  "status": "reviewed",
+  "record": "backend/eval/baselines/groq.json",
+  "labels": {
+    "filler": "States nothing about David: a pleasantry, heading, transition, or a remark about the context.",
+    "supported": "Every claim in it is stated or clearly implied by the chunks, together if not by one.",
+    "contradicted": "A chunk states the opposite of a claim in it, or clearly implies the claim is false.",
+    "says_nothing": "Neither: at least one claim has no basis in the chunks, and none is contradicted."
+  },
+  "sentences": [
+    {
+      "case": "tacom-history",
+      "text": "Yes.",
+      "label": "filler",
+      "compound": false,
+      "note": "Says nothing on its own; the claim it answers is carried by the next sentence."
+    },
+    {
+      "case": "nietzsche-project",
+      "text": "Key technical details",
+      "label": "filler",
+      "compound": false,
+      "note": "A section heading."
+    },
+    {
+      "case": "cloud-platforms",
+      "text": "No other cloud providers are mentioned in the provided context.",
+      "label": "filler",
+      "compound": false,
+      "note": "A remark about the context, not about David. (If read as 'David has used no other cloud providers', chunk 3 (Modal) would make it unsupported.)"
+    },
+    {
+      "case": "employer-current",
+      "text": "David is currently employed as a Lead AI Engineer at Booz Allen Hamilton.",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 4: 'I am a Lead AI Engineer at Booz Allen Hamilton.'"
+    },
+    {
+      "case": "degree-cs",
+      "text": "David holds a Bachelor of Science in Biochemistry, not a computer‑science degree.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: Bachelor of Science in Biochemistry, 'not a programming-focused degree'. Two claims, one a negation."
+    },
+    {
+      "case": "years-experience",
+      "text": "David has been working with AI/ML since 2020, giving him roughly 6 years of experience in the field.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: 'working with AI/ML since 2020'. 'Roughly 6 years' is arithmetic to the present; no chunk states the current year. Call it says_nothing if you read strictly."
+    },
+    {
+      "case": "python-proficiency",
+      "text": "It’s his primary language for AI engineering and data science, and he has been using it for about three years, including strong experience with libraries such as pandas, PyMuPDF, and boto3.",
+      "label": "supported",
+      "compound": true,
+      "acrossChunks": true,
+      "note": "Split across chunks: chunk 1 'go-to language for AI engineering and data science ... about 3 years'; chunk 5 'pandas, PyMuPDF, and boto3'. No single chunk supports the whole sentence."
+    },
+    {
+      "case": "certifications",
+      "text": "David holds the following certifications: CompTIA Security+ (Certificate of Completion, June 2025) – a requirement for many defense contracts.",
+      "label": "supported",
+      "compound": true,
+      "acrossChunks": true,
+      "note": "Split across chunks: chunk 1 Security+ completed June 2025; chunk 5 'a requirement on defense contracts'."
+    },
+    {
+      "case": "certifications",
+      "text": "David holds the following certifications: Data Scientist with R – DataCamp certificate (July 2020).",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 1: Data Camp, July 2020, 'Data Scientist with R'. Chunk 2 mentions only Security+, which does not contradict it."
+    },
+    {
+      "case": "aws-services",
+      "text": "David has worked with a broad range of AWS services, including: Messaging & Eventing: SQS, SNS, EventBridge (implied in serverless pipelines)",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "SQS and SNS are in chunks 1 and 3; EventBridge appears in no chunk (the answer itself hedges 'implied')."
+    },
+    {
+      "case": "databases",
+      "text": "David has worked with the following databases: Neo4j (currently developing skills with this graph database)",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 2: 'starting to develop skills with graph databases as well, specifically Neo4j'."
+    },
+    {
+      "case": "llm-experience",
+      "text": "He has experience with DoD‑approved LLMs such as Claude 3.5 Sonnet and OpenAI GPT‑4, among others.",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 3: 'DoD-approved Large Language Models (LLMs); Claude 3.5 Sonnet, OpenAI GPT4'."
+    },
+    {
+      "case": "llm-providers",
+      "text": "David has worked with the following LLM providers and their models: Anthropic – Claude models",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 1: 'Anthropic's Claude models'. Chunk 2's 'LLM hosted on Groq' is about this chatbot and does not contradict it."
+    },
+    {
+      "case": "groq",
+      "text": "David has used Groq’s API to serve his own models and for low‑latency LLM inference in his full‑stack AI applications.",
+      "label": "supported",
+      "compound": true,
+      "acrossChunks": true,
+      "note": "Split across chunks: chunk 1 'used Groq's API to serve a few of my own models'; chunk 2 the chatbot's low-latency inference on Groq; chunk 4 Baby Names text-to-SQL on Groq."
+    },
+    {
+      "case": "iac-devops",
+      "text": "He also designs and maintains CI/CD pipelines with GitHub Actions (and Azure DevOps), integrates Docker, Kubernetes, and other cloud services, and mentors teams on IaC best practices.",
+      "label": "supported",
+      "compound": true,
+      "acrossChunks": true,
+      "note": "Split across chunks: chunk 4 CI/CD with GitHub Actions and Azure DevOps; chunk 2 Docker and Kubernetes; chunk 5 mentored team members on IaC best practices."
+    },
+    {
+      "case": "promotions",
+      "text": "I was promoted twice at TAC OM (from GS‑07 to GS‑09 to GS‑11) and have been promoted twice at Booz Allen Hamilton (from Data Scientist II to III to Lead), eventually transitioning to Lead AI Engineer in 2026.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1 states all of it: GS-07 to GS-09 to GS-11 at TACOM, II to III to Lead at Booz Allen, Lead AI Engineer in 2026. First person; 'TAC OM' is a typo."
+    },
+    {
+      "case": "leadership",
+      "text": "I lead the technical development for most of my projects, creating solution architectures, breaking them into components, and delegating work to junior staff.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: leads technical development, creates the solution architecture, breaks it into components, delegates to junior staff."
+    },
+    {
+      "case": "remote-work",
+      "text": "David prefers remote work and is open to a hybrid schedule, but he is not willing to work full‑time on‑site.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: 'I would prefer remote work. I'm open to a hybrid schedule ... I am not open to full-time in office.'"
+    },
+    {
+      "case": "defense-industry",
+      "text": "David has worked exclusively in the defense industry—first as an Army civilian at TACOM and later as a Data Science consultant at Booz Allen Hamilton.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: 'defense industry since college; first as an army civilian at TACOM, and then as a Data Science consultant at Booz Allen'. 'Exclusively' is inferred from 'since college'."
+    },
+    {
+      "case": "vector-search",
+      "text": "In evaluations, plain keyword search consistently outperformed the semantic components for the specific corpus he was using, so the production system was simplified to keyword‑only search, reducing dependencies and container size.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 4: keyword search beat the hybrid pipeline on every metric; production runs keyword search only, 87 to 40 dependencies, 17.2GB to 544MB image."
+    },
+    {
+      "case": "nietzsche-project",
+      "text": "It uses Retrieval‑Augmented Generation (RAG) over the complete corpus of Nietzsche’s 18 works, so every answer can be traced back to the original text with source citations.",
+      "label": "contradicted",
+      "compound": true,
+      "note": "Chunk 4: 'traced back to real text from the 19 works in the corpus'. The answer says 18."
+    },
+    {
+      "case": "nietzsche-project",
+      "text": "Evaluation – Each deployment includes an automated evaluation pipeline that records performance metrics and logs code changes, ensuring responses remain faithful to the source material.",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "No chunk describes an evaluation pipeline in each Nietzsche deployment. Chunk 5 is about the portfolio chatbot's evaluation."
+    },
+    {
+      "case": "music-gpu",
+      "text": "Serverless deployment – I added GPU‑deployment support to the ACE‑Step 1.5 repository, using CRIU‑based GPU memory snapshotting so that a cold‑start GPU can be pre‑warmed instantly and then scaled‑to‑zero when idle.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 2: added serverless GPU deployment support to ACE-Step, CRIU-based GPU memory snapshotting, rapid cold starts, scale-to-zero; chunk 3 names ACE-Step 1.5. 'Pre-warmed instantly' loosely paraphrases 'rapid cold starts'; call it says_nothing if you read strictly."
+    },
+    {
+      "case": "conceptual-microservice-separation",
+      "text": "David builds his full‑stack AI systems as a cleanly decoupled stack: Separate ML inference workers – Heavy models run in isolated containers or serverless GPU workers (e.g., Modal, Groq, or GPU containers on Railway).",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "Modal is in chunks 2 and 5, and chunk 1 has LLM inference on Groq, but Railway hosts the lightweight proxy (chunks 2 and 5): no chunk puts GPU containers on Railway."
+    },
+    {
+      "case": "conceptual-microservice-separation",
+      "text": "David builds his full‑stack AI systems as a cleanly decoupled stack: Containerization & image sizing – Production images are kept lightweight (≈ 550 MB) by splitting heavy ML dependencies into a separate “inference” image, ensuring fast deployments and low latency.",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "Chunk 1: heavy ML dependencies separated so the image stays under 550MB. No chunk mentions a separate 'inference' image or claims fast deployments and low latency from it."
+    },
+    {
+      "case": "conceptual-sql-guardrail-architecture",
+      "text": "The system enforces several safeguards: Resource limits – Execution is sandboxed with a hard 5‑second timeout and a 1 MB memory cap.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: '5-second deadline and 1 MB memory cap'."
+    },
+    {
+      "case": "diamonds-project",
+      "text": "Modeling – Compared a simple linear regression to a random‑forest model.",
+      "label": "supported",
+      "compound": false,
+      "note": "Chunk 3: 'between a linear model and a random forest was a few lines'."
+    },
+    {
+      "case": "conceptual-technical-leadership-mentorship",
+      "text": "At Booz Allen (Data Scientist, Lead, Jan – Dec 2025) he designed and shipped the trademarked Data ReconnAIssance™ capability, integrated a government‑approved LLM (AWS GovCloud Claude 3.5 Sonnet), managed the GitHub repository, reviewed pull requests and produced a technical roadmap for future growth.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 3 (Data Scientist, Lead, January-December 2025): leads Data ReconnAIssance, integrates AWS GovCloud Claude 3.5 Sonnet, manages the GitHub repository, reviews pull requests, develops the technical roadmap."
+    },
+    {
+      "case": "paraphrase-cemetery-project",
+      "text": "The project was for Arlington National Cemetery, where over 260 k burial records were processed and audited automatically.",
+      "label": "supported",
+      "compound": true,
+      "note": "Chunk 1: Arlington National Cemetery, over 260k records processed, an automated quality check of their database."
+    },
+    {
+      "case": "stakeholder-comms",
+      "text": "He uses analogies or metaphors to make technical concepts easy to grasp and often supports his narrative with interactive dashboards (e.g., Streamlit, Shiny, Quarto) that visualize the insights.",
+      "label": "supported",
+      "compound": true,
+      "acrossChunks": true,
+      "note": "Split across chunks: chunk 1 analogies or metaphors; chunk 3 interactive dashboards (Streamlit, Shiny, Quarto) for non-technical stakeholders."
+    },
+    {
+      "case": "conceptual-forecast-uncertainty-modeling",
+      "text": "These intervals are incorporated into the deployment gate, which requires every published artifact to outperform a naive baseline across a 26‑window back‑test, ensuring that the model’s skill—and its quantified uncertainty—is consistently validated.",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "Chunk 4: the deploy gate requires beating the naive baseline across a 26-window backtest. It scores skill; no chunk says the intervals are part of the gate or validated by it."
+    },
+    {
+      "case": "conceptual-devsecops-defense-standards",
+      "text": "David follows a comprehensive DevSecOps regimen that aligns with DoD Impact‑Level 5 (IL5) and CMMC Level 2 requirements. His key practices include: Continuous monitoring – CloudWatch metrics and alerts track compliance‑related events; findings from scans are tracked and mitigated as part of the release cycle.",
+      "label": "says_nothing",
+      "compound": true,
+      "note": "CloudWatch appears in chunk 1 as part of the serverless backend, and security findings were mitigated, but no chunk says CloudWatch alerts track compliance events."
+    },
+    {
+      "case": "clearance",
+      "text": "David holds a Top Secret security clearance, sponsored by the US Army.",
+      "label": "contradicted",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 1: 'David has a Secret security clearance. It was sponsored by the US Army.' (also chunks 3 and 4: Secret). The level is wrong; the sponsor is supported. Contradiction about David alongside a supported part."
+    },
+    {
+      "case": "clearance",
+      "text": "David is available to start immediately and is open to relocating for the right role.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 1: available to start immediately (with a 2-week notice period). No chunk mentions relocation. Partly supported."
+    },
+    {
+      "case": "vector-search",
+      "text": "In production, the chatbot ranks results with BM25 keyword search and then re-scores the top passages with a cross-encoder.",
+      "label": "contradicted",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 2: retrieval is BM25 keyword search. Chunk 4: the cross-encoder failed against keyword search alone and 'production now runs keyword search only'. Does not name David."
+    },
+    {
+      "case": "vector-search",
+      "text": "Deleting the semantic and re-ranking stages cut the backend from 87 production dependencies to 24.",
+      "label": "contradicted",
+      "compound": false,
+      "heldOut": true,
+      "note": "Chunk 4: 'from 87 production dependencies to 40'. A wrong number; does not name David."
+    },
+    {
+      "case": "music-project",
+      "text": "The web app renders each generated track's waveform with WaveSurfer.js and stores finished tracks in S3 so users can download them later.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 1: waveform rendering; chunk 5: WaveSurfer.js on the frontend. No chunk mentions S3 or stored tracks. Partly supported; does not name David."
+    },
+    {
+      "case": "rate-limiting",
+      "text": "Rate limits in the music app are keyed on each visitor's session cookie.",
+      "label": "contradicted",
+      "compound": false,
+      "heldOut": true,
+      "note": "Chunk 1: 'Rate limits are keyed strictly on client IP rather than session cookies.' Chunk 5: IP-keyed rate limiting. Does not name David."
+    },
+    {
+      "case": "rate-limiting",
+      "text": "The chatbot's FastAPI backend uses SlowAPI for rate limiting, with Redis storing the counters so limits hold across replicas.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 3: FastAPI backend with SlowAPI for rate limiting. No chunk mentions Redis or replicas. Partly supported; does not name David."
+    },
+    {
+      "case": "baby-names-project",
+      "text": "The forecasting model is retrained every night by a scheduled GitHub Actions workflow.",
+      "label": "says_nothing",
+      "compound": false,
+      "heldOut": true,
+      "note": "Chunk 3: forecast tables generated by automated batch scripts and validated by a deployment gate; chunks 1 and 5 mention CI/CD. None says the model is retrained nightly or on a schedule. Does not name David."
+    },
+    {
+      "case": "time-series",
+      "text": "David replaced per-name ARIMA with a pooled LightGBM model, which beat the naive baseline in every popularity band, including names ranked beyond 5,000.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunks 1 and 3: per-name ARIMA replaced by pooled LightGBM. No chunk gives LightGBM's skill by band. Chunk 3's negative skill beyond rank 5000 is ARIMA's, a different model, so it is not a contradiction."
+    },
+    {
+      "case": "embedding-models",
+      "text": "David has used OpenAI's text-embedding-3-small for work projects and all-mpnet-base-v2 for personal projects.",
+      "label": "says_nothing",
+      "compound": true,
+      "heldOut": true,
+      "note": "Chunk 1: Amazon's Titan embedding models for work, all-mpnet-base-v2 for personal projects. Titan is a different item of the same kind and does not rule out OpenAI's, so it is not a contradiction. Partly supported."
+    },
+    {
+      "case": "fine-tuning",
+      "text": "David has fine-tuned Llama models on his own data using LoRA.",
+      "label": "contradicted",
+      "compound": false,
+      "heldOut": true,
+      "note": "Chunk 2: 'Has David done any fine-tuning of LLMs? Not yet'. Chunk 1 lists Meta's Llama models among those he has worked with, which does not support fine-tuning them."
+    },
+    {
+      "case": "location",
+      "text": "David is based in Austin, Texas.",
+      "label": "says_nothing",
+      "compound": false,
+      "heldOut": true,
+      "note": "No retrieved chunk mentions where David is based (retrieval missed it). His real location is not in the chunks either, so this is says_nothing, not contradicted."
+    }
+  ],
+  "declineRuns": {
+    "gate": "The generation gate's first CI run: bm25, gpt-6-luna at reasoning effort low, judged by jev-1.13.0, 2026-10-11 (https://github.com/dwest1507/portfolio/actions/runs/38184969261, generation-run artifact).",
+    "comparison": "The Shipped Arm's (bm25) answers in the local comparison run of Candidate Arms at 6691b03: gpt-6-luna at reasoning effort low, judged by jev-1.13.0, 2026-10-11."
+  },
+  "declines": [
+    {
+      "case": "oos-contract-rate",
+      "run": "gate",
+      "question": "What hourly rate does David charge for contract work?",
+      "answer": "The provided information doesn’t specify David’s hourly rate for contract work.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": false,
+      "draft": false,
+      "note": "Out of scope; says the rate is not specified, nothing else."
+    },
+    {
+      "case": "oos-biggest-weakness",
+      "run": "gate",
+      "question": "What would David say is his biggest weakness?",
+      "answer": "The portfolio context doesn’t say what David considers his biggest weakness, so I can’t answer that reliably.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": false,
+      "draft": false,
+      "note": "Out of scope; says the context doesn't say, and that it can't answer."
+    },
+    {
+      "case": "current-title",
+      "run": "gate",
+      "question": "What is David's current job title?",
+      "answer": "The provided context doesn’t specify David’s current job title.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": false,
+      "draft": false,
+      "note": "Answerable, but the answer says the title is not specified and gives none: a Decline, and a wrong one."
+    },
+    {
+      "case": "education",
+      "run": "gate",
+      "question": "What did David study in college?",
+      "answer": "The provided information doesn’t say what David studied in college.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": false,
+      "draft": false,
+      "note": "Answerable; says the context doesn't say, nothing else."
+    },
+    {
+      "case": "conceptual-data-preparation-share",
+      "run": "gate",
+      "question": "Where does he think most of the effort in a modeling project actually goes?",
+      "answer": "The provided context doesn’t say where David thinks most of the effort in a modeling project goes.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": false,
+      "draft": false,
+      "note": "Answerable; says the context doesn't say, nothing else."
+    },
+    {
+      "case": "oos-patents",
+      "run": "gate",
+      "question": "Does David hold any patents?",
+      "answer": "The provided context doesn’t say whether David holds any patents.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": true,
+      "draft": false,
+      "note": "Out of scope; says the context doesn't say, nothing else."
+    },
+    {
+      "case": "oos-hobbies",
+      "run": "comparison",
+      "question": "What does David like to do for fun outside of work?",
+      "answer": "I don’t have information about what David likes to do for fun outside of work.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": true,
+      "draft": false,
+      "note": "Out of scope; 'I don't have information' rather than 'the context doesn't say'."
+    },
+    {
+      "case": "oos-spark-databricks",
+      "run": "gate",
+      "question": "Has David used Spark or Databricks for big data processing?",
+      "answer": "The provided information doesn’t mention David using Spark or Databricks.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": true,
+      "draft": false,
+      "note": "Out of scope; 'doesn't mention', nothing else."
+    },
+    {
+      "case": "oos-pmp",
+      "run": "comparison",
+      "question": "Does David have a PMP certification?",
+      "answer": "The provided information doesn’t indicate that David has a PMP certification.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": true,
+      "draft": false,
+      "note": "Out of scope; 'doesn't indicate that David has' reads close to a 'no', but asserts nothing about David."
+    },
+    {
+      "case": "oos-blockchain",
+      "run": "comparison",
+      "question": "Has David worked on any blockchain or crypto projects?",
+      "answer": "The provided information doesn’t mention any blockchain or crypto projects.",
+      "declines": true,
+      "kind": "decline",
+      "heldOut": true,
+      "draft": false,
+      "note": "Out of scope; 'doesn't mention', nothing else."
+    },
+    {
+      "case": "employer-current",
+      "run": "gate",
+      "question": "Where does David currently work?",
+      "answer": "David currently works at Booz Allen Hamilton.",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": false,
+      "draft": false,
+      "note": "One-sentence direct answer."
+    },
+    {
+      "case": "degree-cs",
+      "run": "gate",
+      "question": "Does David have a computer science degree?",
+      "answer": "No. David has a bachelor’s degree in Biochemistry from Western Michigan University, not computer science.",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": false,
+      "draft": false,
+      "note": "Answers 'No.' and names the degree: a negative answer, not a Decline."
+    },
+    {
+      "case": "clearance",
+      "run": "gate",
+      "question": "Does David have a security clearance?",
+      "answer": "Yes. David has a Secret security clearance sponsored by the U.S. Army.",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": false,
+      "draft": false,
+      "note": "Direct answer."
+    },
+    {
+      "case": "languages",
+      "run": "gate",
+      "question": "What programming languages does David know?",
+      "answer": "David knows Python, R, TypeScript, and SQL.",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": false,
+      "draft": false,
+      "note": "Direct answer."
+    },
+    {
+      "case": "nietzsche-reranking",
+      "run": "gate",
+      "question": "How does the Nietzsche chatbot rank its search results?",
+      "answer": "It uses hybrid search: FAISS semantic search contributes 70% of the ranking weight, and BM25 keyword search contributes 30%. This combines conceptual matches with exact terms such as “Ressentiment” or “Zarathustra.”",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": false,
+      "draft": false,
+      "note": "Direct answer with detail."
+    },
+    {
+      "case": "fine-tuning",
+      "run": "gate",
+      "question": "Has David fine-tuned a model?",
+      "answer": "No. David hasn’t fine-tuned an LLM yet, though he’s interested in learning more about it.",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": true,
+      "draft": false,
+      "note": "Answers 'No. David hasn't fine-tuned an LLM yet': a negative answer, not a Decline."
+    },
+    {
+      "case": "remote-work",
+      "run": "gate",
+      "question": "Is David open to remote work?",
+      "answer": "Yes. David prefers remote work, but he’s also open to a hybrid schedule. He’s not open to full-time in-office work.",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": true,
+      "draft": false,
+      "note": "Answers yes, with a 'not open to' clause: an answer, not a Decline."
+    },
+    {
+      "case": "api-experience",
+      "run": "gate",
+      "question": "Has David built APIs?",
+      "answer": "Yes. David has built RESTful APIs using FastAPI and has also created serverless APIs with AWS API Gateway and Lambda.",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": true,
+      "draft": false,
+      "note": "Direct answer."
+    },
+    {
+      "case": "anomaly-detection",
+      "run": "gate",
+      "question": "Has David done anomaly detection?",
+      "answer": "Yes. As a Data Scientist III at Booz Allen Hamilton, David worked on anomaly detection in Army Garrison financial data for the Installation Management Command.",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": true,
+      "draft": false,
+      "note": "Direct answer."
+    },
+    {
+      "case": "paraphrase-answer-judge",
+      "run": "comparison",
+      "question": "What does he use to grade whether the portfolio chatbot's answers are right?",
+      "answer": "He uses TypeSafe’s Jev decision model as a separate LLM judge. It checks whether each answer’s claims are supported by the retrieved text, whether key facts are included, and whether the chatbot declines questions it can’t answer. The judge is pinned to an exact version for consistent evaluations.",
+      "declines": false,
+      "kind": "answer",
+      "heldOut": true,
+      "draft": false,
+      "note": "Direct answer; mentions declining only as something the Judge checks."
+    },
+    {
+      "case": "paraphrase-series-stationarity",
+      "run": "gate",
+      "question": "What statistical hypothesis procedures verify constant mean and variance across historical sequences?",
+      "answer": "The project context names the **ADF** and **KPSS** tests for assessing stationarity in the per-name ARIMA prototype. It doesn’t specify separate procedures for testing constant mean and constant variance.",
+      "declines": false,
+      "kind": "hedged",
+      "heldOut": false,
+      "draft": false,
+      "note": "Partial: names the ADF and KPSS tests, then says separate procedures are not specified. The answer CI's first gate run counted as a Decline."
+    },
+    {
+      "case": "conceptual-data-cleaning-geometry",
+      "run": "gate",
+      "question": "How does he ensure data processing pipelines handle missing values and impossible physical observations without silent corruption?",
+      "answer": "For the diamond analysis, David identified physically impossible measurements—length, width, or depth recorded as zero—and converted them to missing values (NAs) before modeling, rather than treating them as valid observations. The context doesn’t specify a broader missing-value strategy or pipeline checks beyond this example.",
+      "declines": false,
+      "kind": "hedged",
+      "heldOut": false,
+      "draft": false,
+      "note": "Partial: gives the diamonds example, then says a broader strategy is not specified."
+    },
+    {
+      "case": "paraphrase-frontend-libraries",
+      "run": "gate",
+      "question": "What user interface library and styling utility powers his web applications?",
+      "answer": "David’s web applications use React, Next.js, and TypeScript. For styling, the chatbot uses Tailwind CSS. The context doesn’t specify a UI component library.",
+      "declines": false,
+      "kind": "hedged",
+      "heldOut": true,
+      "draft": false,
+      "note": "Partial: names React, Next.js, TypeScript and Tailwind, then says a UI component library is not specified."
+    },
+    {
+      "case": "years-experience",
+      "run": "comparison",
+      "question": "How many years of AI and machine learning experience does David have?",
+      "answer": "David has been working with AI and machine learning since 2020. The context doesn’t specify an exact number of years.",
+      "declines": false,
+      "kind": "hedged",
+      "heldOut": true,
+      "draft": false,
+      "note": "Partial: 'since 2020', then says an exact number of years is not specified."
+    },
+    {
+      "case": "paraphrase-names-database-hosting",
+      "run": "gate",
+      "question": "Where does the baby names app keep its database, since it isn't in the repo?",
+      "answer": "The database is generated as a published build artifact rather than checked into the repository. At runtime, the FastAPI backend resolves it locally or downloads it from Hugging Face Hub, then opens it read-only. The context doesn’t specify the exact artifact location or Hugging Face repository.",
+      "declines": false,
+      "kind": "hedged",
+      "heldOut": true,
+      "draft": false,
+      "note": "Partial: says how the database is built and loaded, then says the exact location is not specified."
+    },
+    {
+      "case": "conceptual-statistical-evaluation-rigor",
+      "run": "comparison",
+      "question": "How does he prevent benchmark contamination and data leakage between model development and published metrics?",
+      "answer": "The context describes several safeguards: evaluations run automatically in GitHub Actions, and published metrics are generated from the evaluation results rather than edited by hand. For forecasts, projected ranks are calculated against a **frozen field of names at each forecast origin**, which helps prevent rank distortions. A deployment gate also checks forecasts against a naive baseline across a 26-window backtest.\n\nIt doesn’t specify how David prevents other forms of benchmark contamination or data leakage between model development and evaluation.",
+      "declines": false,
+      "kind": "hedged",
+      "heldOut": true,
+      "draft": false,
+      "note": "Partial: lists safeguards first, then says other forms are not specified. Compare the gate run's answer to the same case, which Declines."
+    },
+    {
+      "case": "conceptual-statistical-evaluation-rigor",
+      "run": "gate",
+      "question": "How does he prevent benchmark contamination and data leakage between model development and published metrics?",
+      "answer": "The context doesn’t specify how David prevents benchmark contamination or data leakage between model development and published metrics. It does describe PR-based retrieval evaluations and automated deployment gates, but not the safeguards or data-splitting protocol behind them.",
+      "declines": true,
+      "kind": "hedged",
+      "heldOut": true,
+      "draft": false,
+      "note": "Says how David prevents contamination is not specified; the evaluations and gates it mentions are named as not being the answer."
+    },
+    {
+      "case": "tacom-history",
+      "run": "gate",
+      "question": "Did David ever work for the government directly?",
+      "answer": "The provided information doesn’t say whether David has worked directly for the government. It says he works at Booz Allen Hamilton, a technology provider for the government.",
+      "declines": true,
+      "kind": "hedged",
+      "heldOut": true,
+      "draft": false,
+      "note": "Says whether he worked for the government directly is not stated; working at a government contractor does not answer it."
+    },
+    {
+      "case": "conceptual-replacing-a-working-model",
+      "run": "comparison",
+      "question": "What convinced him to throw out a forecasting approach that was already in place?",
+      "answer": "The context doesn’t say what convinced David to replace an existing forecasting approach. It says he experimented with per-series ARIMA models for the Baby Names Explorer, then implemented a pooled LightGBM model, but doesn’t explain what drove that change.",
+      "declines": true,
+      "kind": "hedged",
+      "heldOut": true,
+      "draft": false,
+      "note": "Says what convinced him is not stated; that ARIMA came before LightGBM is context, not the reason asked for."
+    },
+    {
+      "case": "predictive-maintenance",
+      "run": "gate",
+      "question": "Has David built models that predict equipment failure?",
+      "answer": "The provided context doesn’t say whether David has built equipment-failure prediction models. It mentions his work on active-learning error prediction to prioritize human review, but that’s not described as predicting equipment failure.",
+      "declines": true,
+      "kind": "hedged",
+      "heldOut": false,
+      "draft": false,
+      "note": "Says equipment-failure models are not mentioned; the active-learning work it names is explicitly not that."
+    },
+    {
+      "case": "oos-tableau-power-bi",
+      "run": "gate",
+      "question": "Can David build dashboards in Tableau or Power BI?",
+      "answer": "The provided context mentions David’s dashboard experience with Streamlit, Shiny, and Quarto, but doesn’t say whether he’s used Tableau or Power BI.",
+      "declines": true,
+      "kind": "hedged",
+      "heldOut": false,
+      "draft": false,
+      "note": "Out of scope; says Tableau and Power BI are not mentioned, and names other dashboard tools instead."
+    }
+  ]
+}
