@@ -13,9 +13,15 @@ pass bar against the median:
 
     uv run --frozen python eval/validate_judge.py --final --output validation-run.json
 
+With --declines it validates the Decline judgment instead, against whole answers labelled
+with whether they Decline (#86), and checks its own bar (DECLINE_PASS_BAR) the same way:
+
+    uv run --frozen python eval/validate_judge.py --declines --final --output declines-run.json
+
 Needs JEV_API_KEY, and OPENAI_CI_API_KEY for the model that splits sentences into claims
 (eval/splitter.py). Labels still marked "draft" have not been reviewed by David, and are
-not measured against unless asked to with --draft.
+not measured against unless asked to with --draft: for sentences the whole set carries
+one status, and each Decline label carries its own.
 """
 
 from __future__ import annotations
@@ -151,22 +157,87 @@ PASS_BAR = {
 FINAL_RUNS = 3
 
 
-def median_of(reports: list[dict]) -> dict:
-    """Each measure of the bar, as its median over `reports`; None if any run lacks it."""
+def median_of(reports: list[dict], bar: dict[str, float] = PASS_BAR) -> dict:
+    """Each measure of `bar`, as its median over `reports`; None if any run lacks it."""
     medians = {}
-    for measure in PASS_BAR:
+    for measure in bar:
         values = [report[measure] for report in reports]
         medians[measure] = None if None in values else statistics.median(values)
     return medians
 
 
-def missed_bar(report: dict) -> list[str]:
-    """The measures in `report` below the bar. A measure with no sentences misses it."""
+def missed_bar(report: dict, bar: dict[str, float] = PASS_BAR) -> list[str]:
+    """The measures in `report` below `bar`. A measure with nothing to measure misses it."""
     return [
         measure
-        for measure, bar in PASS_BAR.items()
-        if report[measure] is None or report[measure] < bar
+        for measure, least in bar.items()
+        if report[measure] is None or report[measure] < least
     ]
+
+
+#: What kind of answer a Decline label is on. A hedged answer says something is not
+#: available and also gives something: part of what was asked (not a Decline, per
+#: CONTEXT.md), or only what is near it (a Decline). That is where Jev has been wrong.
+DECLINE_KINDS = ("decline", "answer", "hedged")
+
+
+def load_decline_labels(
+    path: Path = VALIDATION_PATH, held_out: bool = False, draft: bool = False
+) -> list[dict]:
+    """The answer-level Decline labels, each with the question and answer it is about.
+
+    Held-out labels are left out unless asked for, as for sentences. So are labels still
+    marked draft: David has not reviewed them, so they cannot decide whether the Judge
+    may gate.
+    """
+    validation = json.loads(path.read_text(encoding="utf-8"))
+    return [
+        label
+        for label in validation["declines"]
+        if (held_out or not label.get("heldOut")) and (draft or not label.get("draft"))
+    ]
+
+
+def compare_declines(items: list[dict], judge: Judge) -> dict:
+    """How often the Judge agrees with the hand label on whether an answer Declines.
+
+    Disagreements are listed and counted per kind of answer, so errors on partial and
+    hedged answers stand out from errors on clear ones.
+    """
+    tally = {kind: {"answers": 0, "disagreements": 0} for kind in DECLINE_KINDS}
+    agreed, held_out, disagreements = [], [], []
+    for item in items:
+        verdict = judge.declines(item["question"], item["answer"])
+        agrees = verdict == item["declines"]
+        agreed.append(agrees)
+        if item.get("heldOut"):
+            held_out.append(agrees)
+        tally[item["kind"]]["answers"] += 1
+        if not agrees:
+            tally[item["kind"]]["disagreements"] += 1
+            disagreements.append(
+                {
+                    "case": item["case"],
+                    "run": item["run"],
+                    "kind": item["kind"],
+                    "question": item["question"],
+                    "answer": item["answer"],
+                    "hand": item["declines"],
+                    "judge": verdict,
+                }
+            )
+    return {
+        "answers": len(items),
+        "declineAgreement": share(agreed),
+        "heldOutDeclineAgreement": share(held_out),
+        **tally,
+        "disagreements": disagreements,
+    }
+
+
+#: What the Decline judgment must reach before Decline accuracy gates anything (#86):
+#: agreement on held-out answers, against the median of `FINAL_RUNS` runs.
+DECLINE_PASS_BAR = {"heldOutDeclineAgreement": 0.9}
 
 
 def share(agreed: list[bool]) -> float | None:
@@ -197,7 +268,12 @@ def main() -> int:
     parser.add_argument(
         "--final",
         action="store_true",
-        help="The final measurement: also judge the held-out sentences, and check the bar.",
+        help="The final measurement: also judge the held-out labels, and check the bar.",
+    )
+    parser.add_argument(
+        "--declines",
+        action="store_true",
+        help="Measure the Decline judgment against the answer-level labels instead.",
     )
     args = parser.parse_args()
 
@@ -208,39 +284,52 @@ def main() -> int:
     from eval.publish import _git_commit
     from eval.splitter import OpenAISplitter
 
-    status = json.loads(VALIDATION_PATH.read_text(encoding="utf-8"))["status"]
-    if status != "reviewed" and not args.draft:
-        raise SystemExit(f"FAIL — the labels are {status}, not reviewed. Pass --draft to measure.")
+    if args.declines:
+        items = load_decline_labels(held_out=args.final, draft=args.draft)
+        drafts = sum(1 for item in items if item.get("draft"))
+        status = f"{drafts} draft" if drafts else "reviewed"
+        if not items:
+            raise SystemExit("FAIL — no reviewed Decline labels. Pass --draft to measure.")
+        measure, report_on, bar = compare_declines, print_decline_report, DECLINE_PASS_BAR
+    else:
+        status = json.loads(VALIDATION_PATH.read_text(encoding="utf-8"))["status"]
+        if status != "reviewed" and not args.draft:
+            raise SystemExit(
+                f"FAIL — the labels are {status}, not reviewed. Pass --draft to measure."
+            )
+        items = load_validation_set(held_out=args.final)
+        measure, report_on, bar = compare, print_report, PASS_BAR
 
     load_dotenv(BACKEND_ROOT / ".env")
     splitter = OpenAISplitter(OpenAI(api_key=os.environ["OPENAI_CI_API_KEY"], max_retries=6))
     judge = JevJudge(os.environ["JEV_API_KEY"], splitter)
-    items = load_validation_set(held_out=args.final)
 
     scope = "with" if args.final else "without"
     print(
         f"Judge: {judge.model}, claims split by {splitter.model} | "
-        f"{len(items)} {status} hand labels, {scope} held-out\n"
+        f"{len(items)} {status} {'Decline ' if args.declines else ''}hand labels, "
+        f"{scope} held-out\n"
     )
     reports = []
     for run in range(FINAL_RUNS if args.final else 1):
         if args.final:
             print(f"Run {run + 1} of {FINAL_RUNS}")
-        reports.append(compare(items, judge))
-        print_report(reports[-1])
+        reports.append(measure(items, judge))
+        report_on(reports[-1])
     print(f"\nJudge usage: {judge.usage}")
     print(f"Splitter usage: {splitter.usage}")
 
-    median = median_of(reports) if args.final else None
+    median = median_of(reports, bar) if args.final else None
     if median is not None:
         print("\nPass bar, against the median of the runs:")
-        for measure, bar in PASS_BAR.items():
-            runs = "  ".join(shown(report[measure]) for report in reports)
-            print(f"  {measure:<26} runs {runs}  median {shown(median[measure])}  (bar {bar:.0%})")
+        for name, least in bar.items():
+            runs = "  ".join(shown(report[name]) for report in reports)
+            print(f"  {name:<26} runs {runs}  median {shown(median[name])}  (bar {least:.0%})")
     if args.output:
         document = {
             "judge": judge.model,
             "splitter": splitter.model,
+            "judgment": "declines" if args.declines else "sentences",
             "labels": status,
             "commit": _git_commit(),
             "judgedAt": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -251,10 +340,26 @@ def main() -> int:
         )
         print(f"Wrote {args.output}")
     if median is not None:
-        missed = missed_bar(median)
+        missed = missed_bar(median, bar)
         print(f"\n{'FAIL — below the bar: ' + ', '.join(missed) if missed else 'PASS'}")
         return 1 if missed else 0
     return 0
+
+
+def print_decline_report(report: dict) -> None:
+    print(f"  Decline agreement           {shown(report['declineAgreement'])}")
+    print(f"  Held-out Decline agreement  {shown(report['heldOutDeclineAgreement'])}")
+    for kind in DECLINE_KINDS:
+        tally = report[kind]
+        print(f"  {kind:<8} answers: {tally['disagreements']} of {tally['answers']} disagree")
+    print(f"\nDisagreements ({len(report['disagreements'])}):")
+    for d in report["disagreements"]:
+        hand = "Declines" if d["hand"] else "answers"
+        judge = "Declines" if d["judge"] else "answers"
+        print(f"  {d['case']} ({d['kind']}, {d['run']} run): hand {hand}, Jev {judge}")
+        print(f"    Q: {d['question']}")
+        print(f"    A: {' '.join(d['answer'].split())}")
+    print()
 
 
 def print_report(report: dict) -> None:

@@ -919,6 +919,51 @@ What this does and does not show:
 Faithfulness may now gate (#71), at the Floor that the rerun of the run-to-run spread below
 sets with these questions.
 
+### Validating the Decline judgment
+
+Decline accuracy gates too, and it rests on a different Judge question: whether the whole
+answer Declines (`DECLINES_QUESTION` in `backend/eval/judge.py`). The sentence labels
+above never test it. In the generation gate's first CI run it counted a partial answer as
+a Decline: `paraphrase-series-stationarity` names the ADF and KPSS tests, then says
+separate procedures aren't specified. Per [`CONTEXT.md`](../CONTEXT.md), an answer that
+gives part of what was asked is not a Decline.
+
+So `judge_validation.json` also holds **answer-level Decline labels** under `declines`. Each
+label has the case, the question and answer exactly as judged, and whether the answer
+Declines. It also says which stored run the answer came from (`declineRuns`: the gate's
+first CI run, and the Shipped Arm's answers in the comparison run of Candidate Arms) and
+what kind of answer it is:
+
+| Kind | Labels | What it is |
+|---|---|---|
+| `decline` | 10 | says the information isn't available and gives nothing else; 3 are on answerable cases, where the Decline is wrong but still a Decline |
+| `answer` | 10 | answers directly, including answers that begin "No." |
+| `hedged` | 11 | says something isn't available and also gives something: part of what was asked (6, not a Decline) or only something near it (5, a Decline) |
+
+The hedged third is where Jev has already been wrong. Two labels are on the same case
+(`conceptual-statistical-evaluation-rigor`): one answer lists safeguards first, and the
+other says the safeguards aren't described.
+
+A label is held out when its Golden Set case is: the Split rule already in use, so 17 of
+the 31 are held out. As with sentences, a tuning run leaves held-out labels out. The labels
+were drafted from the answers' text without Jev's verdicts in view. They stay marked
+`"draft": true` until David has reviewed them, and a draft label is never measured
+against unless `--draft` is passed.
+
+```bash
+cd backend
+uv run --frozen python eval/validate_judge.py --declines --draft                 # tuning, against drafts
+uv run --frozen python eval/validate_judge.py --declines --final --output declines-run.json  # final
+```
+
+The report gives agreement over every label measured and over held-out labels alone. It
+counts disagreements per kind and lists each one with its question and answer.
+
+**Pass bar.** Decline accuracy may gate only once the final measurement reaches
+**≥ 0.9 agreement on held-out labels**, as the median of three `--final` runs
+(`DECLINE_PASS_BAR`). The protocol is the one used for sentences. With 17 held-out labels,
+that allows one disagreement (16 of 17 is 0.94; 15 of 17 is 0.88).
+
 ## Run-to-run spread
 
 The same commit does not give the same numbers twice: Jev is not fully deterministic, and

@@ -56,7 +56,9 @@ LLM calls" therefore stays true of the retrieval harness and does not apply to t
 - The generation model ID and Judge version are part of the measurement; a change to
   either is a new measurement, as a Corpus change is.
 - Before any Jev judgment gates a build, it is validated against roughly 30 hand-labelled
-  sentences from this domain.
+  sentences from this domain. _(2026-10-11: this covers the Decline judgment too, against
+  roughly 30 hand-labelled answers; see docs/evaluation.md, "Validating the Decline
+  judgment".)_
 
 ## Amendment (2026-10-10)
 

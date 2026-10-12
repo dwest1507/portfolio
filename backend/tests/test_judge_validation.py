@@ -10,12 +10,17 @@ from __future__ import annotations
 import json
 
 from eval.generation import split_sentences
+from eval.run_eval import GOLDEN_SET_PATH
 from eval.run_generation import BASELINE_PATH
 from eval.validate_judge import (
+    DECLINE_KINDS,
+    DECLINE_PASS_BAR,
     FINAL_RUNS,
     HAND_LABELS,
     VALIDATION_PATH,
     compare,
+    compare_declines,
+    load_decline_labels,
     load_validation_set,
     median_of,
     missed_bar,
@@ -262,3 +267,190 @@ def test_the_final_measurement_checks_the_bar_against_the_median_of_its_runs():
 def test_a_run_without_held_out_sentences_cannot_meet_the_bar():
     """Agreement on sentences the questions were tuned against proves nothing."""
     assert missed_bar(report_with(heldOutUnsupportedCaught=None)) == ["heldOutUnsupportedCaught"]
+
+
+# ---------------------------------------------------------------------------
+# The Decline judgment
+# ---------------------------------------------------------------------------
+#
+# Decline accuracy gates the build too, and rests on a separate Judge question: whether
+# an answer Declines. Its labels are answer-level, drafted from stored runs, and weighted
+# toward partial and hedged answers, where Jev has already been wrong (#86).
+
+
+def committed_decline_labels() -> list[dict]:
+    return json.loads(VALIDATION_PATH.read_text(encoding="utf-8"))["declines"]
+
+
+def test_each_decline_label_is_an_answer_to_a_golden_set_case_in_that_cases_split():
+    """Labels take dev and held-out from their case's Split, the Golden Set's own rule."""
+    golden = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
+    splits = {case["id"]: case["split"] for case in golden["cases"]}
+    runs = json.loads(VALIDATION_PATH.read_text(encoding="utf-8"))["declineRuns"]
+
+    for label in committed_decline_labels():
+        assert label["case"] in splits, label
+        assert label["heldOut"] == (splits[label["case"]] == "holdout"), label
+        assert label["run"] in runs, label
+        assert label["question"] and label["answer"], label
+        assert isinstance(label["declines"], bool), label
+        assert label["kind"] in DECLINE_KINDS, label
+
+
+def test_a_clear_decline_declines_and_a_clear_answer_does_not():
+    """Only a hedged answer may go either way: a partial answer is not a Decline."""
+    for label in committed_decline_labels():
+        if label["kind"] == "decline":
+            assert label["declines"], label
+        if label["kind"] == "answer":
+            assert not label["declines"], label
+
+
+def test_about_thirty_decline_labels_with_a_third_partial_or_hedged():
+    labels = committed_decline_labels()
+    hedged = [label for label in labels if label["kind"] == "hedged"]
+
+    assert 25 <= len(labels) <= 40
+    assert 0.25 <= len(hedged) / len(labels) <= 0.45
+    assert {label["kind"] for label in labels} == set(DECLINE_KINDS)
+    assert {label["declines"] for label in hedged} == {True, False}
+    held_out = [label for label in labels if label["heldOut"]]
+    assert {label["declines"] for label in held_out} == {True, False}
+
+
+def write_validation_set(tmp_path, declines):
+    path = tmp_path / "judge_validation.json"
+    validation = json.loads(VALIDATION_PATH.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**validation, "declines": declines}), encoding="utf-8")
+    return path
+
+
+def decline_label(case, answer, declines, kind="answer", **fields):
+    return {
+        "case": case,
+        "run": "gate",
+        "question": f"question {case}",
+        "answer": answer,
+        "declines": declines,
+        "kind": kind,
+        "heldOut": False,
+        **fields,
+    }
+
+
+def test_draft_decline_labels_are_left_out_unless_asked_for(tmp_path):
+    """A label David has not reviewed must not decide whether the Judge may gate."""
+    path = write_validation_set(
+        tmp_path,
+        [
+            decline_label("a", "Reviewed.", False),
+            decline_label("b", "Draft.", False, draft=True),
+        ],
+    )
+
+    assert [item["case"] for item in load_decline_labels(path)] == ["a"]
+    assert [item["case"] for item in load_decline_labels(path, draft=True)] == ["a", "b"]
+
+
+def test_held_out_decline_labels_are_left_out_unless_asked_for(tmp_path):
+    """As for sentences: tuning the Decline question must never see the held-out labels."""
+    path = write_validation_set(
+        tmp_path,
+        [
+            decline_label("a", "Dev.", False),
+            decline_label("b", "Held out.", False, heldOut=True),
+        ],
+    )
+
+    assert [item["case"] for item in load_decline_labels(path)] == ["a"]
+    assert [item["case"] for item in load_decline_labels(path, held_out=True)] == ["a", "b"]
+
+
+PARTIAL = "The project names the ADF and KPSS tests. It doesn't specify the rest."
+DECLINE = "The provided context doesn't say whether David holds any patents."
+ANSWER = "David currently works at Booz Allen Hamilton."
+
+
+def test_decline_agreement_counts_each_answer_and_lists_every_disagreement():
+    """A partial answer the Judge calls a Decline is the error seen in CI."""
+    items = [
+        decline_label("partial", PARTIAL, False, kind="hedged"),
+        decline_label("decline", DECLINE, True, kind="decline"),
+        decline_label("answer", ANSWER, False),
+    ]
+    judge = FakeJudge(declining={PARTIAL, DECLINE})
+
+    report = compare_declines(items, judge)
+
+    assert report["answers"] == 3
+    assert report["declineAgreement"] == 2 / 3
+    assert report["hedged"] == {"answers": 1, "disagreements": 1}
+    assert report["decline"] == {"answers": 1, "disagreements": 0}
+    assert report["disagreements"] == [
+        {
+            "case": "partial",
+            "run": "gate",
+            "kind": "hedged",
+            "question": "question partial",
+            "answer": PARTIAL,
+            "hand": False,
+            "judge": True,
+        }
+    ]
+
+
+def test_the_judge_is_asked_about_each_labelled_answer_with_its_question():
+    """The label holds the answer and question as judged, so the Judge sees exactly those."""
+    asked = []
+
+    class Recording(FakeJudge):
+        def declines(self, question, answer):
+            asked.append((question, answer))
+            return False
+
+    compare_declines([decline_label("answer", ANSWER, False)], Recording())
+
+    assert asked == [("question answer", ANSWER)]
+
+
+def test_held_out_decline_agreement_counts_only_held_out_answers():
+    """The bar is measured on answers the Decline question was never tuned against."""
+    items = [
+        decline_label("dev", PARTIAL, False, kind="hedged"),
+        decline_label("held-1", DECLINE, True, kind="decline", heldOut=True),
+        decline_label("held-2", ANSWER, False, heldOut=True),
+    ]
+    judge = FakeJudge(declining={PARTIAL, DECLINE})
+
+    report = compare_declines(items, judge)
+
+    assert report["declineAgreement"] == 2 / 3
+    assert report["heldOutDeclineAgreement"] == 1.0
+
+
+def test_the_decline_bar_is_ninety_percent_agreement_on_held_out():
+    assert missed_bar({"heldOutDeclineAgreement": 0.9}, DECLINE_PASS_BAR) == []
+    assert missed_bar({"heldOutDeclineAgreement": 14 / 16}, DECLINE_PASS_BAR) == [
+        "heldOutDeclineAgreement"
+    ]
+
+
+def test_a_decline_run_without_held_out_answers_cannot_meet_the_bar():
+    report = compare_declines([decline_label("dev", ANSWER, False)], FakeJudge())
+
+    assert report["heldOutDeclineAgreement"] is None
+    assert missed_bar(report, DECLINE_PASS_BAR) == ["heldOutDeclineAgreement"]
+
+
+def test_the_final_decline_measurement_checks_the_bar_against_the_median_of_three():
+    """One Jev run near the line could pass or fail on noise, as for sentences."""
+    runs = [
+        {"heldOutDeclineAgreement": 15 / 17},
+        {"heldOutDeclineAgreement": 17 / 17},
+        {"heldOutDeclineAgreement": 16 / 17},
+    ]
+
+    median = median_of(runs, DECLINE_PASS_BAR)
+
+    assert median == {"heldOutDeclineAgreement": 16 / 17}
+    assert missed_bar(median, DECLINE_PASS_BAR) == []
