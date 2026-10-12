@@ -1,77 +1,95 @@
 {
   "gate": "generation",
-  "writtenBy": "migrated by hand from the FLOORS and STEPS constants in code (#90). It predates the recalibrate command and fingerprints, so it is stale until `eval/recalibrate.py generation` rewrites it from five judged runs (#91, ADR-0012). Never edit by hand.",
-  "rule": "three judged runs of the Shipped Arm over the 107-case Golden Set (ADR-0007, before ADR-0012); step = the smallest of 0.005/0.01/0.02/0.05/0.1 no smaller than the metric's held-out range; Floor = lowest run − max(2 × range, step) over all cases, rounded down to the step; values to three places, as docs/evaluation.md published them",
+  "writtenBy": "eval/recalibrate.py generation — never edit by hand (ADR-0012)",
+  "rule": "five judged runs of the Shipped Arm over the full Golden Set; step = the smallest of 0.005/0.01/0.02/0.05/0.1 no smaller than the metric's held-out range; Floor = lowest run − max(2 × range, step) over all cases, rounded down to the step",
   "arm": "bm25",
   "inputs": {
     "runs": [
       {
-        "generated": "72d2df9",
-        "judged": "b2f4889"
+        "generated": "0e8b406ff5863114ebe3ed582cd298211465c6ff",
+        "judged": "6dead1d"
       },
       {
-        "generated": "72d2df9",
-        "judged": "b2f4889"
+        "generated": "0e8b406ff5863114ebe3ed582cd298211465c6ff",
+        "judged": "6dead1d"
       },
       {
-        "generated": "72d2df9",
-        "judged": "b2f4889"
+        "generated": "6dead1d",
+        "judged": "6dead1d"
+      },
+      {
+        "generated": "6dead1d",
+        "judged": "6dead1d"
+      },
+      {
+        "generated": "6dead1d",
+        "judged": "6dead1d"
       }
     ],
     "holdout": {
       "factRecall": {
         "values": [
-          0.747,
-          0.701,
-          0.782
+          0.651786,
+          0.633929,
+          0.642857,
+          0.651786,
+          0.633929
         ],
-        "range": 0.081
+        "range": 0.017857
       },
       "faithfulness": {
         "values": [
-          0.971,
-          0.94,
-          0.957
+          0.96,
+          0.951807,
+          0.934211,
+          0.974026,
+          0.987013
         ],
-        "range": 0.031
+        "range": 0.052802
       },
       "declineAccuracy": {
         "values": [
-          1.0,
-          1.0,
-          1.0
+          0.897959,
+          0.918367,
+          0.897959,
+          0.897959,
+          0.897959
         ],
-        "range": 0.0
+        "range": 0.020408
       }
     },
     "all": {
       "faithfulness": {
         "values": [
-          0.964,
-          0.937,
-          0.934
+          0.954338,
+          0.948113,
+          0.955882,
+          0.971698,
+          0.945813
         ],
-        "range": 0.03
+        "range": 0.025885
       },
       "declineAccuracy": {
         "values": [
-          0.935,
-          0.944,
-          0.944
+          0.900763,
+          0.916031,
+          0.908397,
+          0.900763,
+          0.908397
         ],
-        "range": 0.009
+        "range": 0.015267
       }
     }
   },
   "steps": {
-    "factRecall": 0.1,
-    "faithfulness": 0.05,
-    "declineAccuracy": 0.005
+    "factRecall": 0.02,
+    "faithfulness": 0.1,
+    "declineAccuracy": 0.05
   },
   "floors": {
-    "faithfulness": 0.85,
-    "declineAccuracy": 0.915
+    "faithfulness": 0.8,
+    "declineAccuracy": 0.85
   },
-  "fingerprint": null,
-  "commit": "b2f4889"
+  "fingerprint": "sha256:e27d36616c2f04074e36e5ea4e352f3506043911ba5317e97c66e8291f7eba67",
+  "commit": "6dead1d"
 }

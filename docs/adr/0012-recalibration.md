@@ -86,8 +86,8 @@ because what it measures with changed.
 - Until a gate's record is recalibrated after a trigger, that gate reports stale. That is
   correct: gating against Floors from a Golden Set that no longer exists is worse. The
   first generation record was carried over from the three-run study's constants with no
-  fingerprint, so it is stale until the five-run study recalibrates it (#91); until then
-  the ordinary suite's check of it is a strict expected failure, which that
-  Recalibration must remove.
+  fingerprint, so it was stale until the five-run study recalibrated it on 2026-10-11
+  (#91); until then the ordinary suite's check of it was a strict expected failure, which
+  that Recalibration removed.
 - ADR-0004's and ADR-0007's descriptions of how Floors are set are superseded by this ADR,
   and each carries a pointer to it.

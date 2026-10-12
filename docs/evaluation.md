@@ -1072,65 +1072,68 @@ Decline accuracy may gate, at the Floor that the run-to-run spread below sets.
 
 The same commit does not give the same numbers twice: Jev is not fully deterministic, and
 OpenAI's reasoning models, which also split sentences into claims, generate only at the
-default temperature. The spread of three runs sets two things
-([ADR-0007](adr/0007-generation-evaluation-harness.md)):
+default temperature. The spread of five judged runs sets two things
+([ADR-0007](adr/0007-generation-evaluation-harness.md),
+[ADR-0012](adr/0012-recalibration.md)):
 
 - each published generation metric's **rounding step**, from its own held-out spread
   (held-out is what is published): the smallest of 0.005 / 0.01 / 0.02 / 0.05 / 0.1 no
   smaller than that metric's range;
 - the **Floors** for Faithfulness and Decline accuracy, from the spread over every case
-  (the gate runs on the full Golden Set): the lowest run minus twice the range (three runs
-  understate the noise), and at least one of the metric's steps, rounded down to its
-  step.
+  (the gate runs on the full Golden Set): the lowest run minus twice the range (a handful
+  of runs understates the noise), and at least one of the metric's steps, rounded down to
+  its step.
 
 Until #81 one step, set by the noisiest metric, applied to every metric. Fact Recall moves
 with every reworded answer, and once its range reached 0.08 that rule set a step of 0.1
 and both Floors at 0.80, which would fire only on a collapse. David chose a step per
-metric (ADR-0007, amendment of 2026-10-11).
+metric (ADR-0007, amendment of 2026-10-11). Three runs then understated the noise, so the
+study is now five (#90).
 
-Measured on 2026-10-11 with the questions fixed in #81: three generations at `72d2df9`,
-judged at `b2f4889` (the same judging code). `gpt-6-luna` with reasoning effort `low`, the
-`bm25` Arm, 123 Corpus Chunks, all 107 cases, judged by `jev-1.13.0` with claims split by
-`gpt-6-luna`.
+### The five-run study (2026-10-11, #91)
 
-**Judge only.** One Luna record, judged three times:
-
-| Metric | Held-out | Range | All cases | Range |
-|---|---|---|---|---|
-| Fact Recall | 0.747, 0.747, 0.747 | 0 | 0.746, 0.746, 0.746 | 0 |
-| Faithfulness | 0.971, 0.971, 0.971 | 0 | 0.964, 0.964, 0.964 | 0 |
-| Decline accuracy | 1.000, 1.000, 1.000 | 0 | 0.935, 0.935, 0.935 | 0 |
-
-The three judgings split 86 of the 167 factual sentences into different claims, and only
-2 sentence verdicts changed, in opposite directions. Judging is not the noise.
-
-**End to end.** Three Luna generations of the same commit, each judged once:
+Five generations of the Shipped Arm, `bm25`, with `gpt-6-luna` at reasoning effort `low`
+over all 131 cases (111 answerable, 20 Out-of-Scope; 49 held-out) and 158 Corpus Chunks,
+each judged once at `6dead1d` by `jev-1.13.0` with the validated Judge questions, claims
+split by `gpt-6-luna` at effort `low`, filler cutoff 0.2. Two of the five reuse answers
+already paid for, re-judged: the first CI gate run on 131 cases (Actions run 38184969261)
+and the Shipped Arm of the comparison run, both generated at `0e8b406`. The other three
+were generated at `6dead1d`. Nothing between the two commits changes an answer.
 
 | Metric | Held-out | Range | All cases | Range |
 |---|---|---|---|---|
-| Fact Recall | 0.747, 0.701, 0.782 | 0.080 | 0.746, 0.722, 0.756 | 0.034 |
-| Faithfulness | 0.971, 0.940, 0.957 | 0.031 | 0.964, 0.937, 0.934 | 0.030 |
-| Decline accuracy | 1.000, 1.000, 1.000 | 0 | 0.935, 0.944, 0.944 | 0.009 |
+| Fact Recall | 0.652, 0.634, 0.643, 0.652, 0.634 | 0.018 | 0.697, 0.682, 0.701, 0.689, 0.689 | 0.019 |
+| Faithfulness | 0.960, 0.952, 0.934, 0.974, 0.987 | 0.053 | 0.954, 0.948, 0.956, 0.972, 0.946 | 0.026 |
+| Decline accuracy | 0.898, 0.918, 0.898, 0.898, 0.898 | 0.020 | 0.901, 0.916, 0.908, 0.901, 0.908 | 0.015 |
 
-Only 12 of the 107 answers were word-for-word the same in all three generations. Held-out
-Fact Recall is 65, 61 and 68 of 87 Required Facts, mostly on conceptual questions whose
-answers cover different ground each time. Held-out Faithfulness is 2 to 4 unsupported
-sentences in ~69. Both are wider than on 2026-10-10 (0.011 and 0.019): Fact Recall from
-generation alone, Faithfulness because a stricter Judge puts more sentences near the line.
-Derived from the end-to-end runs:
+Only 5 of the 131 answers were word-for-word the same in all five runs. Held-out Fact
+Recall is 71 to 73 of 112 Required Facts. Held-out Faithfulness is 1 to 5 unsupported
+sentences in ~77, so a couple of sentences near the line move it by 0.05. Decline accuracy
+is not noise: every wrong Decline in every run is an answerable question the model
+declined (no Out-of-Scope question was ever answered), and 11 of those questions were
+declined in all five runs. They are misses the gate measures, not spread.
+
+Derived by `eval/recalibrate.py generation`:
 
 | | Value | Derivation |
 |---|---|---|
-| Rounding step, Fact Recall | **0.1** | smallest step ≥ 0.080 |
-| Rounding step, Faithfulness | **0.05** | smallest step ≥ 0.031 |
-| Rounding step, Decline accuracy | **0.005** | smallest step ≥ 0 |
-| Faithfulness Floor | **0.85** | 0.934 − max(2 × 0.030, 0.05) = 0.873, rounded down to 0.85 |
-| Decline accuracy Floor | **0.915** | 0.935 − max(2 × 0.009, 0.005) = 0.916, rounded down to 0.915 |
+| Rounding step, Fact Recall | **0.02** | smallest step ≥ 0.018 |
+| Rounding step, Faithfulness | **0.1** | smallest step ≥ 0.053 |
+| Rounding step, Decline accuracy | **0.05** | smallest step ≥ 0.020 |
+| Faithfulness Floor | **0.80** | 0.946 − max(2 × 0.026, 0.1) = 0.846, rounded down to 0.80 |
+| Decline accuracy Floor | **0.85** | 0.901 − max(2 × 0.015, 0.05) = 0.851, rounded down to 0.85 |
 
-These replace the 2026-10-10 Floors (0.96 and 0.92), which were measured with Judge
-questions that [validation](#result-jev-is-not-yet-fit-to-gate-faithfulness) found blind
-to unsupported sentences. The Faithfulness Floor is lower because the fixed Judge now
-finds unsupported sentences, and those vary between generations.
+These replace the three-run Floors of 0.85 and 0.915, measured on the 107-case Golden Set.
+Faithfulness's held-out range, just over 0.05, now sets its step at 0.1 and so its Floor at
+0.80, the outcome the per-metric step was meant to avoid; this time it comes from
+Faithfulness's own spread, not Fact Recall's. Decline accuracy's lower Floor reflects the
+new Golden Set's harder questions, which the model declines more often.
+
+**Judge only (earlier study).** On 2026-10-11, with the questions fixed in #81, one Luna
+record of the 107-case Golden Set was judged three times at `b2f4889`: all three
+metrics had a range of 0. The three judgings split 86 of the 167 factual sentences into
+different claims, and only 2 sentence verdicts changed, in opposite directions. Judging is
+not the noise; generation is.
 
 ### The generation Floors record
 
@@ -1161,21 +1164,18 @@ uv run --frozen python eval/judge_generation.py --record runs/luna-1.json --outp
 uv run --frozen python eval/recalibrate.py generation runs/judged-{1,2,3,4,5}.json
 ```
 
-The record committed today was carried over from the constants above, from the three-run
-study on the 107-case Golden Set. It predates fingerprints, carries none, and so is
-**stale**, as it would be anyway: the Golden Set has since grown to 131 cases.
-Until the five-run study recalibrates it (#91), the generation gate fails with "Floors
-stale: Recalibrate" before generating anything. That is intended: gating on Floors from a
-Golden Set that no longer exists is worse. For the same reason the ordinary test suite's
-check of the committed record (`tests/test_recalibration.py`) is a strict expected
-failure until then; the Recalibration that makes it pass must also remove the marker.
+The record was first carried over by hand from the three-run study's constants on the
+107-case Golden Set, with no fingerprint, so it was stale and the gate failed "Floors
+stale: Recalibrate" until the five-run study above recalibrated it (#91). The ordinary
+test suite checks the committed record against the committed Golden Set and instrument
+(`tests/test_recalibration.py`), so a change that stales it fails there first, for free.
 
 `--provider openai` sends no temperature (the candidates reject any but the default) and
 pins `--reasoning-effort` (default `low`). It needs `OPENAI_CI_API_KEY` and a `--record`
-path, so it cannot overwrite the Groq baseline. A Luna run of all 107 cases billed ~108k
-tokens. Judging one bills Jev ~1.95M input tokens, about three times its cost before
-claim splitting (each sentence becomes ~3 claims, each judged against 5 chunks), and the
-splitter ~68k tokens.
+path, so it cannot overwrite the Groq baseline. A Luna run of all 131 cases bills ~92k
+tokens and takes under a minute, eight cases at a time. Judging one bills Jev ~2.05–2.15M
+input tokens (each sentence becomes ~3 claims, each judged against 5 chunks) and the
+splitter ~82–86k tokens, and takes about two minutes.
 
 ## Generation gate and published results
 
@@ -1199,8 +1199,9 @@ CI runs it from `.github/workflows/generation-gate.yml`, on pull requests and pu
 Golden Set, and the generation harness. Dependency bumps don't trigger it, so they spend
 no API budget. It uses CI's own keys (`OPENAI_CI_API_KEY`, and `JEV_CI_API_KEY` passed as
 `JEV_API_KEY`), never production's. It answers and judges eight cases at a time
-(`--workers`), so a full run takes a few minutes, not the ~20 it took one case at a time,
-and costs a few cents: the same calls, made concurrently.
+(`--workers`), so the gate step takes about two and a half minutes in CI (2m11s–2m27s
+measured on 131 cases), not the ~20 it took one case at a time, and costs a few cents: the
+same calls, made concurrently. The job's timeout is 10 minutes, room for Jev's retries.
 The judged run is uploaded as the `generation-run` artifact.
 
 On `main`, a passing run publishes its **held-out** cases as the Shipped Arm section of
@@ -1212,7 +1213,7 @@ Candidate Arms. A run replaces only its own section.
 
 | Published field | Measured? | |
 |---|---|---|
-| Fact Recall, Faithfulness, Decline accuracy | yes | rounded to each metric's step: 0.1, 0.05, 0.005 |
+| Fact Recall, Faithfulness, Decline accuracy | yes | rounded to each metric's step: 0.02, 0.1, 0.05 |
 | cost per answer (USD) | yes | mean billed usage at OpenAI's list prices, to one significant figure |
 | generation model ID, reasoning effort | yes | the model ID OpenAI reports answering with |
 | Judge version, splitter model | yes | |

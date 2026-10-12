@@ -61,6 +61,16 @@ same OpenAI project as production's, so the project's $20 hard monthly budget ca
 visitors together ([deployment.md](deployment.md#step-2a--the-openai-project-key-and-budget)). Locally, `make generation-gate` reads
 `OPENAI_CI_API_KEY` and `JEV_API_KEY` from `backend/.env`.
 
+Both generation workflows answer and judge eight cases at a time. The gate step takes about
+two and a half minutes on the 131-case Golden Set, so `generation-gate.yml` times out at
+10 minutes and `generation-comparison.yml` (four Arms) at 30, leaving room for Jev's
+retries. The gate's Floors (Faithfulness 0.80, Decline accuracy 0.85) and the publisher's
+rounding steps come from `backend/eval/floors/generation.json`, written only by
+`eval/recalibrate.py generation` from a five-run study
+([evaluation.md](evaluation.md#run-to-run-spread)); a change to the Golden Set's questions,
+Required Facts or `answerable`, or to the instrument, makes the gate fail "Floors stale:
+Recalibrate" until that study is rerun in the same change.
+
 uv is pinned the same way, for the same reason: `UV_VERSION` in `backend-ci.yml`,
 `generation-gate.yml` and `generation-comparison.yml` (and the `setup-uv` step in `security.yml`) matches the uv that last wrote `backend/uv.lock`, so CI
 and local development agree on the lockfile's format `revision`. Bump them together when

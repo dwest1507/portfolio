@@ -476,13 +476,6 @@ class TestCommittedGenerationRecord:
                 _generation_record(fingerprint="sha256:old"), golden["cases"]
             )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Stale until the five-run spread study recalibrates the generation gate (#91). "
-            "Strict, so the Recalibration that fixes it must also remove this marker."
-        ),
-    )
     def test_matches_the_committed_golden_set_and_instrument(self, record):
         golden = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
         assert_generation_record_current(record, golden["cases"])

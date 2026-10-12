@@ -74,8 +74,9 @@ jobs:
     name: Generation gate
     runs-on: ubuntu-latest
     # The gate answers and judges eight cases at a time (eval/gate_generation.py's
-    # --workers default), so a run takes minutes; one at a time it took ~20.
-    timeout-minutes: 20
+    # --workers default): the gate step takes ~2.5 minutes on 131 cases (one at a time it
+    # took ~20). The rest is headroom for Jev's retries.
+    timeout-minutes: 10
     # Only this job writes, and only on main.
     permissions:
       contents: write

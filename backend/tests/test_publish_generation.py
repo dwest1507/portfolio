@@ -83,13 +83,13 @@ def _published(path) -> dict:
 class TestSection:
     def test_metrics_are_rounded_to_each_metrics_step(self):
         """Steps from the spread study, read from the generation Floors record."""
-        assert steps() == {"factRecall": 0.1, "faithfulness": 0.05, "declineAccuracy": 0.005}
+        assert steps() == {"factRecall": 0.02, "faithfulness": 0.1, "declineAccuracy": 0.05}
 
-        # Faithfulness 18/20 = 0.9; Fact Recall 6/8 = 0.75 → 0.8; Decline accuracy 1.0.
+        # Faithfulness 18/20 = 0.9; Fact Recall 6/8 = 0.75 → 0.76; Decline accuracy 1.0.
         section = _section()
 
         assert section["metrics"] == {
-            "factRecall": 0.8,
+            "factRecall": 0.76,
             "faithfulness": 0.9,
             "declineAccuracy": 1.0,
         }
@@ -169,18 +169,18 @@ class TestWriteSection:
         assert published["comparison"] is None
 
     def test_rounding_suppresses_a_noise_only_rewrite(self, tmp_path):
-        """Faithfulness 0.957 and 0.940 both round to 0.95: the same measurement.
+        """Faithfulness 0.960 and 0.952 both round to 1.0: the same measurement.
 
-        Those are two of the three held-out values the spread study measured on one
+        Those are two of the five held-out values the spread study measured on one
         commit. Unrounded, every push to main would commit a re-measurement of noise.
         """
         path = tmp_path / "generationResults.json"
         write_section(
-            "shippedArm", _section(_run([_case("a", supported=957, unsupported=43)])), path
+            "shippedArm", _section(_run([_case("a", supported=960, unsupported=40)])), path
         )
         before = path.read_text(encoding="utf-8")
 
-        rerun = _section(_run([_case("a", supported=940, unsupported=60)]))
+        rerun = _section(_run([_case("a", supported=952, unsupported=48)]))
         rerun["commit"] = "deadbee"
         rerun["generatedAt"] = "2027-01-01T00:00:00+00:00"
         rerun["runUrl"] = "https://example.test/run/2"
@@ -192,13 +192,13 @@ class TestWriteSection:
 
     def test_a_move_beyond_the_step_is_published(self, tmp_path):
         path = tmp_path / "generationResults.json"
-        write_section("shippedArm", _section(_run([_case("a", supported=95, unsupported=5)])), path)
+        write_section("shippedArm", _section(_run([_case("a", supported=97, unsupported=3)])), path)
 
-        moved = _section(_run([_case("a", supported=85, unsupported=15)]))
+        moved = _section(_run([_case("a", supported=83, unsupported=17)]))
         _, written = write_section("shippedArm", moved, path)
 
         assert written is True
-        assert _published(path)["shippedArm"]["metrics"]["faithfulness"] == 0.85
+        assert _published(path)["shippedArm"]["metrics"]["faithfulness"] == 0.8
 
     def test_a_changed_generation_model_is_a_new_measurement(self, tmp_path):
         """The same numbers from a different model describe a different chatbot."""
@@ -419,11 +419,11 @@ class TestComparisonSection:
 
     def test_rounding_suppresses_a_noise_only_rewrite(self, tmp_path):
         path = tmp_path / "generationResults.json"
-        noisy = _candidate_runs(onnx_dense=[_case("a", supported=957, unsupported=43)])
+        noisy = _candidate_runs(onnx_dense=[_case("a", supported=960, unsupported=40)])
         write_section("comparison", _comparison(noisy), path)
         before = path.read_text(encoding="utf-8")
 
-        rerun = _comparison(_candidate_runs(onnx_dense=[_case("a", supported=940, unsupported=60)]))
+        rerun = _comparison(_candidate_runs(onnx_dense=[_case("a", supported=952, unsupported=48)]))
         rerun["commit"] = "deadbee"
         rerun["runUrl"] = "https://example.test/run/10"
         _, written = write_section("comparison", rerun, path)
