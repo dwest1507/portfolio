@@ -122,6 +122,10 @@ def generation_instrument() -> dict:
     decision, 2026-10-11, #91). Imported here, not at the top, so the retrieval gate never
     loads the generation harness.
     """
+    # From their source, not `eval.run_generation`, which imports `eval.run_eval` and so
+    # this module: the cycle CodeQL flagged (py/cyclic-import).
+    from app.config import DEFAULT_OPENAI_MODEL
+    from app.llm import REASONING_EFFORT
     from eval.judge import (
         CONVEYS_QUESTION,
         DECLINES_QUESTION,
@@ -130,7 +134,6 @@ def generation_instrument() -> dict:
         JEV_MODEL,
         SUPPORT_QUESTION,
     )
-    from eval.run_generation import OPENAI_MODEL, OPENAI_REASONING_EFFORT
     from eval.splitter import SPLITTER_MODEL, SPLITTER_REASONING_EFFORT
 
     return {
@@ -144,8 +147,8 @@ def generation_instrument() -> dict:
         "splitter": SPLITTER_MODEL,
         "splitterReasoningEffort": SPLITTER_REASONING_EFFORT,
         "factualBelow": FACTUAL_BELOW,
-        "generationModel": OPENAI_MODEL,
-        "reasoningEffort": OPENAI_REASONING_EFFORT,
+        "generationModel": DEFAULT_OPENAI_MODEL,
+        "reasoningEffort": REASONING_EFFORT,
     }
 
 
