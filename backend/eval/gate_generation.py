@@ -95,7 +95,7 @@ def main() -> int:
     print()
     print(format_report(run))
     print(f"\nGeneration usage: {run['usage']}")
-    print(f"Judge usage: {judge.usage}")
+    print(f"Judge usage: {judge.reported_usage}")
     print(f"Splitter usage ({run['splitter']}): {splitter.usage}")
     if args.output:
         args.output.write_text(

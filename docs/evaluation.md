@@ -677,6 +677,16 @@ billed-usage totals are updated under a lock, and the retriever answers one quer
 the workers start, so a model it loads on first use is loaded once. The Groq baseline is
 always answered one case at a time: its pacing assumes a single caller.
 
+TypeSafe publishes no numeric rate limits, only that a 429 (rate limited) or 529
+(overloaded) should be retried with exponential backoff. Eight workers limited together
+would retry together and be limited again, so before each of its five retries the Judge
+waits 1, 2, 4, 8 and then 16 seconds, plus up to as much again at random. A `Retry-After`
+the response carries, in seconds or as a date, replaces that base when it is longer, so
+the server's wait is never cut short and is still jittered. Each retry is counted,
+under the same lock as the billed tokens, and the Judge's usage is reported as
+`{input_tokens, output_tokens, retries}`: a run slowed by rate limits shows a retry count
+rather than only a long wall-clock time.
+
 ## Judging answers
 
 The Judge is TypeSafe's Jev, pinned to `jev-1.13.0`, never `jev-latest`
@@ -741,7 +751,8 @@ uv run --frozen python eval/judge_generation.py --split dev --output judged.json
 This needs `JEV_API_KEY`, and `OPENAI_CI_API_KEY` for the splitter. The CLI prints the
 metrics and then each Contradiction with its case, sentence, claim and chunk. `--output`
 writes the same, plus per-case judgments, the Judge version, the splitter's model, both
-billed usages and the judged record's provenance, as JSON. Judging a
+billed usages (the Judge's with its retry count) and the judged record's provenance, as
+JSON. Judging a
 stored record publishes nothing and gates nothing; the [generation
 gate](#generation-gate-and-published-results) does both.
 

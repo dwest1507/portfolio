@@ -2,13 +2,17 @@
 
 The adapter is thin, and judging is tested through the harness with a fake Judge
 (test_generation_harness.py). What is pinned down here is what a fake cannot show: that
-every request names the exact Judge version, and that an answer from any other version is
-refused rather than recorded (ADR-0007).
+every request names the exact Judge version, that an answer from any other version is
+refused rather than recorded (ADR-0007), and that rate-limited requests are retried with
+jittered backoff and counted in the reported usage.
 """
 
 from __future__ import annotations
 
 import json
+import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pytest
@@ -159,3 +163,147 @@ def test_billed_usage_is_totalled_across_judgments():
     judge.is_factual("Anything else?")
 
     assert judge.usage == {"input_tokens": 240, "output_tokens": 6}
+
+
+# ---------------------------------------------------------------------------
+# Retries under rate limits
+# ---------------------------------------------------------------------------
+
+
+def jev_limited(statuses: list[int], retry_after: str | None = None):
+    """An httpx client answering with each of `statuses` in turn, then 200 for good.
+
+    A limited response carries `retry_after` as its Retry-After header, when given.
+    """
+    statuses = list(statuses)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if statuses:
+            headers = {"Retry-After": retry_after} if retry_after is not None else {}
+            return httpx.Response(statuses.pop(0), headers=headers)
+        return httpx.Response(
+            200,
+            json={
+                "model": JEV_MODEL,
+                "answers": {"judgment": {"type": "noul", "noul": 0.7}},
+                "usage": {"input_tokens": 120, "output_tokens": 3},
+            },
+        )
+
+    return httpx.Client(transport=httpx.MockTransport(handle))
+
+
+@pytest.mark.parametrize("draw", [0.0, 0.5, 0.999])
+def test_a_rate_limited_request_waits_a_jittered_interval_and_then_succeeds(draw):
+    """Workers limited together must not retry together, so the wait is randomised.
+
+    The first retry waits between 1 and 2 seconds, wherever the random draw lands.
+    """
+    sleeps = []
+    judge = JevJudge(
+        "test-key",
+        WholeSentence(),
+        client=jev_limited([429]),
+        sleep=sleeps.append,
+        random=lambda: draw,
+    )
+
+    assert judge.is_factual("David is a Lead AI Engineer.") is True
+    [wait] = sleeps
+    assert 1.0 <= wait < 2.0
+    assert wait == pytest.approx(1.0 + draw)
+
+
+@pytest.mark.parametrize(
+    "retry_after",
+    ["30", "Wed, 21 Oct 2026 07:28:30 GMT"],  # seconds, or a date 30 seconds after `now`
+)
+def test_a_retry_after_header_is_honoured(retry_after):
+    """The server's own wait is never cut short; jitter still spreads what follows it."""
+    now = 1792567680.0  # Wed, 21 Oct 2026 07:28:00 GMT
+    sleeps = []
+    judge = JevJudge(
+        "test-key",
+        WholeSentence(),
+        client=jev_limited([429], retry_after=retry_after),
+        sleep=sleeps.append,
+        random=lambda: 0.5,
+        clock=lambda: now,
+    )
+
+    assert judge.is_factual("David is a Lead AI Engineer.") is True
+    [wait] = sleeps
+    assert wait == pytest.approx(45.0)
+
+
+def test_a_retry_after_shorter_than_the_backoff_does_not_shorten_it():
+    sleeps = []
+    judge = JevJudge(
+        "test-key",
+        WholeSentence(),
+        client=jev_limited([529, 529, 529], retry_after="0"),
+        sleep=sleeps.append,
+        random=lambda: 0.0,
+    )
+
+    judge.is_factual("David is a Lead AI Engineer.")
+
+    assert sleeps == [1.0, 2.0, 4.0]
+
+
+def test_retries_are_reported_with_the_billed_usage():
+    """A rate limit shows up as a number in the run's usage, not as an unexplained slow run."""
+    judge = JevJudge(
+        "test-key",
+        WholeSentence(),
+        client=jev_limited([429, 529]),
+        sleep=lambda seconds: None,
+    )
+
+    judge.is_factual("David is a Lead AI Engineer.")
+    judge.is_factual("He leads a team.")
+
+    assert judge.reported_usage == {"input_tokens": 240, "output_tokens": 6, "retries": 2}
+
+
+def test_the_retry_count_is_exact_under_concurrent_use():
+    """Eight workers share one Judge, so no retry may be lost to a race between them."""
+    seen = set()
+    seen_lock = threading.Lock()
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sentence = json.loads(request.content)["state"]["sentence"]
+        with seen_lock:
+            first = sentence not in seen
+            seen.add(sentence)
+        if first:  # every sentence is limited once, then answered
+            return httpx.Response(429)
+        return httpx.Response(
+            200,
+            json={
+                "model": JEV_MODEL,
+                "answers": {"judgment": {"type": "noul", "noul": 0.7}},
+                "usage": {"input_tokens": 120, "output_tokens": 3},
+            },
+        )
+
+    judge = JevJudge(
+        "test-key",
+        WholeSentence(),
+        client=httpx.Client(transport=httpx.MockTransport(handle)),
+        sleep=lambda seconds: None,
+    )
+    sentences = [f"Sentence {n}." for n in range(400)]
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # switch threads as often as possible, to surface a race
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(judge.is_factual, sentences))
+    finally:
+        sys.setswitchinterval(interval)
+
+    assert judge.reported_usage == {
+        "input_tokens": 120 * 400,
+        "output_tokens": 3 * 400,
+        "retries": 400,
+    }

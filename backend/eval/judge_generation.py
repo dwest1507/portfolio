@@ -88,7 +88,7 @@ def main() -> int:
         },
         "split": args.split,
         "judge": run["judge"],
-        "judgeUsage": judge.usage,
+        "judgeUsage": judge.reported_usage,
         "splitter": run["splitter"],
         "splitterUsage": splitter.usage,
         "commit": _git_commit(),
@@ -99,7 +99,7 @@ def main() -> int:
     }
 
     print(format_report(run))
-    print(f"\nJudge usage: {judge.usage}")
+    print(f"\nJudge usage: {judge.reported_usage}")
     print(f"Splitter usage ({run['splitter']}): {splitter.usage}")
     if args.output:
         args.output.write_text(

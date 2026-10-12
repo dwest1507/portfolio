@@ -16,8 +16,11 @@ labels found Jev dropping factual sentences as filler and passing partly support
 
 from __future__ import annotations
 
+import random as _random
 import threading
 import time
+from collections.abc import Callable
+from email.utils import parsedate_to_datetime
 from typing import Protocol
 
 import httpx
@@ -31,7 +34,8 @@ JEV_URL = "https://api.typesafe.ai/v1/systemone"
 JEV_MODEL = "jev-1.13.0"
 
 # Rate-limited (429) and overloaded (529) requests are retried with exponential backoff,
-# as TypeSafe's own SDKs do.
+# as TypeSafe's own SDKs do. TypeSafe publishes no numeric limits, so the backoff is
+# what keeps eight concurrent workers within them.
 RETRY_STATUSES = (429, 529)
 MAX_ATTEMPTS = 6
 
@@ -142,19 +146,41 @@ class JevJudge:
 
     Every answer is checked against the pin, so `model` is the version that actually
     judged the run, not only the one requested. `usage` totals Jev's billed tokens; the
-    splitter totals its own. Safe to call from several threads at once: the usage total is
-    updated under a lock, so no billed token is lost to a race.
+    splitter totals its own. `retries` counts requests repeated after a 429 or 529, and
+    `reported_usage` gives both together, as a run reports them. Safe to call from several
+    threads at once: both totals are updated under a lock, so no billed token or retry is
+    lost to a race.
+
+    `sleep`, `random` and `clock` are injectable so the backoff can be tested without
+    waiting, as the Groq pacer's are (`eval.generation.throttled`).
     """
 
     def __init__(
-        self, api_key: str, splitter: Splitter, client: httpx.Client | None = None
+        self,
+        api_key: str,
+        splitter: Splitter,
+        client: httpx.Client | None = None,
+        *,
+        sleep: Callable[[float], None] = time.sleep,
+        random: Callable[[], float] = _random.random,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self.model = JEV_MODEL
         self.usage = {"input_tokens": 0, "output_tokens": 0}
+        self.retries = 0
         self.splitter = splitter
         self._headers = {"Authorization": f"Bearer {api_key}"}
         self._client = client or httpx.Client(timeout=60)
         self._usage_lock = threading.Lock()
+        self._sleep = sleep
+        self._random = random
+        self._clock = clock
+
+    @property
+    def reported_usage(self) -> dict[str, int]:
+        """Billed tokens and the retry count, as a run reports the Judge's usage."""
+        with self._usage_lock:
+            return {**self.usage, "retries": self.retries}
 
     @property
     def splitter_model(self) -> str:
@@ -179,13 +205,40 @@ class JevJudge:
     def _yes(self, state: dict, question: dict) -> bool:
         return self._ask(state, question)["noul"] >= 0.5
 
+    def _backoff(self, attempt: int, response: httpx.Response) -> float:
+        """Seconds to wait before retry `attempt + 1`.
+
+        The base is 2**attempt, or the response's `Retry-After` when that is longer, and
+        up to as much again is added at random. The random part spreads the retries of
+        workers that were limited together, which would otherwise all retry at the same
+        moment and be limited together again.
+        """
+        base = max(2**attempt, self._retry_after(response))
+        return base * (1 + self._random())
+
+    def _retry_after(self, response: httpx.Response) -> float:
+        """The wait `Retry-After` asks for, in seconds or as a date; 0 if none is given."""
+        value = response.headers.get("Retry-After")
+        if value is None:
+            return 0.0
+        try:
+            return max(0.0, float(value))
+        except ValueError:
+            pass
+        try:
+            return max(0.0, parsedate_to_datetime(value).timestamp() - self._clock())
+        except TypeError, ValueError:
+            return 0.0
+
     def _ask(self, state: dict, question: dict) -> dict:
         body = {"model": self.model, "state": state, "questions": {"judgment": question}}
         for attempt in range(MAX_ATTEMPTS):
             response = self._client.post(JEV_URL, json=body, headers=self._headers)
             if response.status_code not in RETRY_STATUSES or attempt == MAX_ATTEMPTS - 1:
                 break
-            time.sleep(2**attempt)
+            with self._usage_lock:
+                self.retries += 1
+            self._sleep(self._backoff(attempt, response))
         response.raise_for_status()
         data = response.json()
         if data["model"] != self.model:

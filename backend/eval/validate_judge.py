@@ -316,7 +316,7 @@ def main() -> int:
             print(f"Run {run + 1} of {FINAL_RUNS}")
         reports.append(measure(items, judge))
         report_on(reports[-1])
-    print(f"\nJudge usage: {judge.usage}")
+    print(f"\nJudge usage: {judge.reported_usage}")
     print(f"Splitter usage: {splitter.usage}")
 
     median = median_of(reports, bar) if args.final else None

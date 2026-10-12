@@ -188,7 +188,7 @@ def main() -> int:
     for split in ("dev", "holdout"):
         print()
         print(format_comparison(runs, split))
-    print(f"\nJudge usage: {judge.usage}")
+    print(f"\nJudge usage: {judge.reported_usage}")
     print(f"Splitter usage: {splitter.usage}")
     if args.output:
         record = {
