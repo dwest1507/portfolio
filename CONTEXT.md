@@ -71,8 +71,12 @@ The order-of-magnitude cost of answering a query with an Arm, published in place
 _Avoid_: Latency, speed, response time, performance
 
 **Floor**:
-A minimum metric value below which a Measured Run fails the build. A Floor sits beneath measured performance to catch regressions, and is never a target to optimise toward. Only the Shipped Arm has one — a Floor defends what a visitor is served, and nothing is served by an Arm production does not run.
+A minimum metric value below which a Measured Run fails the build. A Floor is derived from measurement by a fixed rule, never chosen; it sits beneath measured performance to catch regressions, and is never a target to optimise toward. Only the Shipped Arm has one — a Floor defends what a visitor is served, and nothing is served by an Arm production does not run.
 _Avoid_: Threshold, target, baseline, SLA
+
+**Recalibration**:
+Re-deriving a Floor by its fixed rule because what it measures with changed: the Golden Set, or the instrument doing the measuring. Never because the system being measured changed — a Corpus edit is what a Floor exists to judge, so a Floor that followed it could never catch one. It happens in the same change that caused it, so any drop is visible there rather than surfacing later as a failing gate.
+_Avoid_: Re-baselining, adjusting the Floor, threshold tuning
 
 **Corpus**:
 The chunked text the pipeline retrieves over, assembled from the resume, the question document, and the project write-ups. Metrics from different Corpora are not comparable.
@@ -113,5 +117,5 @@ A sentence in an answer, one of whose claims a retrieved chunk states the opposi
 _Avoid_: Hallucination, error
 
 **Decline**:
-An answer that says the information is not available rather than answering. Correct for an out-of-scope question; a failure for an answerable one.
+An answer that says the information is not available rather than answering. Correct for an Out-of-Scope Case; a failure for an answerable one, whatever caused it — a Decline because retrieval found nothing to answer from still leaves the visitor without an answer. An answer that gives part of what was asked is not a Decline.
 _Avoid_: Refusal, abstention, fallback
