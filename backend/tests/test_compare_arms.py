@@ -9,12 +9,22 @@ from __future__ import annotations
 
 import pytest
 
+from eval import compare_arms as compare_arms_module
 from eval.compare_arms import compare_arms, format_comparison
 from eval.generation import Generation, Relation
-from eval.publish import ARM_SPECS, CANDIDATE, REFERENCE, shipped_arm_id
+from eval.publish import ARM_SPECS, CANDIDATE, REFERENCE, Arm, shipped_arm_id
 
 CANDIDATES = [a.id for a in ARM_SPECS if a.eligibility == CANDIDATE]
 REFERENCES = [a.id for a in ARM_SPECS if a.eligibility == REFERENCE]
+
+#: None is measured at present (ADR-0013), so the filter is tested against one made up.
+CEILING = Arm(
+    id="ceiling",
+    label="Quality ceiling",
+    description="An Arm too heavy to ship, kept to show what is possible.",
+    technical="A stand-in for a deliberately added Reference Arm.",
+    eligibility=REFERENCE,
+)
 
 
 class FakeJudge:
@@ -79,12 +89,19 @@ def all_retrievers(**chunks: str) -> dict:
 
 
 class TestCompareArms:
-    def test_runs_every_candidate_arm_and_no_reference_arm(self):
-        """Reference Arms can't ship, so no API budget is spent on them (story 55)."""
+    def test_runs_every_candidate_arm(self):
         runs = compare_arms([case("a")], all_retrievers(), generate, FakeJudge())
 
         assert sorted(runs) == sorted(CANDIDATES)
-        assert REFERENCES, "the registry should still hold Reference Arms to leave out"
+
+    def test_runs_no_reference_arm(self, monkeypatch):
+        """Reference Arms can't ship, so no API budget is spent on them (story 55)."""
+        monkeypatch.setattr(compare_arms_module, "ARM_SPECS", (*ARM_SPECS, CEILING))
+        retrievers = {**all_retrievers(), CEILING.id: refusing(CEILING.id)}
+
+        runs = compare_arms([case("a")], retrievers, generate, FakeJudge())
+
+        assert sorted(runs) == sorted(CANDIDATES)
 
     def test_the_shipped_arm_is_among_the_runs(self):
         """It is what every Candidate Arm is compared with."""

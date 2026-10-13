@@ -18,7 +18,9 @@ from eval.publish import (
     BAND_HYSTERESIS,
     BEGIN_MARKER,
     END_MARKER,
+    REFERENCE,
     SCHEMA_VERSION,
+    Arm,
     build_results_document,
     latency_band,
     leading_arm,
@@ -69,6 +71,21 @@ def _scored(arm: str, hits: list[int], mrrs: list[float] | None = None) -> dict:
     return raw
 
 
+@pytest.fixture
+def ceiling_arm(monkeypatch) -> str:
+    """A Reference Arm in the registry for one test. None is measured at present
+    (ADR-0013), but the schema keeps `eligibility` for one added on purpose later."""
+    arm = Arm(
+        id="ceiling",
+        label="Quality ceiling",
+        description="An Arm too heavy to ship, kept to show what is possible.",
+        technical="A stand-in for a deliberately added Reference Arm.",
+        eligibility=REFERENCE,
+    )
+    monkeypatch.setitem(ARM_SPEC_BY_ID, arm.id, arm)
+    return arm.id
+
+
 def _document(results=None, **kwargs) -> dict:
     defaults = {
         "corpus_chunks": 49,
@@ -79,7 +96,7 @@ def _document(results=None, **kwargs) -> dict:
     }
     defaults.update(kwargs)
     return build_results_document(
-        results or [_raw("bm25", 1.0, 0.892), _raw("rerank", 0.909, 0.853)], **defaults
+        results or [_raw("bm25", 1.0, 0.892), _raw("bm25+onnx-rerank-20", 0.909, 0.853)], **defaults
     )
 
 
@@ -120,14 +137,14 @@ class TestArmSpecs:
     def test_every_arm_is_a_candidate_or_a_reference(self):
         assert {a.eligibility for a in ARM_SPECS} <= {"candidate", "reference"}
 
-    def test_the_torch_arms_are_reference_arms(self):
-        """ADR-0009: the torch-based Arms stay as baselines but cannot ship."""
-        for arm in ("dense", "hybrid", "rerank", "bm25+rerank"):
-            assert ARM_SPEC_BY_ID[arm].eligibility == "reference"
-
-    def test_the_shippable_arms_are_candidate_arms(self):
-        for arm in ("bm25", "onnx-dense", "onnx-hybrid", "bm25+onnx-rerank-20"):
-            assert ARM_SPEC_BY_ID[arm].eligibility == "candidate"
+    def test_every_arm_is_a_candidate_arm(self):
+        """ADR-0013 retired the torch-based Reference Arms; none is measured at present."""
+        assert {a.id: a.eligibility for a in ARM_SPECS} == {
+            "bm25": "candidate",
+            "onnx-dense": "candidate",
+            "onnx-hybrid": "candidate",
+            "bm25+onnx-rerank-20": "candidate",
+        }
 
     def test_the_shipped_arm_is_a_candidate_arm(self):
         """Only Candidate Arms are eligible when the Shipped Arm is chosen."""
@@ -160,16 +177,16 @@ class TestResultsDocument:
         assert bm25["byCategory"]["direct"]["hit@5"] == 1.0
         assert bm25["shipped"] is True
 
-        rerank = next(a for a in doc["arms"] if a["id"] == "rerank")
+        rerank = next(a for a in doc["arms"] if a["id"] == "bm25+onnx-rerank-20")
         assert rerank["shipped"] is False
         assert rerank["byCategory"]["direct"]["hit@5"] == 0.909
 
-    def test_each_arm_publishes_its_eligibility(self):
+    def test_each_arm_publishes_its_eligibility(self, ceiling_arm):
         """The Scoreboard has to say which Arms could ship, or a Reference Arm's upper bound
         reads as something on offer (ADR-0009)."""
-        doc = _document(results=[_raw("bm25", 1.0, 0.9), _raw("rerank", 0.9, 0.8)])
+        doc = _document(results=[_raw("bm25", 1.0, 0.9), _raw(ceiling_arm, 0.9, 0.8)])
         eligibility = {a["id"]: a["eligibility"] for a in doc["arms"]}
-        assert eligibility == {"bm25": "candidate", "rerank": "reference"}
+        assert eligibility == {"bm25": "candidate", ceiling_arm: "reference"}
 
     def test_carries_per_category_metrics_for_each_arm(self):
         bm25_cat = {
@@ -222,12 +239,12 @@ class TestResultsDocument:
         assert written is True
         assert loaded == document
         assert loaded["schemaVersion"] == SCHEMA_VERSION
-        assert {a["id"] for a in loaded["arms"]} == {"bm25", "rerank"}
+        assert {a["id"] for a in loaded["arms"]} == {"bm25", "bm25+onnx-rerank-20"}
 
     def test_writes_arrows_rather_than_escapes(self, tmp_path):
         """The published file is read by humans; \\u2192 in it is noise.
 
-        Anchored to whichever arm actually uses an arrow rather than to `rerank` by name,
+        Anchored to whichever arm actually uses an arrow rather than to `bm25+onnx-rerank-20` by name,
         so rewording one description cannot quietly turn this into a test of nothing.
         """
         arm = next((a for a in ARM_SPECS if "\u2192" in a.technical), None)
@@ -322,20 +339,22 @@ class TestResultsDocument:
         path = tmp_path / "evalResults.json"
         shipped = [1, 0, 1, 0]
         write_results_document(
-            _document(results=[_scored("bm25", shipped), _scored("dense", [1, 0, 1, 0])]), path
+            _document(results=[_scored("bm25", shipped), _scored("onnx-dense", [1, 0, 1, 0])]), path
         )
 
-        swapped = _document(results=[_scored("bm25", shipped), _scored("dense", [0, 1, 0, 1])])
+        swapped = _document(results=[_scored("bm25", shipped), _scored("onnx-dense", [0, 1, 0, 1])])
         document, written = write_results_document(swapped, path)
 
         assert written is True
-        assert _arm(document, "dense")["vsShipped"]["won"] == 2
+        assert _arm(document, "onnx-dense")["vsShipped"]["won"] == 2
 
     def test_a_moved_metric_is_published(self, tmp_path):
         path = tmp_path / "evalResults.json"
         write_results_document(_document(), path)
 
-        moved = _document(results=[_raw("bm25", 1.0, 0.892), _raw("rerank", 0.99, 0.99)])
+        moved = _document(
+            results=[_raw("bm25", 1.0, 0.892), _raw("bm25+onnx-rerank-20", 0.99, 0.99)]
+        )
         document, written = write_results_document(moved, path)
 
         assert written is True
@@ -439,11 +458,16 @@ class TestPublishedLatency:
         doc = _document(
             results=[
                 _raw("bm25", 1.0, 0.9, latency={"p50": 0.000_1, "p95": 0.000_2, "load": 0.002}),
-                _raw("rerank", 1.0, 0.9, latency={"p50": 0.030, "p95": 0.037, "load": 4.2}),
+                _raw(
+                    "bm25+onnx-rerank-20",
+                    1.0,
+                    0.9,
+                    latency={"p50": 0.030, "p95": 0.037, "load": 4.2},
+                ),
             ]
         )
         assert _arm(doc, "bm25")["latencyBand"] == {"warm": "~1ms", "load": "~1ms"}
-        assert _arm(doc, "rerank")["latencyBand"] == {"warm": "~100ms", "load": "~10s"}
+        assert _arm(doc, "bm25+onnx-rerank-20")["latencyBand"] == {"warm": "~100ms", "load": "~10s"}
 
     def test_raw_timings_are_not_published(self):
         """Raw timings vary between runs and runners; only the band is a measurement."""
@@ -560,28 +584,28 @@ def _arm(doc: dict, arm_id: str) -> dict:
 
 class TestComparisonAgainstShipped:
     def test_a_lopsided_disagreement_puts_the_arm_ahead(self):
-        """Eight questions only `dense` hit, none only `bm25` hit: p ≈ 0.008."""
+        """Eight questions only `onnx-dense` hit, none only `bm25` hit: p ≈ 0.008."""
         shipped = [0] * 8 + [1] * 25
-        doc = _document(results=[_scored("bm25", shipped), _scored("dense", [1] * 33)])
+        doc = _document(results=[_scored("bm25", shipped), _scored("onnx-dense", [1] * 33)])
 
-        assert _arm(doc, "dense")["vsShipped"] == {"won": 8, "lost": 0, "outcome": "ahead"}
+        assert _arm(doc, "onnx-dense")["vsShipped"] == {"won": 8, "lost": 0, "outcome": "ahead"}
 
     def test_a_lopsided_disagreement_the_other_way_puts_the_arm_behind(self):
-        """`dense` misses nine questions the shipped arm hits and wins one: p ≈ 0.021."""
+        """`onnx-dense` misses nine questions the shipped arm hits and wins one: p ≈ 0.021."""
         shipped = [1] * 9 + [0] + [1] * 23
         dense = [0] * 9 + [1] + [1] * 23
-        doc = _document(results=[_scored("bm25", shipped), _scored("dense", dense)])
+        doc = _document(results=[_scored("bm25", shipped), _scored("onnx-dense", dense)])
 
-        assert _arm(doc, "dense")["vsShipped"] == {"won": 1, "lost": 9, "outcome": "behind"}
+        assert _arm(doc, "onnx-dense")["vsShipped"] == {"won": 1, "lost": 9, "outcome": "behind"}
 
     def test_a_balanced_disagreement_is_indistinguishable(self):
         """The case the old verdict got wrong: 4 won, 2 lost is a 0.06 lead on hit@5 out of
         33 questions — and p ≈ 0.69, well inside sampling noise."""
         shipped = [1, 1, 0, 0, 0, 0] + [1] * 27
         dense = [0, 0, 1, 1, 1, 1] + [1] * 27
-        doc = _document(results=[_scored("bm25", shipped), _scored("dense", dense)])
+        doc = _document(results=[_scored("bm25", shipped), _scored("onnx-dense", dense)])
 
-        assert _arm(doc, "dense")["vsShipped"] == {
+        assert _arm(doc, "onnx-dense")["vsShipped"] == {
             "won": 4,
             "lost": 2,
             "outcome": "indistinguishable",
@@ -590,30 +614,30 @@ class TestComparisonAgainstShipped:
     def test_the_smallest_significant_split_is_six_to_nothing(self):
         """Five discordant questions can never be significant (p = 0.0625 at 5–0), which is
         why a 33-question sample rarely calls anything."""
-        five = _document(results=[_scored("bm25", [0] * 5 + [1]), _scored("dense", [1] * 6)])
-        six = _document(results=[_scored("bm25", [0] * 6), _scored("dense", [1] * 6)])
+        five = _document(results=[_scored("bm25", [0] * 5 + [1]), _scored("onnx-dense", [1] * 6)])
+        six = _document(results=[_scored("bm25", [0] * 6), _scored("onnx-dense", [1] * 6)])
 
-        assert _arm(five, "dense")["vsShipped"]["outcome"] == "indistinguishable"
-        assert _arm(six, "dense")["vsShipped"]["outcome"] == "ahead"
+        assert _arm(five, "onnx-dense")["vsShipped"]["outcome"] == "indistinguishable"
+        assert _arm(six, "onnx-dense")["vsShipped"]["outcome"] == "ahead"
 
     def test_each_category_is_compared_on_its_own_questions(self):
         """The page filters by Query Category, and its verdict follows the filter. A
         category's verdict must rest on that category's disagreements alone."""
         shipped = _scored("bm25", [0] * 6 + [1] * 4)
-        dense = _scored("dense", [1] * 6 + [0] * 1 + [1] * 3)
+        dense = _scored("onnx-dense", [1] * 6 + [0] * 1 + [1] * 3)
         for raw in (shipped, dense):
             for case in raw["cases"][6:]:
                 case["category"] = "paraphrase"
         doc = _document(results=[shipped, dense])
 
-        assert _arm(doc, "dense")["vsShippedByCategory"] == {
+        assert _arm(doc, "onnx-dense")["vsShippedByCategory"] == {
             "direct": {"won": 6, "lost": 0, "outcome": "ahead"},
             "paraphrase": {"won": 0, "lost": 1, "outcome": "indistinguishable"},
         }
         assert _arm(doc, "bm25")["vsShippedByCategory"] is None
 
     def test_the_shipped_arm_is_not_compared_with_itself(self):
-        doc = _document(results=[_scored("bm25", [1, 0]), _scored("dense", [1, 1])])
+        doc = _document(results=[_scored("bm25", [1, 0]), _scored("onnx-dense", [1, 1])])
         assert _arm(doc, "bm25")["vsShipped"] is None
 
 
@@ -631,7 +655,7 @@ class TestVerdict:
         shipped = [1, 1, 0, 0, 0, 0] + [1] * 27
         dense = [0, 0, 1, 1, 1, 1] + [1] * 27
         doc = _document(
-            results=[_scored("bm25", shipped), _scored("dense", dense)],
+            results=[_scored("bm25", shipped), _scored("onnx-dense", dense)],
             golden_questions=33,
             split="holdout",
         )
@@ -643,12 +667,12 @@ class TestVerdict:
     def test_names_an_arm_that_is_distinguishably_ahead(self):
         shipped = [0] * 8 + [1] * 25
         doc = _document(
-            results=[_scored("bm25", shipped), _scored("dense", [1] * 33)],
+            results=[_scored("bm25", shipped), _scored("onnx-dense", [1] * 33)],
             golden_questions=33,
             split="holdout",
         )
         assert verdict_line(doc) == (
-            "Production runs Keyword only. Across the 33 held-out questions, Meaning only "
+            "Production runs Keyword only. Across the 33 held-out questions, Meaning only, shippable "
             "(won 8, lost 0) is distinguishably ahead of it on hit@5."
         )
 
@@ -656,48 +680,65 @@ class TestVerdict:
         shipped = [1] * 9 + [0] + [1] * 23
         dense = [0] * 9 + [1] + [1] * 23
         doc = _document(
-            results=[_scored("bm25", shipped), _scored("dense", dense)],
+            results=[_scored("bm25", shipped), _scored("onnx-dense", dense)],
             golden_questions=33,
             split="holdout",
         )
         assert verdict_line(doc) == (
-            "Production runs Keyword only. Across the 33 held-out questions, Meaning only "
+            "Production runs Keyword only. Across the 33 held-out questions, Meaning only, shippable "
             "(won 1, lost 9) is distinguishably behind it on hit@5."
         )
 
-    def test_names_arms_ahead_and_behind_and_leaves_out_the_indistinguishable(self):
-        """Labels contain commas ("Both combined, then re-ranked"), so each name is closed
-        by its won/lost counts rather than left to run into the next one."""
+    def test_names_arms_ahead_and_behind(self):
+        """Labels contain commas ("Both combined, shippable"), so each name is closed by
+        its won/lost counts rather than left to run into the next one."""
         shipped = [1] * 7 + [0] * 7 + [1] * 19
-        rerank = [1] * 7 + [1] * 7 + [1] * 19  # wins the 7 the shipped arm missed
-        dense = [0] * 7 + [0] * 7 + [1] * 19  # loses the 7 the shipped arm hit
-        hybrid = [0, 0, 1, 1] + [1] * 3 + [0] * 7 + [1] * 19  # 2 won, 2 lost
+        ahead = [1] * 7 + [1] * 7 + [1] * 19  # wins the 7 the shipped arm missed
+        behind = [0] * 7 + [0] * 7 + [1] * 19  # loses the 7 the shipped arm hit
         doc = _document(
             results=[
                 _scored("bm25", shipped),
-                _scored("dense", dense),
-                _scored("hybrid", hybrid),
-                _scored("rerank", rerank),
-                _scored("bm25+rerank", rerank),
+                _scored("onnx-dense", behind),
+                _scored("onnx-hybrid", ahead),
+                _scored("bm25+onnx-rerank-20", ahead),
             ],
             golden_questions=33,
             split="holdout",
         )
         assert verdict_line(doc) == (
             "Production runs Keyword only. Across the 33 held-out questions, "
-            "Both combined, then re-ranked (won 7, lost 0) and Keyword, then re-ranked "
-            "(won 7, lost 0) are distinguishably ahead of it on hit@5, and Meaning only "
-            "(won 0, lost 7) is behind it."
+            "Both combined, shippable (won 7, lost 0) and Keyword, then re-ranked from 20, "
+            "shippable (won 7, lost 0) are distinguishably ahead of it on hit@5, and "
+            "Meaning only, shippable (won 0, lost 7) is behind it."
+        )
+
+    def test_leaves_out_the_indistinguishable(self):
+        shipped = [1] * 7 + [0] * 7 + [1] * 19
+        ahead = [1] * 7 + [1] * 7 + [1] * 19  # wins the 7 the shipped arm missed
+        balanced = [0, 0, 1, 1] + [1] * 3 + [0] * 7 + [1] * 19  # 2 won, 2 lost
+        doc = _document(
+            results=[
+                _scored("bm25", shipped),
+                _scored("onnx-hybrid", balanced),
+                _scored("bm25+onnx-rerank-20", ahead),
+            ],
+            golden_questions=33,
+            split="holdout",
+        )
+        assert verdict_line(doc) == (
+            "Production runs Keyword only. Across the 33 held-out questions, "
+            "Keyword, then re-ranked from 20, shippable (won 7, lost 0) is distinguishably "
+            "ahead of it on hit@5."
         )
 
     def test_names_the_sample_for_a_run_over_the_whole_set(self):
-        doc = _document(results=[_scored("bm25", [1, 0]), _scored("dense", [0, 1])])
+        doc = _document(results=[_scored("bm25", [1, 0]), _scored("onnx-dense", [0, 1])])
         assert "Across all 55 questions," in verdict_line(doc)
 
     def test_leading_arm_ids_returns_every_tied_arm(self):
-        doc = _document(results=[_raw("bm25", 1.0, 0.5), _raw("rerank", 1.0, 0.99)])
-        assert leading_arm_ids(doc, "hit@5") == ["bm25", "rerank"]
-        assert leading_arm_ids(doc, "mrr") == ["rerank"]
+        doc = _document(results=[_raw("bm25", 1.0, 0.5), _raw("bm25+onnx-rerank-20", 1.0, 0.99)])
+        assert leading_arm_ids(doc, "hit@5") == ["bm25", "bm25+onnx-rerank-20"]
+        assert leading_arm_ids(doc, "mrr") == ["bm25+onnx-rerank-20"]
 
     def test_reports_honestly_when_no_arm_is_flagged(self):
         doc = _document(results=[_raw("bm25", 1.0, 0.9)])
@@ -706,9 +747,9 @@ class TestVerdict:
         assert "No arm is flagged as shipped" in verdict_line(doc)
 
     def test_leading_arm_is_per_metric(self):
-        doc = _document(results=[_raw("bm25", 1.0, 0.5), _raw("rerank", 0.9, 0.99)])
+        doc = _document(results=[_raw("bm25", 1.0, 0.5), _raw("bm25+onnx-rerank-20", 0.9, 0.99)])
         assert leading_arm(doc, "hit@5")["id"] == "bm25"
-        assert leading_arm(doc, "mrr")["id"] == "rerank"
+        assert leading_arm(doc, "mrr")["id"] == "bm25+onnx-rerank-20"
 
     def test_a_retired_arm_stays_publishable(self):
         """Arms come and go; #23 retired three from production in one change.
@@ -730,13 +771,15 @@ class TestMarkdown:
     def test_bolds_every_arm_tied_for_a_column(self):
         """The caption says "Best score per column in bold", so it has to be every arm
         holding the best score, not the first one listed."""
-        md = render_markdown(_document(results=[_raw("bm25", 1.0, 0.9), _raw("rerank", 1.0, 0.8)]))
+        md = render_markdown(
+            _document(results=[_raw("bm25", 1.0, 0.9), _raw("bm25+onnx-rerank-20", 1.0, 0.8)])
+        )
         assert md.count("**1.000**") == 2
 
     def test_renders_a_row_per_arm_with_the_winner_bolded(self):
         md = render_markdown(_document())
         assert "| `bm25` _(shipped)_ |" in md
-        assert "| `rerank` |" in md
+        assert "| `bm25+onnx-rerank-20` |" in md
         assert "**1.000**" in md  # bm25 leads hit@5
         assert "Measured on 49 chunks and 55 golden questions" in md
         # Column labels match the page's, so the two surfaces read identically.
@@ -745,28 +788,37 @@ class TestMarkdown:
     def test_renders_won_and_lost_against_the_shipped_arm(self):
         shipped = [0] * 8 + [1] * 25
         dense = [1] * 8 + [0] * 2 + [1] * 23
-        md = render_markdown(_document(results=[_scored("bm25", shipped), _scored("dense", dense)]))
+        md = render_markdown(
+            _document(results=[_scored("bm25", shipped), _scored("onnx-dense", dense)])
+        )
         header = next(line for line in md.splitlines() if line.startswith("| Arm |"))
         assert "| vs shipped (won / lost) |" in header
-        assert "| 8 / 2 |" in next(line for line in md.splitlines() if "`dense`" in line)
+        assert "| 8 / 2 |" in next(line for line in md.splitlines() if "`onnx-dense`" in line)
         # The shipped arm is the reference, not a contestant against itself.
         assert "| — |" in next(line for line in md.splitlines() if "`bm25`" in line)
 
-    def test_renders_each_arms_eligibility(self):
-        md = render_markdown(_document(results=[_raw("bm25", 1.0, 0.9), _raw("rerank", 0.9, 0.8)]))
+    def test_renders_each_arms_eligibility(self, ceiling_arm):
+        md = render_markdown(
+            _document(results=[_raw("bm25", 1.0, 0.9), _raw(ceiling_arm, 0.9, 0.8)])
+        )
         lines = md.splitlines()
         assert next(line for line in lines if line.startswith("| Arm |")).startswith(
             "| Arm | Eligibility |"
         )
         assert "| `bm25` _(shipped)_ | Candidate |" in md
-        assert "| `rerank` | Reference |" in md
+        assert f"| `{ceiling_arm}` | Reference |" in md
 
     def test_renders_each_arms_latency_bands(self):
         md = render_markdown(
             _document(
                 results=[
                     _raw("bm25", 1.0, 0.9, latency={"p50": 0.000_1, "p95": 0.000_2, "load": 0.002}),
-                    _raw("rerank", 1.0, 0.9, latency={"p50": 0.03, "p95": 0.037, "load": 4.2}),
+                    _raw(
+                        "bm25+onnx-rerank-20",
+                        1.0,
+                        0.9,
+                        latency={"p50": 0.03, "p95": 0.037, "load": 4.2},
+                    ),
                 ]
             )
         )
@@ -774,14 +826,16 @@ class TestMarkdown:
         header = next(line for line in lines if line.startswith("| Arm |"))
         assert header.endswith("| Latency Band (warm p95) | Load band |")
         assert next(line for line in lines if "`bm25`" in line).endswith("| ~1ms | ~1ms |")
-        assert next(line for line in lines if "`rerank`" in line).endswith("| ~100ms | ~10s |")
+        assert next(line for line in lines if "`bm25+onnx-rerank-20`" in line).endswith(
+            "| ~100ms | ~10s |"
+        )
         # Raw timings belong to the CLI and --json output, not the published block.
         assert "0.037" not in md and "4.2" not in md
 
     def test_renders_a_bootstrap_interval_for_mrr(self):
         """An engineer judging a 0.03 MRR gap needs to see how wide MRR's own noise is."""
         flat = _scored("bm25", [1] * 20, mrrs=[0.5] * 20)
-        spread = _scored("dense", [1] * 20, mrrs=[0.0, 1.0] * 10)
+        spread = _scored("onnx-dense", [1] * 20, mrrs=[0.0, 1.0] * 10)
         md = render_markdown(_document(results=[flat, spread]))
 
         header = next(line for line in md.splitlines() if line.startswith("| Arm |"))
@@ -789,7 +843,7 @@ class TestMarkdown:
         # No variation between questions means no uncertainty to report.
         assert "| 0.500–0.500 |" in next(line for line in md.splitlines() if "`bm25`" in line)
 
-        dense_row = next(line for line in md.splitlines() if "`dense`" in line)
+        dense_row = next(line for line in md.splitlines() if "`onnx-dense`" in line)
         interval = next(cell for cell in dense_row.split("|") if "–" in cell)
         lo, hi = (float(x) for x in interval.strip().split("–"))
         assert 0.0 < lo < 0.5 < hi < 1.0

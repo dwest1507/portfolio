@@ -5,7 +5,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 # NOTE: indexes/ is deliberately committed — the Dockerfile copies it into the
-# image, so the built FAISS/BM25 files must be in the repo. Rebuild with
+# image, so the built BM25 and embedding files must be in the repo. Rebuild with
 # `make build-index` whenever backend/data/ changes.
 .venv/
 venv/

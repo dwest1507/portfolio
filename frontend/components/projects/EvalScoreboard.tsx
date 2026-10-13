@@ -37,10 +37,11 @@ function categoryLabel(cat: string): string {
  * contradict its own numbers and needs no edit when the numbers move, an arm is added, or
  * the shipped configuration changes.
  *
- * Only Candidate Arms are shown (ADR-0009): each torch Reference Arm scored identically to
- * its ONNX twin, so the references repeated rows a reader could not act on. The highlight
- * and the verdict are computed over the shown arms alone, so neither can point at a row
- * that is not on the page.
+ * Only Candidate Arms are shown (ADR-0009). The torch Reference Arms this first hid scored
+ * identically to their ONNX twins and have since been retired (ADR-0013); the filter stays
+ * so a quality-ceiling Arm added on purpose later stays off the page without an edit here.
+ * The highlight and the verdict are computed over the shown arms alone, so neither can
+ * point at a row that is not on the page.
  *
  * `run` defaults to the published run; it is a prop only so tests can render fixtures.
  */

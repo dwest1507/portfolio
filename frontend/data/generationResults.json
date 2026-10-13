@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "shippedArm": {
-    "generatedAt": "2026-10-12T17:52:24+00:00",
-    "commit": "15db05d",
-    "runUrl": "https://github.com/dwest1507/portfolio/actions/runs/38286766780",
+    "generatedAt": "2026-10-13T00:59:30+00:00",
+    "commit": "a039d89",
+    "runUrl": "https://github.com/dwest1507/portfolio/actions/runs/38329750379",
     "split": "holdout",
     "arm": "bm25",
     "armLabel": "Keyword only",
@@ -16,7 +16,7 @@
     "answerable": 43,
     "outOfScope": 6,
     "metrics": {
-      "factRecall": 0.62,
+      "factRecall": 0.6,
       "faithfulness": 1.0,
       "declineAccuracy": 0.9
     },

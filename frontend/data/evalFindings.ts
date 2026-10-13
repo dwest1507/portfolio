@@ -45,6 +45,26 @@ export interface Finding {
 /** Newest first. */
 export const findings: Finding[] = [
   {
+    id: 'torch-arms-retired',
+    date: '2026-10-13',
+    title: 'Retiring the torch arms cut backend CI by more than half and changed no score',
+    observed:
+      'The four torch arms only ever duplicated their ONNX twins, but every backend pull ' +
+      'request still installed torch, its CUDA wheels and FAISS, and the two torch ' +
+      're-rankers took about 65 seconds of each retrieval gate. With them gone, Backend CI ' +
+      '(lint, tests and retrieval eval, summed) took 2m18s on a warm cache, against 5m20s ' +
+      'before, and 2m28s on the first run after the lockfile changed, against 6m57s for the ' +
+      'last such run (which also published results, about 70 seconds of its total). The ' +
+      'retrieval gate fell from 3m16s to 1m29s, tests from 50 to 15 seconds and lint from 32 ' +
+      'to 9.',
+    changed:
+      'The torch arms, the FAISS index and the sentence-transformers and faiss-cpu ' +
+      'dependencies were removed from the harness, so every arm it measures could ship. The ' +
+      'shipped arm, its floors and every remaining arm’s definition are unchanged, and the ' +
+      'torch measurements stay in the evaluation docs as the record of the parity check.',
+    href: 'https://github.com/dwest1507/portfolio/blob/main/docs/adr/0013-torch-reference-arms-retired.md',
+  },
+  {
     id: 'onnx-matches-torch',
     date: '2026-10-12',
     title: 'Swapping torch for ONNX Runtime changed no retrieval score, only the speed',

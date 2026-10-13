@@ -6,18 +6,14 @@ actually work, and do the weights and stage choices earn their keep?
 Runs the golden question set through each retrieval arm and reports recall@k,
 MRR, and nDCG@k so the arms can be compared directly:
 
-    bm25         keyword only (no embedding model required)
-    dense        FAISS semantic only
-    hybrid       weighted reciprocal-rank fusion of both
-    rerank       hybrid candidates re-ordered by the cross-encoder
-    bm25+rerank  keyword candidates re-ordered by the cross-encoder, no dense stage
-
-and three Candidate Arms that run their models on ONNX Runtime instead of torch, so
-production could ship them (ADR-0009). The five above are Reference Arms:
-
-    onnx-dense           `dense` with the same embedding model on ONNX Runtime
-    onnx-hybrid          `hybrid` with onnx-dense as its dense stage
+    bm25                 keyword only (no embedding model required)
+    onnx-dense           semantic search with all-mpnet-base-v2 on ONNX Runtime
+    onnx-hybrid          weighted reciprocal-rank fusion of bm25 and onnx-dense
     bm25+onnx-rerank-20  20 keyword candidates re-ordered by an ONNX cross-encoder
+
+Every arm is a Candidate Arm: it runs its models on ONNX Runtime rather than torch, so
+production could ship it (ADR-0009). The torch-based Reference Arms were retired once
+their ONNX twins had reproduced them (ADR-0013).
 
 Usage:
     uv run python eval/run_eval.py                      # all arms
@@ -342,9 +338,8 @@ def ndcg_at_k(retrieved: list[int], relevant: set[int], k: int) -> float:
 # ---------------------------------------------------------------------------
 
 
-#: The candidate pool of `bm25+onnx-rerank-20`: fixed, not a multiple of the cutoff. The
-#: 2×k pool of the older re-ranking arms can only recover chunks BM25 already put in its
-#: top 10, and widening it is a new Arm rather than an edit to theirs (ADR-0009).
+#: The candidate pool of `bm25+onnx-rerank-20`: fixed, not a multiple of the cutoff. A 2×k
+#: pool could only recover chunks BM25 already put in its top 10.
 RERANK_POOL = 20
 
 
@@ -354,17 +349,9 @@ def _retrievers(pipeline, top_k: int) -> dict:
     ARM_SPECS owns how an arm is described; this owns what it does. A mapping rather
     than an if/elif chain because arms come and go — see retrievers_for_arms().
 
-    The re-ranking arms retrieve twice the cutoff and let the cross-encoder narrow to
-    top_k. That ratio lives here now: `RAGPipeline.retrieve` no longer has a candidate
-    stage to mirror, because the arm it implements does not re-rank.
+    The re-ranking arm's candidate pool lives here: `RAGPipeline.retrieve` has no
+    candidate stage to mirror, because the arm it implements does not re-rank.
     """
-
-    def reranked(retrieve):
-        def run(question: str) -> list[int]:
-            candidates = retrieve(question, top_k=top_k * 2)
-            return pipeline.rerank(question, candidates, top_k=top_k)
-
-        return run
 
     def onnx_reranked_from_pool(question: str) -> list[int]:
         candidates = pipeline.sparse_search(question, top_k=RERANK_POOL)
@@ -372,10 +359,6 @@ def _retrievers(pipeline, top_k: int) -> dict:
 
     return {
         "bm25": lambda q: pipeline.sparse_search(q, top_k=top_k),
-        "dense": lambda q: pipeline.dense_search(q, top_k=top_k),
-        "hybrid": lambda q: pipeline.hybrid_search(q, top_k=top_k),
-        "rerank": reranked(pipeline.hybrid_search),
-        "bm25+rerank": reranked(pipeline.sparse_search),
         "onnx-dense": lambda q: pipeline.onnx_dense_search(q, top_k=top_k),
         "onnx-hybrid": lambda q: pipeline.onnx_hybrid_search(q, top_k=top_k),
         "bm25+onnx-rerank-20": onnx_reranked_from_pool,
@@ -406,10 +389,6 @@ def retrievers_for_arms(pipeline, top_k: int) -> dict:
 #: construction, named by the RAGPipeline attribute that loads it on first use.
 _ARM_LOADS: dict[str, tuple[str, ...]] = {
     "bm25": (),
-    "dense": ("faiss_index", "embedder"),
-    "hybrid": ("faiss_index", "embedder"),
-    "rerank": ("faiss_index", "embedder", "cross_encoder"),
-    "bm25+rerank": ("cross_encoder",),
     "onnx-dense": ("onnx_embeddings", "onnx_embedder"),
     "onnx-hybrid": ("onnx_embeddings", "onnx_embedder"),
     "bm25+onnx-rerank-20": ("onnx_cross_encoder",),
@@ -575,10 +554,10 @@ def check_floors(
     Three ways a run can look gated without being gated. The first two were real
     behaviour once; the third is what a `--split` flag would have introduced:
 
-    1. An ungated arm (``dense``) contributed no checks, so a dense-only ``--check``
-       run compared nothing and still printed "OK". A run in which *nothing* was gated
-       is now a failure, and any ungated arm is named explicitly rather than passing in
-       silence.
+    1. An ungated arm (then ``dense``) contributed no checks, so a ``--check`` run of
+       that arm alone compared nothing and still printed "OK". A run in which *nothing*
+       was gated is now a failure, and any ungated arm is named explicitly rather than
+       passing in silence.
     2. Floors are derived at k=5. Comparing them against metrics measured at another
        cutoff is meaningless, so a non-default ``--top-k`` cannot be gated.
     3. Floors are derived on the whole golden set. A single split is a smaller,

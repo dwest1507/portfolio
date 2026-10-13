@@ -40,7 +40,9 @@ END_MARKER = "<!-- eval:end -->"
 
 #: An Arm that could become the Shipped Arm within production's constraints.
 CANDIDATE = "candidate"
-#: An Arm kept as a baseline but not eligible to ship. No new ones are added (ADR-0009).
+#: An Arm kept as a baseline but not eligible to ship (ADR-0009). None is measured at
+#: present: the torch-based ones were retired (ADR-0013). The value stays so a
+#: quality-ceiling Arm added on purpose later stays off the public page unchanged.
 REFERENCE = "reference"
 
 
@@ -82,52 +84,8 @@ ARM_SPECS: tuple[Arm, ...] = (
         eligibility=CANDIDATE,
         shipped=True,
     ),
-    Arm(
-        id="dense",
-        label="Meaning only",
-        description=(
-            "Matches on meaning rather than wording, so it can find a passage that answers "
-            "the question without repeating any of its words."
-        ),
-        technical="FAISS inner-product search over normalized all-mpnet-base-v2 embeddings.",
-        eligibility=REFERENCE,
-    ),
-    Arm(
-        id="hybrid",
-        label="Both combined",
-        description="Runs both of the above and merges their rankings into one list.",
-        technical="Weighted reciprocal-rank fusion of the sparse and dense rankings.",
-        eligibility=REFERENCE,
-    ),
-    Arm(
-        id="rerank",
-        label="Both combined, then re-ranked",
-        description=(
-            "Takes the merged list and has a second, slower model re-read each candidate "
-            "against the question to put the best one first."
-        ),
-        technical=(
-            "Cross-encoder re-ranking of the fused candidates: hybrid_search over 2×k "
-            "candidates → cross-encoder narrows to k. Shipped until the harness measured "
-            "it against the keyword arm."
-        ),
-        eligibility=REFERENCE,
-    ),
-    Arm(
-        id="bm25+rerank",
-        label="Keyword, then re-ranked",
-        description=(
-            "Takes the keyword results alone and has the slower second model re-read them "
-            "against the question, with no meaning-based search involved at all."
-        ),
-        technical=(
-            "Cross-encoder re-ranking of BM25 candidates. The arm that answers whether the "
-            "dense stage contributes anything the re-ranker cannot recover on its own."
-        ),
-        eligibility=REFERENCE,
-    ),
-    # The Candidate Arms below run their models on ONNX Runtime rather than torch, so any
-    # of them could ship without returning a GPU-oriented runtime to the image (ADR-0009).
+    # The Arms below run their models on ONNX Runtime rather than torch, so any of them
+    # could ship without returning a GPU-oriented runtime to the image (ADR-0009).
     Arm(
         id="onnx-dense",
         label="Meaning only, shippable",
@@ -137,8 +95,7 @@ ARM_SPECS: tuple[Arm, ...] = (
         ),
         technical=(
             "Inner-product search over normalized all-mpnet-base-v2 embeddings, computed with "
-            "ONNX Runtime instead of torch. Same model as `dense`, so the two measure the "
-            "runtime and nothing else."
+            "ONNX Runtime instead of torch."
         ),
         eligibility=CANDIDATE,
     ),
@@ -149,8 +106,8 @@ ARM_SPECS: tuple[Arm, ...] = (
             "Merges the keyword ranking with the shippable meaning-based ranking into one list."
         ),
         technical=(
-            "Weighted reciprocal-rank fusion of the BM25 ranking and the `onnx-dense` ranking, "
-            "with the same weights and damping as `hybrid`."
+            "Weighted reciprocal-rank fusion of the BM25 ranking (weight 0.3) and the "
+            "`onnx-dense` ranking (weight 0.7), damped at k=1."
         ),
         eligibility=CANDIDATE,
     ),
@@ -163,8 +120,8 @@ ARM_SPECS: tuple[Arm, ...] = (
         ),
         technical=(
             "BM25 over 20 candidates → ms-marco-MiniLM-L-6-v2 cross-encoder on ONNX Runtime "
-            "narrows to k. A new Arm rather than a change to `bm25+rerank`, whose 2×k pool "
-            "can recover only the top 10."
+            "narrows to k. The pool is fixed at 20 so the re-ranker can recover Chunks BM25 "
+            "ranks below the top 10."
         ),
         eligibility=CANDIDATE,
     ),
@@ -538,9 +495,9 @@ def leading_arm(document: dict, metric: str) -> dict:
 def leading_arm_ids(document: dict, metric: str) -> list[str]:
     """Every arm tied for the best score on `metric`, in listed order.
 
-    A tie is a real result and gets rendered as one. `bm25` and `bm25+rerank` currently
-    both take hit@5 = 1.000; highlighting only the first would report the arm that ships
-    as beating an arm it merely matched.
+    A tie is a real result and gets rendered as one. When `bm25` and a re-ranking arm both
+    take hit@5 = 1.000, highlighting only the first would report the arm that ships as
+    beating an arm it merely matched.
     """
     best = leading_arm(document, metric)["metrics"].get(metric, float("-inf"))
     return [a["id"] for a in document["arms"] if a["metrics"].get(metric) == best]

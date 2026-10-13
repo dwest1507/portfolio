@@ -6,8 +6,8 @@
 # pipeline is keyword retrieval over a pickled index. See docs/evaluation.md.
 #
 # What that removes: ~500MB of embedding and re-ranking weights that used to be baked in
-# here, the faiss-cpu and sentence-transformers wheels, the Hugging Face cache directory,
-# and the model-loading step from container start.
+# here, the ML runtime wheels, the Hugging Face cache directory, and the model-loading step
+# from container start.
 
 FROM python:3.14-slim
 
@@ -20,16 +20,16 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Install dependencies first for layer caching. --no-dev is what keeps faiss-cpu and
-# sentence-transformers out: they are declared in the dev group because only the index
-# builder and the eval harness use them.
+# Install dependencies first for layer caching. --no-dev is what keeps onnxruntime,
+# tokenizers and huggingface-hub out: they are declared in the dev group because only the
+# index builder and the eval harness use them.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Application code + pre-built indexes. faiss.index ships too — it is a few hundred KB,
-# and shipping the whole directory keeps the image a faithful copy of what was measured.
+# Application code + pre-built indexes. onnx_embeddings.npy ships too — it is a few hundred
+# KB, and shipping the whole directory keeps the image a faithful copy of what was measured.
 COPY app ./app
 COPY indexes ./indexes
 

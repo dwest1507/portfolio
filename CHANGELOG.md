@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/dwest1507/portfolio/compare/portfolio-v1.4.1...portfolio-v1.5.0) (2026-10-13)
+
+
+### Features
+
+* **eval:** retire the torch Reference Arms from the retrieval harness ([#104](https://github.com/dwest1507/portfolio/issues/104)) ([a039d89](https://github.com/dwest1507/portfolio/commit/a039d892923999c583e1202bbeae31aa1fd4ddd0))
+
 ## [1.4.1](https://github.com/dwest1507/portfolio/compare/portfolio-v1.4.0...portfolio-v1.4.1) (2026-10-12)
 
 

@@ -11,7 +11,9 @@ how it picks.
 GPU-oriented ML runtime back into the image ADR-0004 shrank from 17.2GB to 544MB, such as
 ONNX-runtime models or a hosted embedding API. The existing torch-based Arms remain as
 Reference Arms and no new ones are added; a Scoreboard of Arms nobody can ship is a list
-of upper bounds nobody can act on.
+of upper bounds nobody can act on. *Superseded in part by ADR-0013: the torch-based
+Reference Arms were retired once their ONNX twins had reproduced them. The rule below is
+unchanged.*
 
 **The rule**, applied to a comparison run on `dev` and confirmed on `holdout`:
 
