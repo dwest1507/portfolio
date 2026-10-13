@@ -11,14 +11,14 @@ as deciding it will never be worth running again. `eval/run_eval.py` measures ev
 of them on every run, so the day the corpus grows past the point where keyword matching
 suffices, the harness is what says so.
 
-Each of those stages also has an ONNX Runtime twin (`onnx_dense_search`,
-`onnx_hybrid_search`, `onnx_rerank`): the same models without torch, for the Candidate
-Arms that production could actually ship (ADR-0009).
+They run on ONNX Runtime (`onnx_dense_search`, `onnx_hybrid_search`, `onnx_rerank`), not
+torch, so each is a Candidate Arm production could actually ship (ADR-0009). The torch
+and FAISS versions they were checked against are gone (ADR-0013).
 
-They are inert until an arm asks for them: faiss, sentence-transformers and the ONNX
-models are imported inside the lazy loaders below, not at module scope, so the production
-image installs none of them and startup loads none of them. All are declared in the `dev`
-dependency group, which the Dockerfile's `uv sync --no-dev` skips.
+They are inert until an arm asks for them: the ONNX models are imported inside the lazy
+loaders below, not at module scope, so the production image installs none of them and
+startup loads none of them. Their runtime is declared in the `dev` dependency group,
+which the Dockerfile's `uv sync --no-dev` skips.
 """
 
 from __future__ import annotations
@@ -35,21 +35,15 @@ from ..config import INDEXES_DIR
 from .tokenize import tokenize
 
 if TYPE_CHECKING:  # imported for typing only; see the module docstring
-    import faiss
-    from sentence_transformers import CrossEncoder, SentenceTransformer
-
     from .onnx_models import OnnxCrossEncoder, OnnxEmbedder
 
-EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
-CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-# Weights applied to each retriever's reciprocal-rank contribution in the `hybrid` and
-# `rerank` arms. Semantic search leads on the assumption that most recruiter questions
-# are paraphrases rather than exact-term lookups, with BM25 as the backstop for proper
-# nouns ("TACOM", "FAISS") that embeddings blur together.
+# Weights applied to each retriever's reciprocal-rank contribution in the `onnx-hybrid`
+# arm. Semantic search leads on the assumption that most recruiter questions are
+# paraphrases rather than exact-term lookups, with BM25 as the backstop for proper nouns
+# ("TACOM", "FAISS") that embeddings blur together.
 #
 # These were never tuned, and deliberately were not. Under RRF, driving DENSE_WEIGHT
-# toward zero makes `hybrid` converge on BM25's ordering — so on a corpus where BM25
+# toward zero makes the fused ranking converge on BM25's ordering — so on a corpus where BM25
 # already leads every metric, "find the best ratio" and "turn dense off" are the same
 # experiment, and the second one is the honest way to run it. It was run, dense lost,
 # and tuning the split would have been optimising a stage on its way off the serving
@@ -85,7 +79,7 @@ def reciprocal_rank_fusion(
     Each list contributes ``weight / (k + rank)`` for its entries (rank is
     1-based). Returns ``(id, score)`` pairs sorted best-first.
 
-    RRF is used instead of normalizing and summing raw scores because FAISS
+    RRF is used instead of normalizing and summing raw scores because embedding
     cosine similarities and BM25 term-frequency scores live on different,
     unbounded scales. Min-max normalizing each list independently — the previous
     approach here — forces the top hit of *every* list to 1.0 and the bottom to
@@ -109,16 +103,14 @@ class RAGPipeline:
     """Retrieval over the pre-built portfolio indexes.
 
     Only the chunks and the BM25 index are loaded on construction, because only those
-    are on the serving path. The FAISS index, the embedding model and the cross-encoder
-    load on first use, which in production is never — the evaluation harness is the only
-    caller that reaches them.
+    are on the serving path. The Corpus embeddings, the embedding model and the
+    cross-encoder load on first use, which in production is never — the evaluation
+    harness is the only caller that reaches them.
     """
 
     def __init__(
         self,
         indexes_dir: Path = INDEXES_DIR,
-        embedder: SentenceTransformer | None = None,
-        cross_encoder: CrossEncoder | None = None,
         onnx_embedder: OnnxEmbedder | None = None,
         onnx_cross_encoder: OnnxCrossEncoder | None = None,
     ) -> None:
@@ -136,17 +128,14 @@ class RAGPipeline:
         # positions that no longer mean what they meant when it was built. Since
         # `sparse_search` hands those positions straight to `self.chunks[i]`, a stale
         # pickle either raises IndexError on a live request or, worse, silently serves
-        # the text of the wrong chunk. This is the guard that used to sit on the FAISS
-        # index; it belongs on whichever index is actually served, and that is this one.
+        # the text of the wrong chunk. The guards on the unserved indexes run on first use
+        # instead; this one belongs on whichever index is actually served.
         if self.bm25.corpus_size != len(self.chunks):
             raise ValueError(
                 f"Index mismatch: bm25.pkl has {self.bm25.corpus_size} documents but "
                 f"chunks.json has {len(self.chunks)} chunks. Run `make build-index`."
             )
 
-        self._faiss_index: faiss.Index | None = None
-        self._embedder = embedder
-        self._cross_encoder = cross_encoder
         self._onnx_embeddings: np.ndarray | None = None
         self._onnx_embedder = onnx_embedder
         self._onnx_cross_encoder = onnx_cross_encoder
@@ -154,50 +143,15 @@ class RAGPipeline:
     # -- Lazily loaded indexes and models ------------------------------------
 
     @property
-    def faiss_index(self) -> faiss.Index:
-        """The dense index, read on first use.
-
-        The consistency check below used to run at construction, catching a stale
-        index before the server took traffic. It belongs here now: dense retrieval is
-        no longer on the serving path, so a mismatch can no longer return the text of
-        the wrong chunk to a visitor — it can only mislead the harness, which is
-        exactly who this raises for. The equivalent guard for the index that *is*
-        served stayed at construction, in `__init__`.
-        """
-        if self._faiss_index is None:
-            import faiss
-
-            index = faiss.read_index(str(self._indexes_dir / "faiss.index"))
-            if index.ntotal != len(self.chunks):
-                raise ValueError(
-                    f"Index mismatch: faiss.index has {index.ntotal} vectors but "
-                    f"chunks.json has {len(self.chunks)} chunks. Run `make build-index`."
-                )
-            self._faiss_index = index
-        return self._faiss_index
-
-    @property
-    def embedder(self) -> SentenceTransformer:
-        if self._embedder is None:
-            from sentence_transformers import SentenceTransformer
-
-            self._embedder = SentenceTransformer(EMBEDDING_MODEL)
-        return self._embedder
-
-    @property
-    def cross_encoder(self) -> CrossEncoder:
-        if self._cross_encoder is None:
-            from sentence_transformers import CrossEncoder
-
-            self._cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL)
-        return self._cross_encoder
-
-    @property
     def onnx_embeddings(self) -> np.ndarray:
         """The Corpus embedded by the ONNX embedder at index build time, read on first use.
 
-        A plain matrix rather than a FAISS index: an exact inner-product search over a few
+        A plain matrix rather than a vector index: an exact inner-product search over a few
         hundred rows is one matrix product, and numpy is already on the serving path.
+
+        The consistency check runs here rather than at construction: dense retrieval is
+        not on the serving path, so a mismatch cannot return the text of the wrong chunk to
+        a visitor — it can only mislead the harness, which is exactly who this raises for.
         """
         if self._onnx_embeddings is None:
             embeddings = np.load(self._indexes_dir / "onnx_embeddings.npy")
@@ -248,33 +202,7 @@ class RAGPipeline:
         # merely padded out the list.
         return [int(i) for i in ranked if scores[i] > 0]
 
-    def dense_search(self, query: str, top_k: int = 10) -> list[int]:
-        """Semantic search over the FAISS index. Returns chunk IDs, best first.
-
-        Measured, not shipped — see the module docstring.
-        """
-        query_vec = self.embedder.encode([query], normalize_embeddings=True).astype(np.float32)
-        _, indices = self.faiss_index.search(query_vec, top_k)
-        return [int(i) for i in indices[0] if i >= 0]
-
-    def hybrid_search(self, query: str, top_k: int = 10) -> list[int]:
-        """Weighted reciprocal-rank fusion of dense and sparse retrieval.
-
-        Returns chunk IDs, best first. Measured, not shipped.
-        """
-        return self._fused(self.dense_search(query, top_k=top_k), query, top_k)
-
-    def rerank(self, query: str, candidate_ids: list[int], top_k: int = 5) -> list[int]:
-        """Cross-encoder re-ranking. Returns chunk IDs, best first.
-
-        Measured, not shipped.
-        """
-        if len(candidate_ids) <= 1:
-            return candidate_ids[:top_k]
-        return self._reranked(self.cross_encoder, query, candidate_ids, top_k)
-
-    # The ONNX Runtime versions of the three stages above, for the Candidate Arms. Same
-    # models, same fusion; only the runtime differs, so they could ship (ADR-0009).
+    # The stages below are measured, not shipped — see the module docstring.
 
     def onnx_dense_search(self, query: str, top_k: int = 10) -> list[int]:
         """Semantic search with the ONNX embedder. Returns chunk IDs, best first."""
@@ -283,23 +211,21 @@ class RAGPipeline:
         return [int(i) for i in np.argsort(-scores, kind="stable")[:top_k]]
 
     def onnx_hybrid_search(self, query: str, top_k: int = 10) -> list[int]:
-        """`hybrid_search` with `onnx_dense_search` as its dense stage."""
-        return self._fused(self.onnx_dense_search(query, top_k=top_k), query, top_k)
+        """Weighted reciprocal-rank fusion of `onnx_dense_search` and `sparse_search`.
 
-    def onnx_rerank(self, query: str, candidate_ids: list[int], top_k: int = 5) -> list[int]:
-        """`rerank` with the ONNX cross-encoder."""
-        if len(candidate_ids) <= 1:
-            return candidate_ids[:top_k]
-        return self._reranked(self.onnx_cross_encoder, query, candidate_ids, top_k)
-
-    def _fused(self, dense: list[int], query: str, top_k: int) -> list[int]:
+        Returns chunk IDs, best first.
+        """
+        dense = self.onnx_dense_search(query, top_k=top_k)
         sparse = self.sparse_search(query, top_k=top_k)
         fused = reciprocal_rank_fusion([dense, sparse], [DENSE_WEIGHT, SPARSE_WEIGHT])
         return [doc_id for doc_id, _ in fused[:top_k]]
 
-    def _reranked(self, model, query: str, candidate_ids: list[int], top_k: int) -> list[int]:
+    def onnx_rerank(self, query: str, candidate_ids: list[int], top_k: int = 5) -> list[int]:
+        """Cross-encoder re-ranking of `candidate_ids`. Returns chunk IDs, best first."""
+        if len(candidate_ids) <= 1:
+            return candidate_ids[:top_k]
         pairs = [[query, self.chunks[i]["text"]] for i in candidate_ids]
-        scores = model.predict(pairs)
+        scores = self.onnx_cross_encoder.predict(pairs)
         ranked = sorted(zip(candidate_ids, scores), key=lambda x: x[1], reverse=True)
         return [doc_id for doc_id, _ in ranked[:top_k]]
 

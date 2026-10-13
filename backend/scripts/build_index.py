@@ -1,5 +1,5 @@
 """
-Pre-processing script: chunk documents, build FAISS + BM25 indexes.
+Pre-processing script: chunk documents, build the BM25 index and the Corpus embeddings.
 
 Run once before deploying:
     python scripts/build_index.py
@@ -17,9 +17,8 @@ is split at line and sentence boundaries with its heading repeated on every piec
 
 Writes to indexes/:
   - chunks.json     List of {"text": str, "source": str}
-  - faiss.index     FAISS inner-product index (cosine sim on normalised vecs)
-  - onnx_embeddings.npy  The same embeddings computed on ONNX Runtime, for the
-                         Candidate Arms (normalised float32, one row per chunk)
+  - onnx_embeddings.npy  all-mpnet-base-v2 embeddings computed on ONNX Runtime, for
+                         the dense Candidate Arms (normalised float32, one row per chunk)
   - bm25.pkl        BM25Okapi index
 """
 
@@ -29,10 +28,8 @@ import re
 import sys
 from pathlib import Path
 
-import faiss
 import numpy as np
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.rag.onnx_models import OnnxEmbedder
@@ -369,24 +366,11 @@ def main() -> None:
         json.dump(all_chunks, f, ensure_ascii=False, indent=2)
     print("\nSaved chunks.json")
 
-    # Embed with sentence-transformers
-    print("\nGenerating embeddings (sentence-transformers/all-mpnet-base-v2)...")
-    embedder = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
-    texts = [c["text"] for c in all_chunks]
-    embeddings = embedder.encode(texts, normalize_embeddings=True, show_progress_bar=True)
-    embeddings = embeddings.astype(np.float32)
-
-    # Build FAISS index (inner product = cosine sim on normalised vecs)
-    dim = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dim)
-    index.add(embeddings)
-    faiss.write_index(index, str(INDEXES_DIR / "faiss.index"))
-    print(f"Saved faiss.index ({index.ntotal} vectors, dim={dim})")
-
-    # The same model on ONNX Runtime, for the Candidate Arms (ADR-0009). Embedded here, not
-    # at query time, so their load band counts loading the model and not embedding the
-    # Corpus — the cost a production image would actually pay.
+    # The embedding model on ONNX Runtime, for the dense Candidate Arms (ADR-0009).
+    # Embedded here, not at query time, so their load band counts loading the model and not
+    # embedding the Corpus — the cost a production image would actually pay.
     print("\nGenerating embeddings (all-mpnet-base-v2 on ONNX Runtime)...")
+    texts = [c["text"] for c in all_chunks]
     onnx_embeddings = OnnxEmbedder().encode(texts)
     np.save(INDEXES_DIR / "onnx_embeddings.npy", onnx_embeddings)
     print(f"Saved onnx_embeddings.npy ({onnx_embeddings.shape[0]} vectors)")

@@ -4,10 +4,10 @@ name: Retrieval eval
 # a Floor in backend/eval/floors/retrieval.json, or that record is stale (ADR-0012). On
 # pushes to main it also publishes the held-out Measured Run (ADR-0001).
 #
-# Measuring every Arm takes about 4.5 minutes, so it runs only when something it measures
-# can have changed. The path filter is a first cut, narrower than backend-ci.yml's: the
-# retrieval code, the indexes and their build script, the Corpus sources, the retrieval
-# harness, the Golden Set and the retrieval Floors record. backend/uv.lock must be on it,
+# Measuring every Arm takes minutes (4m53s on the release merge #95), so it runs only
+# when something it measures can have changed. The path filter is a first cut, narrower
+# than backend-ci.yml's: the retrieval code, the indexes and their build script, the
+# Corpus sources, the retrieval harness, the Golden Set and the retrieval Floors record. backend/uv.lock must be on it,
 # since a dependency bump can move results, but every release rewrites the backend
 # package's own version there too. So scripts/backend-eval.sh then compares the input
 # fingerprint (backend/eval/inputs.py, which ignores that version line) with the one the
@@ -92,8 +92,8 @@ jobs:
         run: uv sync --frozen
         working-directory: backend
 
-      # The embedding + cross-encoder weights, torch and ONNX, are ~1GB. Cache them so only the
-      # first run on a given lockfile pays the download.
+      # The ONNX embedding + cross-encoder weights. Cache them so only the first run on a
+      # given lockfile pays the download.
       - name: Cache Hugging Face models
         uses: actions/cache@v6
         with:

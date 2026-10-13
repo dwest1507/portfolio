@@ -11,7 +11,7 @@ help:
 	@echo "  make dev                     - Run both frontend and backend locally"
 	@echo "  make dev-frontend            - Run frontend only"
 	@echo "  make dev-backend             - Run backend only"
-	@echo "  make build-index             - Build FAISS + BM25 indexes from resume and project data"
+	@echo "  make build-index             - Build the BM25 index + Corpus embeddings"
 	@echo "  make stop                    - Stop running dev servers"
 	@echo "  make test                    - Run frontend and backend tests"
 	@echo "  make lint                    - Run frontend and backend linters"
@@ -77,7 +77,7 @@ dev: frontend-deps
 	wait $$back $$front 2>/dev/null || true
 
 build-index:
-	@echo "Building FAISS + BM25 indexes..."
+	@echo "Building the BM25 index and Corpus embeddings..."
 	cd backend && uv run python scripts/build_index.py
 
 # Only ever targets processes *listening* on the port. A bare `lsof -ti:3000`

@@ -49,28 +49,26 @@ make build-index
    boundaries with its heading repeated on every piece. A source that no longer parses
    into its structure fails the build. See
    [ADR-0011](adr/0011-structure-aware-chunking.md).
-3. **Embed** — `sentence-transformers` (`all-mpnet-base-v2`) generates a vector per chunk,
-   and the same model's ONNX export, run on ONNX Runtime, generates a second set for the
-   Candidate Arms
-4. **Index** — Builds a FAISS index (vector search) and a BM25 index (keyword search).
-   BM25 terms are lowercased, stopword-filtered, and Snowball-stemmed by
+3. **Embed** — the ONNX export of `all-mpnet-base-v2`, run on ONNX Runtime, generates a
+   normalized vector per chunk for the dense Candidate Arms
+4. **Index** — Builds a BM25 index (keyword search). The embeddings need no index: an exact
+   inner-product search over a few hundred rows is one matrix product. BM25 terms are lowercased, stopword-filtered, and Snowball-stemmed by
    `app/rag/tokenize.py` — the same tokenizer the query path uses, so index and
    query terms always agree.
-5. **Save** — Writes `backend/indexes/faiss.index`, `onnx_embeddings.npy`, `bm25.pkl`,
-   and `chunks.json`
+5. **Save** — Writes `backend/indexes/onnx_embeddings.npy`, `bm25.pkl` and `chunks.json`
 
 The indexes are committed to the repo. `chunks.json` and `bm25.pkl` are loaded into memory
-at FastAPI startup; `faiss.index` is not, because the served pipeline does not use it —
-steps 3 and 4's vector half exist for the evaluation harness. See
+at FastAPI startup; `onnx_embeddings.npy` is not, because the served pipeline does not use
+it — step 3 exists for the evaluation harness. See
 [evaluation.md](evaluation.md).
 
 The three artefacts are built together and must stay together. `RAGPipeline.__init__`
 refuses to construct when `bm25.pkl` and `chunks.json` disagree on how many documents
 exist, because BM25 returns *positions* that `sparse_search` hands straight to
 `chunks[i]`: a stale pickle either raises on a live request or, worse, serves the text of
-the wrong chunk with no error at all. The equivalent check for `faiss.index` moved to the
-lazy loader when dense retrieval left the serving path — a stale dense index can now only
-mislead the harness, which is who it raises for. Rebuild all three with `make build-index`
+the wrong chunk with no error at all. The equivalent check for `onnx_embeddings.npy` runs
+in its lazy loader, since dense retrieval is not on the serving path — stale embeddings can
+only mislead the harness, which is who it raises for. Rebuild all three with `make build-index`
 and commit them together.
 
 ## Runtime Pipeline (`POST /api/chat`)
@@ -206,14 +204,16 @@ one is a manual, reviewed act:
 | Purpose | Model | Where it runs |
 |---------|-------|---------------|
 | LLM | `gpt-6-luna` via OpenAI (chosen by [ADR-0008](adr/0008-generation-moves-to-openai.md)'s rule), overridable with `OPENAI_MODEL` | Production |
-| Embedding | `sentence-transformers/all-mpnet-base-v2`, on torch and on ONNX Runtime | Index build + eval only |
-| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2`, on torch and on ONNX Runtime | Eval only |
+| Embedding | `sentence-transformers/all-mpnet-base-v2`, on ONNX Runtime | Index build + eval only |
+| Re-ranking | `cross-encoder/ms-marco-MiniLM-L-6-v2`, on ONNX Runtime | Eval only |
 
-Neither model is installed in the production image: `faiss-cpu`, `sentence-transformers`,
-`onnxruntime`, `tokenizers` and `huggingface-hub` live in the `dev` dependency group, which
-the Dockerfile's `uv sync --no-dev` skips. The ONNX Runtime versions back the Candidate
-Arms, which could ship without torch if one is ever chosen
-([ADR-0009](adr/0009-shipped-arm-selection-rule.md)).
+Neither model is installed in the production image: `onnxruntime`, `tokenizers` and
+`huggingface-hub` live in the `dev` dependency group, which the Dockerfile's
+`uv sync --no-dev` skips. They back the Candidate Arms, which could ship without torch if
+one is ever chosen ([ADR-0009](adr/0009-shipped-arm-selection-rule.md)). The torch
+versions of both models, run through `sentence-transformers` with a FAISS index, were
+retired once ONNX Runtime had reproduced them
+([ADR-0013](adr/0013-torch-reference-arms-retired.md)).
 
 ## Environment Variables
 

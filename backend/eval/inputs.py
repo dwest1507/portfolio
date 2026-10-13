@@ -9,7 +9,7 @@ published, and `scripts/backend-eval.sh` skips it (#97).
 The one input that changes for unrelated reasons is `backend/uv.lock`: every release bumps
 the `backend` package's own version inside it. That line cannot move a measurement, so it
 is stripped before hashing. Every other lockfile change (a real dependency bump of
-sentence-transformers, onnxruntime, tokenizers, ...) changes the fingerprint.
+onnxruntime, tokenizers, rank-bm25, ...) changes the fingerprint.
 
 This follows the Floors records' fingerprints (ADR-0012), but hashes files, not cases.
 Usage:

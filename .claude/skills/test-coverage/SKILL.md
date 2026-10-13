@@ -97,19 +97,13 @@ def test_openai_error_yields_error_event(client, mock_pipeline):
     assert '3:"Generation failed"' in response.text
 
 # RAG pipeline — with fake indexes in tmp_path
-def test_hybrid_search_returns_chunks(fake_indexes):
+def test_onnx_rerank_orders_candidates_by_the_cross_encoder(fake_indexes):
     indexes_dir, chunks = fake_indexes
-    mock_embedder = MagicMock()
-    mock_embedder.encode.return_value = np.random.rand(1, 768).astype(np.float32)
-    mock_cross_encoder = MagicMock()
-    mock_cross_encoder.predict.return_value = np.array([0.9, 0.7, 0.5])
-    with patch("app.rag.pipeline.INDEXES_DIR", indexes_dir), \
-         patch("app.rag.pipeline.SentenceTransformer", return_value=mock_embedder), \
-         patch("app.rag.pipeline.CrossEncoder", return_value=mock_cross_encoder):
-        from app.rag.pipeline import RAGPipeline
-        pipeline = RAGPipeline()
-        results = pipeline._hybrid_search("AI Engineer", top_k=3)
-    assert len(results) > 0
+    cross_encoder = MagicMock()
+    cross_encoder.predict.return_value = np.array([0.1, 2.5, -1.0])
+    from app.rag.pipeline import RAGPipeline
+    pipeline = RAGPipeline(indexes_dir=indexes_dir, onnx_cross_encoder=cross_encoder)
+    assert pipeline.onnx_rerank("q", [0, 1, 2], top_k=2) == [1, 0]
 ```
 
 Always test:
@@ -181,7 +175,7 @@ cd frontend && npm run test -- --run
 ## Rules
 
 1. **Test behavior, not implementation** — assert on outputs and side-effects, not internal state.
-2. **No real ML models in tests** — mock `SentenceTransformer`, `CrossEncoder`, and `AsyncOpenAI`. Use the `fake_indexes` fixture (tmp_path) for FAISS/BM25 tests.
+2. **No real ML models in tests** — inject fakes for `OnnxEmbedder` and `OnnxCrossEncoder` (`RAGPipeline(onnx_embedder=..., onnx_cross_encoder=...)`) and mock `AsyncOpenAI`. Use the `fake_indexes` fixture (tmp_path) for BM25 and embedding tests.
 3. **No real OpenAI API calls** — always patch `app.llm.AsyncOpenAI`.
 4. **Static components need no tests** — only test components with conditional rendering, state, or user interactions.
 5. **One test file per source file** — `test_chat.py` covers `routes/chat.py`; `test_rag.py` covers `rag/pipeline.py` and `scripts/build_index.py`.

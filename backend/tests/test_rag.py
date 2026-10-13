@@ -297,9 +297,8 @@ def test_strip_mdx_removes_links_keeps_text():
 
 @pytest.fixture
 def fake_indexes(tmp_path):
-    """Create minimal fake indexes in a temp directory."""
-    import faiss as faiss_lib
-
+    """Create minimal fake indexes in a temp directory: chunks and BM25, what production
+    reads. Tests that need Corpus embeddings write their own (see `_onnx_pipeline`)."""
     chunks = [
         {"text": "David is an AI Engineer.", "source": "resume"},
         {"text": "David built a RAG pipeline using FAISS and BM25.", "source": "resume"},
@@ -307,14 +306,6 @@ def fake_indexes(tmp_path):
     ]
     with open(tmp_path / "chunks.json", "w") as f:
         json.dump(chunks, f)
-
-    # FAISS index with random 768-dim vectors
-    dim = 768
-    vectors = np.random.rand(len(chunks), dim).astype(np.float32)
-    vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
-    index = faiss_lib.IndexFlatIP(dim)
-    index.add(vectors)
-    faiss_lib.write_index(index, str(tmp_path / "faiss.index"))
 
     # BM25 index
     from rank_bm25 import BM25Okapi
@@ -327,49 +318,6 @@ def fake_indexes(tmp_path):
         pickle.dump(bm25, f)
 
     return tmp_path, chunks
-
-
-def test_hybrid_search_returns_chunks(fake_indexes):
-    indexes_dir, _chunks = fake_indexes
-
-    mock_embedder = MagicMock()
-    mock_embedder.encode.return_value = np.random.rand(1, 768).astype(np.float32)
-
-    mock_cross_encoder = MagicMock()
-    mock_cross_encoder.predict.return_value = np.array([0.9, 0.7, 0.5])
-
-    from app.rag.pipeline import RAGPipeline
-
-    pipeline = RAGPipeline(
-        indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
-    )
-    results = pipeline.hybrid_search("AI Engineer experience", top_k=3)
-
-    assert len(results) > 0
-    assert all(isinstance(doc_id, int) for doc_id in results)
-    assert all(0 <= doc_id < 3 for doc_id in results)
-
-
-def test_reranking_orders_by_cross_encoder_score(fake_indexes):
-    """The chunk with the highest cross-encoder score should appear first."""
-    indexes_dir, _chunks = fake_indexes
-
-    mock_embedder = MagicMock()
-    mock_embedder.encode.return_value = np.random.rand(1, 768).astype(np.float32)
-
-    # Cross-encoder: make the last candidate score highest
-    mock_cross_encoder = MagicMock()
-    mock_cross_encoder.predict.return_value = np.array([0.1, 0.5, 0.9])
-
-    from app.rag.pipeline import RAGPipeline
-
-    pipeline = RAGPipeline(
-        indexes_dir=indexes_dir, embedder=mock_embedder, cross_encoder=mock_cross_encoder
-    )
-    reranked = pipeline.rerank("query", [0, 1, 2], top_k=3)
-
-    # The candidate that got score 0.9 (chunk ID 2) should be first
-    assert reranked[0] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -398,18 +346,8 @@ def test_onnx_dense_search_ranks_chunks_by_similarity_to_the_query(fake_indexes)
     assert pipeline.onnx_dense_search("q", top_k=2) == [2, 1]
 
 
-def test_onnx_dense_search_needs_no_torch_model_or_faiss_index(fake_indexes):
-    """A Candidate Arm must run with neither: that is what makes it shippable."""
-    indexes_dir, _chunks = fake_indexes
-    (indexes_dir / "faiss.index").unlink()
-    pipeline = _onnx_pipeline(indexes_dir, [[0.0, 1.0], [0.6, 0.8], [1.0, 0.0]])
-
-    assert pipeline.onnx_dense_search("q", top_k=3) == [2, 1, 0]
-    assert pipeline._embedder is None and pipeline._cross_encoder is None
-
-
 def test_onnx_hybrid_search_fuses_the_keyword_ranking_into_the_dense_one(fake_indexes):
-    """The same fusion as `hybrid`: BM25 lifts a chunk the dense ranking put last."""
+    """BM25 lifts a chunk the dense ranking put last."""
     indexes_dir, _chunks = fake_indexes
     # Dense ranks chunk 1 ("...FAISS and BM25.") last; only BM25 matches "FAISS".
     pipeline = _onnx_pipeline(indexes_dir, [[1.0, 0.0], [0.0, 1.0], [0.9, 0.1]])
@@ -423,10 +361,12 @@ def test_onnx_rerank_orders_candidates_by_the_onnx_cross_encoder(fake_indexes):
     pipeline = _onnx_pipeline(indexes_dir, [[1.0, 0.0]] * 3, scores=[0.1, 2.5, -1.0])
 
     assert pipeline.onnx_rerank("q", [0, 1, 2], top_k=2) == [1, 0]
-    assert pipeline._cross_encoder is None, "the torch cross-encoder is never loaded"
 
 
 def test_stale_onnx_embeddings_raise_for_the_harness(fake_indexes):
+    """The mismatch guard runs on first use, off the startup path, since dense retrieval
+    is not served. It still has to run: embeddings out of step with chunks.json return
+    the wrong chunk IDs, which would corrupt a measured run rather than an answer."""
     indexes_dir, chunks = fake_indexes
     pipeline = _onnx_pipeline(indexes_dir, [[1.0, 0.0]] * (len(chunks) + 1))
 
@@ -477,12 +417,12 @@ def test_retrieve_needs_neither_a_model_nor_the_dense_index(fake_indexes):
 
     The eval measured semantic search, fusion and re-ranking against plain keyword
     search and none of them won, so serving must not touch any of them. This asserts
-    it the only way that cannot rot — by deleting faiss.index and leaving both model
+    it the only way that cannot rot — with no onnx_embeddings.npy on disk and both model
     slots empty. If a dense stage ever creeps back onto the serving path, this raises
-    instead of quietly re-downloading 500MB on a Railway cold start.
+    instead of quietly downloading model weights on a Railway cold start.
     """
     indexes_dir, _chunks = fake_indexes
-    (indexes_dir / "faiss.index").unlink()
+    assert not (indexes_dir / "onnx_embeddings.npy").exists()
 
     from app.rag.pipeline import RAGPipeline
 
@@ -504,31 +444,13 @@ def test_retrieve_returns_nothing_when_the_query_shares_no_term(fake_indexes):
     assert pipeline.retrieve("zebra photosynthesis quarterly") == []
 
 
-def test_a_stale_dense_index_still_raises_for_the_harness(fake_indexes):
-    """The mismatch guard moved off the startup path when dense left production. It has
-    to survive the move: a FAISS index out of step with chunks.json returns the text of
-    the wrong chunk IDs, which would corrupt a measured run rather than an answer."""
-    import faiss as faiss_lib
-
-    indexes_dir, chunks = fake_indexes
-    index = faiss_lib.IndexFlatIP(768)
-    index.add(np.random.rand(len(chunks) + 1, 768).astype(np.float32))
-    faiss_lib.write_index(index, str(indexes_dir / "faiss.index"))
-
-    from app.rag.pipeline import RAGPipeline
-
-    pipeline = RAGPipeline(indexes_dir=indexes_dir)
-    with pytest.raises(ValueError, match="Index mismatch"):
-        _ = pipeline.faiss_index
-
-
 def test_a_stale_bm25_index_refuses_to_construct(fake_indexes):
-    """The served index gets the guard the dense index used to have.
+    """The served index gets its mismatch guard at construction, not first use.
 
     `sparse_search` hands BM25's ranked positions straight to `self.chunks[i]`, so a
     pickle built from a different revision of chunks.json either raises IndexError on a
     live request or serves the text of the wrong chunk with no error at all. Neither
-    should be reachable: refuse at construction, the way the FAISS check used to.
+    should be reachable: refuse at construction.
     """
     from rank_bm25 import BM25Okapi
 
@@ -616,17 +538,18 @@ def test_rrf_agreement_between_arms_boosts_a_chunk():
 
 
 def test_the_pipeline_module_imports_without_the_eval_only_libraries():
-    """The production image installs neither faiss-cpu nor sentence-transformers.
+    """The production image installs neither onnxruntime nor tokenizers.
 
     Both are in the `dev` dependency group, and the Dockerfile syncs with --no-dev, so a
-    module-level `import faiss` in pipeline.py would crash the container on boot while
-    every test here still passed — the dev group has both installed. Run in a subprocess
-    with the two libraries made unimportable, which is the only way to reproduce the
-    production environment from inside a dev one.
+    module-level `import onnxruntime` reachable from pipeline.py would crash the container
+    on boot while every test here still passed — the dev group has both installed. Run in
+    a subprocess with the ML libraries made unimportable, which is the only way to
+    reproduce the production environment from inside a dev one. The torch-era names stay
+    in the guard so none of them can return to the serving path either.
 
     The subprocess walks the whole boot path, not just the imports: `app.main`'s lifespan
     calls `get_pipeline()`, and a request calls `retrieve()`. Importing the module alone
-    would miss a lazy `import faiss` inside `RAGPipeline.__init__` — which is exactly the
+    would miss a lazy `import onnxruntime` inside `RAGPipeline.__init__` — which is exactly the
     shape of mistake this guards, and would fail only once Railway ran it.
     """
     import subprocess

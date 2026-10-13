@@ -3,8 +3,8 @@
 The evidence the Shipped Arm decision rests on (ADR-0009): each Candidate Arm, the
 Shipped Arm among them, retrieves for every Golden Set case on both Splits, the OpenAI
 model the Floors were measured on answers from what it retrieved, and the pinned Judge
-scores each answer. Reference Arms are never run: they can't ship, so generation budget
-spent on them buys nothing (ADR-0007).
+scores each answer. A Reference Arm, were one measured, would never run: it can't ship, so
+generation budget spent on it buys nothing (ADR-0007).
 
 Each Candidate Arm is compared with the Shipped Arm by ADR-0006's test on every metric
 the rule reads: Fact Recall, Faithfulness and Decline accuracy. The decision is made on
