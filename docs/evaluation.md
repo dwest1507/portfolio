@@ -147,8 +147,22 @@ bands the spec named because loading both the embedding model and the cross-enco
 ~4s, and `~1s` would understate it. The warm band is taken from the p95. Each arm's
 `latencyBand` (`warm`, `load`) is part of the measured keys, so only a change of band
 rewrites the published results. The raw p50/p95 and load time appear in the CLI's latency
-table and in `--json` output only. An arm near a cut can flip bands between runs:
-`bm25+rerank`'s warm p95 has measured both 29.6ms and 38ms, either side of 31.6ms.
+table and in `--json` output only.
+
+An arm near a cut would flip bands between runs: `bm25+rerank`'s warm p95 has measured both
+29.6ms and 38ms, either side of 31.6ms, and `onnx-dense` and `onnx-hybrid` load in about
+0.25–0.35s, either side of 316ms, from a single cold-load sample. A flip is a changed
+measured key, so it published a commit, a production deployment and a round of CI on a
+release that could not move any measurement (`b663699`, issue #96). So a band, warm and
+load alike, has **hysteresis against the published band**: before publishing, the harness
+reads each arm's band from `frontend/data/evalResults.json` and keeps it unless the new
+timing is past the cut by a factor of 1.5 (`BAND_HYSTERESIS` in `eval/publish.py`). An arm
+published at `~100ms` moves to `~1s` only above 474ms; one published at `~1s` moves back
+only below 211ms. A timing past the widened cut takes its plain band, so a real change
+still publishes on the run that measures it. Rejected alternatives: the median of several
+cold loads costs a fresh pipeline per sample and still flips when the median sits on the
+cut; leaving bands out of the change comparison would hide a real latency change until
+something else moved. The CLI's latency table shows the plain band of each raw timing.
 
 **Out-of-Scope Cases** — 20 cases (`answerable: false`) ask what a visitor might reasonably
 ask but the corpus cannot answer: salary expectations, languages and tools David has not

@@ -62,6 +62,7 @@ from eval.publish import (  # (needs the sys.path line above)
     ARMS,
     build_results_document,
     latency_band,
+    published_latency_bands,
     shipped_arm_id,
     update_markdown_block,
     verdict_line,
@@ -760,6 +761,7 @@ def main() -> int:
             top_k=args.top_k,
             gating_metric=GATING_METRIC,
             split=args.split,
+            published_bands=published_latency_bands(RESULTS_PATH),
         )
         # An unchanged measurement leaves both files alone, so the publishing job has
         # something real to test for. `document` is rebound to whatever is now on disk:
