@@ -34,7 +34,7 @@ dependencies = [
 # The torch-based Reference Arms, and the sentence-transformers and faiss-cpu they needed,
 # were retired once ONNX Runtime had reproduced them (ADR-0013).
 dev = [
-    "huggingface-hub>=1.28.0",
+    "huggingface-hub>=2.2.0",
     "onnxruntime>=1.31.0",
     "ruff>=0.16.10",
     "tokenizers>=0.22.2",
