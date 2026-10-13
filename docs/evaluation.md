@@ -48,23 +48,29 @@ The arm set is not fixed. Adding or retiring one is a single edit in `ARM_SPECS`
 published table, the markdown block below, and the project page all follow, and nothing
 downstream may assume a particular arm exists. Retiring an arm from *production* is a
 different act from retiring it from the harness, and the two are deliberately decoupled:
-every arm this project has ever shipped is still measured on every run, so a conclusion
-that flips can flip back on evidence rather than on a rewrite.
+an arm leaves production on one measurement and leaves the harness only on another, so a
+conclusion that flips can flip back on evidence rather than on a rewrite. The torch arms,
+`rerank` (shipped until the harness measured it) among them, left the harness only once
+the parity check showed ONNX Runtime reproducing their models exactly
+([ADR-0013](adr/0013-torch-reference-arms-retired.md)).
 
 **Candidate and Reference Arms** — every arm carries an `eligibility` in `ARM_SPECS`,
 published with the Scoreboard. A *Candidate Arm* could become the shipped arm without
 bringing a GPU-oriented ML runtime back into the production image; a *Reference Arm* is a
 baseline kept for comparison that cannot ship as built. Only Candidate Arms are eligible
-when the shipped arm is chosen ([ADR-0009](adr/0009-shipped-arm-selection-rule.md)).
-`test_a_candidate_arm_loads_no_torch_model` holds the line: nothing a Candidate Arm loads
-may need torch.
+when the shipped arm is chosen ([ADR-0009](adr/0009-shipped-arm-selection-rule.md)), and
+only they are shown on the Scoreboard. Every arm measured today is a Candidate Arm: the
+four torch-based Reference Arms (`dense`, `hybrid`, `rerank`, `bm25+rerank`) were retired
+once their ONNX twins had reproduced them
+([ADR-0013](adr/0013-torch-reference-arms-retired.md)). `eligibility` stays in the schema
+so a quality-ceiling arm added on purpose later stays off the page without a frontend
+change.
 
 | Arm | Eligibility | What it runs |
 |-----|-------------|--------------|
 | `bm25` | Candidate | BM25 alone, no model. The shipped arm. |
-| `dense`, `hybrid`, `rerank`, `bm25+rerank` | Reference | The torch models through sentence-transformers. Definitions unchanged. |
-| `onnx-dense` | Candidate | `dense` with the same all-mpnet-base-v2 model on ONNX Runtime. |
-| `onnx-hybrid` | Candidate | `hybrid` with `onnx-dense` as its dense stage: same weights, same `RRF_K`. |
+| `onnx-dense` | Candidate | Semantic search with all-mpnet-base-v2 on ONNX Runtime. |
+| `onnx-hybrid` | Candidate | Weighted reciprocal-rank fusion of `bm25` and `onnx-dense` (`DENSE_WEIGHT` 0.7, `SPARSE_WEIGHT` 0.3, `RRF_K` 1). |
 | `bm25+onnx-rerank-20` | Candidate | 20 BM25 candidates, narrowed to k by ms-marco-MiniLM-L-6-v2 on ONNX Runtime. |
 
 The ONNX arms run the publishers' own ONNX exports of the two models
@@ -72,11 +78,11 @@ The ONNX arms run the publishers' own ONNX exports of the two models
 cannot silently change a Measured Run. `scripts/build_index.py` embeds the Corpus with the
 ONNX embedder into `indexes/onnx_embeddings.npy`, so an arm's load band counts loading the
 model, not embedding the Corpus. `onnx-dense` searches that matrix with one exact inner
-product rather than FAISS: numpy is already on the serving path. The re-ranking pool of
-`bm25+onnx-rerank-20` is fixed at 20 (`RERANK_POOL` in `run_eval.py`), not a multiple of k.
-The 2×k pool of the older re-ranking arms can only recover chunks BM25 already ranked in its
-top 10, and widening it makes a new arm rather than an edit to theirs, so their past
-measurements keep their meaning. onnxruntime, tokenizers and huggingface-hub stay in the
+product rather than a vector index: numpy is already on the serving path. The re-ranking
+pool of `bm25+onnx-rerank-20` is fixed at 20 (`RERANK_POOL` in `run_eval.py`), not a
+multiple of k. The 2×k pool of the retired torch re-ranking arms could only recover chunks
+BM25 already ranked in its top 10; widening it made a new arm rather than an edit to
+theirs, so their past measurements keep their meaning. onnxruntime, tokenizers and huggingface-hub stay in the
 `dev` dependency group until an arm built on them is chosen to ship.
 
 **Splits** — the golden set is partitioned into a `dev` portion (54 questions) and a
@@ -192,13 +198,12 @@ after it is read, scrubbed and labelled
 ## Running it
 
 ```bash
-make eval        # all arms (downloads ~1GB of models on first run: torch and ONNX)
+make eval        # all arms (downloads the ONNX models on first run)
 make eval-fast   # keyword arm only — no model download, runs in seconds
 ```
 
-The models are an *evaluation* cost, not a production one. `faiss-cpu`,
-`sentence-transformers`, `onnxruntime`, `tokenizers` and `huggingface-hub` are in the `dev`
-dependency group; the served API needs none of them, and the Dockerfile's
+The models are an *evaluation* cost, not a production one. `onnxruntime`, `tokenizers` and
+`huggingface-hub` are in the `dev` dependency group; the served API needs none of them, and the Dockerfile's
 `uv sync --no-dev` leaves them out of the image. `make eval-fast`
 runs the shipped arm alone, which is why it needs no weights.
 
@@ -210,12 +215,12 @@ against a `hit@5` Floor.
 Only the shipped arm has Floors. Every other arm is measured and published as
 a baseline for comparison, not defended as a quality bar — see [CI gate](#ci-gate).
 `--check` names every ungated arm explicitly, and a run in which *nothing* was gated —
-`--check --arms dense` — is a failure rather than a pass.
+`--check --arms onnx-dense` — is a failure rather than a pass.
 
 Useful flags:
 
 ```bash
-uv run python eval/run_eval.py --arms hybrid rerank   # subset
+uv run python eval/run_eval.py --arms onnx-hybrid bm25+onnx-rerank-20   # subset
 uv run python eval/run_eval.py --split dev            # decide things against this portion
 uv run python eval/run_eval.py --split holdout        # what --publish reports
 uv run python eval/run_eval.py --failures             # list the questions that missed
@@ -394,6 +399,11 @@ exports and several thread counts were tried, and none scored 20 pairs in under 
 These timings came from a machine shared with other jobs. The published bands come from the
 CI run. As built, this arm is outside ADR-0009's `~100ms` warm limit. On held-out it won 3
 questions and lost 1 against `bm25`, which is indistinguishable.
+
+This section is the historical record of the torch arms. Having matched their ONNX twins
+exactly, they were retired from the harness, along with FAISS and sentence-transformers
+([ADR-0013](adr/0013-torch-reference-arms-retired.md)); the parity it reports is no longer
+re-checked on every run.
 
 ### Chunks cut along source structure moved no Arm beyond noise
 

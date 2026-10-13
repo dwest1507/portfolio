@@ -43,7 +43,7 @@ An Arm that could become the Shipped Arm within production's constraints — not
 _Avoid_: Contender, option
 
 **Reference Arm**:
-An Arm kept in the harness as a baseline for comparison but not eligible to ship. Its scores show what is possible, not what is on offer. No new Reference Arms are added.
+An Arm kept in the harness as a baseline for comparison but not eligible to ship. Its scores show what is possible, not what is on offer. None is measured at present: the torch-based ones were retired once ONNX Runtime had reproduced them (ADR-0013). Adding one is a deliberate decision with its own record, never a default.
 _Avoid_: Upper bound, oracle, legacy arm
 
 **Golden Set**:
