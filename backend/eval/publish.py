@@ -239,9 +239,47 @@ LATENCY_BANDS = ("~1ms", "~10ms", "~100ms", "~1s", "~10s")
 _BAND_CUTS = tuple(10 ** (k + 0.5) / 1000 for k in range(len(LATENCY_BANDS) - 1))
 
 
-def latency_band(seconds: float) -> str:
-    """The Latency Band of a timing: its order of magnitude, cut at geometric midpoints."""
-    return LATENCY_BANDS[bisect.bisect_right(_BAND_CUTS, seconds)]
+#: How far past a cut a timing must land before a published band gives way to its
+#: neighbour. Each run takes one cold-load sample, and runners vary by more than the gap
+#: between an Arm's timing and the nearest cut: `onnx-dense` loads in ~0.25-0.35s, either
+#: side of the 316ms cut, and flipped `~100ms` → `~1s` on a release that changed nothing.
+BAND_HYSTERESIS = 1.5
+
+
+def latency_band(seconds: float, published: str | None = None) -> str:
+    """The Latency Band of a timing: its order of magnitude, cut at geometric midpoints.
+
+    With `published` — the band this timing's Arm already carries in the published
+    results — the cuts either side of that band are widened by BAND_HYSTERESIS, so the
+    published band holds until a timing is clearly outside it. Without hysteresis an Arm
+    near a cut changes band between identical runs, and a changed band is a published
+    measurement. A timing past the widened cut takes its plain band, so a real change of
+    an order of magnitude is still published on the run that measures it.
+    """
+    band = LATENCY_BANDS[bisect.bisect_right(_BAND_CUTS, seconds)]
+    if published not in LATENCY_BANDS or published == band:
+        return band
+    i = LATENCY_BANDS.index(published)
+    lower = _BAND_CUTS[i - 1] / BAND_HYSTERESIS if i > 0 else 0.0
+    upper = _BAND_CUTS[i] * BAND_HYSTERESIS if i < len(_BAND_CUTS) else math.inf
+    return published if lower <= seconds <= upper else band
+
+
+def published_latency_bands(path: Path) -> dict[str, dict[str, str]]:
+    """Each Arm's published Latency Bands, keyed by Arm id; empty if there are none.
+
+    Read before a run is published so latency_band can hold an Arm near a cut in the
+    band it already has. An unreadable file has no bands worth holding.
+    """
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError, json.JSONDecodeError:
+        return {}
+    return {
+        arm["id"]: arm["latencyBand"]
+        for arm in document.get("arms", [])
+        if isinstance(arm.get("latencyBand"), dict)
+    }
 
 
 #: Resamples per bootstrap interval, and the seed that makes a re-run reproduce it.
@@ -279,12 +317,17 @@ def build_results_document(
     gating_metric: str,
     split: str = "all",
     category_counts: dict[str, int] | None = None,
+    published_bands: dict[str, dict[str, str]] | None = None,
 ) -> dict:
     """Assemble the published measured run from raw per-arm harness output.
 
     Metric names travel with the document rather than being assumed by the reader, so a
     run at a different cutoff publishes hit@10 without a frontend change.
+
+    `published_bands` holds each Arm's currently published Latency Bands (see
+    published_latency_bands); a timing near a cut keeps the band it already has.
     """
+    published_bands = published_bands or {}
     metric_names = list(results[0]["summary"].keys()) if results else []
     categories = sorted({cat for r in results for cat in r.get("by_category", {})})
 
@@ -341,8 +384,12 @@ def build_results_document(
                 "vsShippedByCategory": compared_by_category,
                 # Bands only: the raw timings stay in the CLI and --json output.
                 "latencyBand": {
-                    "warm": latency_band(r["latency"]["p95"]),
-                    "load": latency_band(r["latency"]["load"]),
+                    "warm": latency_band(
+                        r["latency"]["p95"], published_bands.get(spec.id, {}).get("warm")
+                    ),
+                    "load": latency_band(
+                        r["latency"]["load"], published_bands.get(spec.id, {}).get("load")
+                    ),
                 },
             }
         )

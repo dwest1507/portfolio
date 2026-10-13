@@ -15,6 +15,7 @@ from eval.publish import (
     ARM_SPEC_BY_ID,
     ARM_SPECS,
     ARMS,
+    BAND_HYSTERESIS,
     BEGIN_MARKER,
     END_MARKER,
     REFERENCE,
@@ -24,6 +25,7 @@ from eval.publish import (
     latency_band,
     leading_arm,
     leading_arm_ids,
+    published_latency_bands,
     render_markdown,
     shipped_arm_id,
     update_markdown_block,
@@ -414,6 +416,43 @@ class TestLatencyBand:
         assert latency_band(60.0) == "~10s"
 
 
+class TestBandHysteresis:
+    """A published band holds until a timing is past the cut by BAND_HYSTERESIS, so an Arm
+    that loads near a cut does not change band — and publish — between identical runs."""
+
+    CUT = 0.316  # between ~100ms and ~1s
+
+    @pytest.mark.parametrize("seconds", [0.25, 0.316, 0.40, 0.47])
+    def test_holds_the_lower_band_until_past_the_margin_above_the_cut(self, seconds):
+        assert latency_band(seconds, published="~100ms") == "~100ms"
+
+    def test_leaves_the_lower_band_past_the_margin_above_the_cut(self):
+        assert latency_band(self.CUT * BAND_HYSTERESIS * 1.01, published="~100ms") == "~1s"
+
+    @pytest.mark.parametrize("seconds", [0.40, 0.317, 0.247, 0.22])
+    def test_holds_the_upper_band_until_past_the_margin_below_the_cut(self, seconds):
+        """0.247s is what onnx-dense measured in the run that flipped to `~1s`."""
+        assert latency_band(seconds, published="~1s") == "~1s"
+
+    def test_leaves_the_upper_band_past_the_margin_below_the_cut(self):
+        assert latency_band(self.CUT / BAND_HYSTERESIS * 0.99, published="~1s") == "~100ms"
+
+    def test_a_timing_inside_the_published_band_keeps_it(self):
+        assert latency_band(0.1, published="~100ms") == "~100ms"
+
+    def test_a_change_of_more_than_one_band_lands_on_the_plain_band(self):
+        assert latency_band(5.0, published="~10ms") == "~10s"
+
+    def test_the_end_bands_are_open_ended(self):
+        assert latency_band(60.0, published="~10s") == "~10s"
+        assert latency_band(0.0, published="~1ms") == "~1ms"
+
+    @pytest.mark.parametrize("published", [None, "~3ms", ""])
+    def test_without_a_published_band_the_plain_cut_applies(self, published):
+        assert latency_band(0.317, published=published) == "~1s"
+        assert latency_band(0.315, published=published) == "~100ms"
+
+
 class TestPublishedLatency:
     def test_each_arm_publishes_its_warm_and_load_bands(self):
         doc = _document(
@@ -476,6 +515,62 @@ class TestPublishedLatency:
 
         assert written is True
         assert _arm(document, "bm25")["latencyBand"] == expected
+
+    def test_a_rerun_near_a_cut_publishes_nothing(self, tmp_path):
+        """The 2026-10-12 false publish: onnx-dense loaded at 0.247s, then 0.35s, either
+        side of the 316ms cut, on runs that changed nothing measurable."""
+        path = tmp_path / "evalResults.json"
+        first = {"p50": 0.012, "p95": 0.013, "load": 0.247}
+        write_results_document(
+            _document(results=[_raw("onnx-dense", 1.0, 0.9, latency=first)]), path
+        )
+        before = path.read_text(encoding="utf-8")
+
+        second = {**first, "load": 0.35}
+        rerun = _document(
+            results=[_raw("onnx-dense", 1.0, 0.9, latency=second)],
+            published_bands=published_latency_bands(path),
+        )
+        _, written = write_results_document(rerun, path)
+
+        assert written is False
+        assert path.read_text(encoding="utf-8") == before
+
+    def test_a_real_change_still_publishes_against_the_published_band(self, tmp_path):
+        path = tmp_path / "evalResults.json"
+        timings = {"p50": 0.012, "p95": 0.013, "load": 0.247}
+        write_results_document(
+            _document(results=[_raw("onnx-dense", 1.0, 0.9, latency=timings)]), path
+        )
+
+        slower = {**timings, "load": 0.9}
+        document, written = write_results_document(
+            _document(
+                results=[_raw("onnx-dense", 1.0, 0.9, latency=slower)],
+                published_bands=published_latency_bands(path),
+            ),
+            path,
+        )
+
+        assert written is True
+        assert _arm(document, "onnx-dense")["latencyBand"]["load"] == "~1s"
+
+
+class TestPublishedLatencyBands:
+    def test_reads_each_arms_bands(self, tmp_path):
+        path = tmp_path / "evalResults.json"
+        write_results_document(_document(), path)
+        bands = published_latency_bands(path)
+        assert set(bands) == {"bm25", "bm25+onnx-rerank-20"}
+        assert bands["bm25"] == {"warm": "~1ms", "load": "~1ms"}
+
+    def test_no_file_means_no_bands(self, tmp_path):
+        assert published_latency_bands(tmp_path / "missing.json") == {}
+
+    def test_a_corrupt_file_means_no_bands(self, tmp_path):
+        path = tmp_path / "evalResults.json"
+        path.write_text("{not json", encoding="utf-8")
+        assert published_latency_bands(path) == {}
 
 
 # ---------------------------------------------------------------------------
