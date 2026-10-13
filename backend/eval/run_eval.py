@@ -58,7 +58,8 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = BACKEND_ROOT.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from eval.publish import (  # (needs the sys.path line above)
+from eval.inputs import retrieval_inputs_fingerprint  # (needs the sys.path line above)
+from eval.publish import (
     ARMS,
     build_results_document,
     latency_band,
@@ -760,6 +761,7 @@ def main() -> int:
             top_k=args.top_k,
             gating_metric=GATING_METRIC,
             split=args.split,
+            inputs_fingerprint=retrieval_inputs_fingerprint(),
         )
         # An unchanged measurement leaves both files alone, so the publishing job has
         # something real to test for. `document` is rebound to whatever is now on disk:

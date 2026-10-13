@@ -2,7 +2,7 @@
 # Retrieval quality gate: runs the golden question set through the RAG pipeline
 # and fails if the shipped arm's hit@5/MRR drop below the Floors in
 # eval/floors/retrieval.json, or that record is stale (see docs/adr/0012-recalibration.md).
-# Called by `make eval` and .github/workflows/backend-ci.yml.
+# Called by `make eval` and .github/workflows/retrieval-eval.yml.
 #
 # Pass arm names to restrict the run, e.g.:
 #   ./scripts/backend-eval.sh bm25        # keyword only; no model download
@@ -12,6 +12,11 @@
 # refresh the generated table in docs/evaluation.md. CI does this only on pushes to main;
 # see docs/adr/0001-generated-eval-results.md. The published run measures the held-out
 # split and always runs every arm, whatever this script was called with.
+#
+# A full run (no arm names) is skipped, with the reason logged, when every input it
+# measures hashes to the fingerprint the published Measured Run recorded: the eval is
+# deterministic, so its gate verdict cannot differ (eval/inputs.py, ADR-0001). Set
+# EVAL_FORCE=1 to measure anyway.
 set -euo pipefail
 cd "$(dirname "$0")/../backend"
 
@@ -34,6 +39,14 @@ if [ "$#" -eq 0 ]; then
 else
   ARM_ARGS=(--arms "$@")
   DESCRIBED="$*"
+fi
+
+# Any failure of the check itself (a missing file, a parse error) measures rather than
+# skips: `if` only skips on the explicit "unchanged" exit.
+if [ "$#" -eq 0 ] && [ "${EVAL_FORCE:-0}" != "1" ] \
+  && uv run --frozen python eval/inputs.py; then
+  echo "backend-eval: skipped (inputs unchanged)"
+  exit 0
 fi
 
 # The gate runs over the whole golden set, where the Floors are derived.

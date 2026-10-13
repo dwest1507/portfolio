@@ -1,0 +1,123 @@
+name: Retrieval eval
+
+# Runs the Golden Set through every retrieval Arm and fails if the Shipped Arm falls below
+# a Floor in backend/eval/floors/retrieval.json, or that record is stale (ADR-0012). On
+# pushes to main it also publishes the held-out Measured Run (ADR-0001).
+#
+# Measuring every Arm takes about 4.5 minutes, so it runs only when something it measures
+# can have changed. The path filter is a first cut, narrower than backend-ci.yml's: the
+# retrieval code, the indexes and their build script, the Corpus sources, the retrieval
+# harness, the Golden Set and the retrieval Floors record. backend/uv.lock must be on it,
+# since a dependency bump can move results, but every release rewrites the backend
+# package's own version there too. So scripts/backend-eval.sh then compares the input
+# fingerprint (backend/eval/inputs.py, which ignores that version line) with the one the
+# published run recorded, and skips the measurement, saying why, when they match.
+
+on:
+  # The two path lists are identical; change them together. They must also match
+  # RETRIEVAL_INPUTS in backend/eval/inputs.py, which a test checks.
+  pull_request:
+    paths:
+      # Retrieval as production runs it, the indexes, and the script that builds them
+      - 'backend/app/rag/**'
+      - 'backend/indexes/**'
+      - 'backend/scripts/build_index.py'
+      # The Corpus sources
+      - 'docs/resume.txt'
+      - 'docs/chatbot-questions.md'
+      - 'frontend/content/projects/**'
+      # The retrieval harness, its input fingerprint, and the script that runs it
+      - 'backend/eval/run_eval.py'
+      - 'backend/eval/publish.py'
+      - 'backend/eval/recalibration.py'
+      - 'backend/eval/inputs.py'
+      - 'scripts/backend-eval.sh'
+      # The Golden Set and the retrieval Floors record
+      - 'backend/eval/golden_set.json'
+      - 'backend/eval/floors/retrieval.json'
+      # Locked dependencies; the fingerprint ignores the backend package's own version
+      - 'backend/uv.lock'
+      - '.github/workflows/retrieval-eval.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/app/rag/**'
+      - 'backend/indexes/**'
+      - 'backend/scripts/build_index.py'
+      - 'docs/resume.txt'
+      - 'docs/chatbot-questions.md'
+      - 'frontend/content/projects/**'
+      - 'backend/eval/run_eval.py'
+      - 'backend/eval/publish.py'
+      - 'backend/eval/recalibration.py'
+      - 'backend/eval/inputs.py'
+      - 'scripts/backend-eval.sh'
+      - 'backend/eval/golden_set.json'
+      - 'backend/eval/floors/retrieval.json'
+      - 'backend/uv.lock'
+      - '.github/workflows/retrieval-eval.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Kept in step with backend-ci.yml; see the note there.
+  UV_VERSION: "0.12.23"
+
+concurrency:
+  group: retrieval-eval-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  eval:
+    name: Retrieval eval
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      # The job token stays read-only and out of .git/config: publishing pushes as the
+      # eval-publisher App instead (.github/actions/publish-results).
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen
+        working-directory: backend
+
+      # The embedding + cross-encoder weights, torch and ONNX, are ~1GB. Cache them so only the
+      # first run on a given lockfile pays the download.
+      - name: Cache Hugging Face models
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
+          restore-keys: hf-${{ runner.os }}-
+
+      # Pull requests measure and gate but never publish: branch results would race
+      # into the committed file. See docs/adr/0001-generated-eval-results.md. Skipped,
+      # with the reason logged, when the inputs match the published run's fingerprint.
+      - name: Retrieval quality gate
+        env:
+          PUBLISH_EVAL: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && '1' || '0' }}
+        run: ./scripts/backend-eval.sh
+
+      # The commit touches only frontend/data/** and docs/evaluation.md, neither of which
+      # matches this workflow's path filters, so it cannot retrigger this job. A skipped
+      # run changes neither, and publishes nothing.
+      - name: Publish measured results
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: ./.github/actions/publish-results
+        with:
+          paths: frontend/data/evalResults.json docs/evaluation.md
+          message: "chore(eval): publish retrieval results for"
+          body: Generated by the Retrieval eval job. See docs/adr/0001-generated-eval-results.md.
+          client-id: ${{ vars.EVAL_PUBLISHER_CLIENT_ID }}
+          private-key: ${{ secrets.EVAL_PUBLISHER_PRIVATE_KEY }}

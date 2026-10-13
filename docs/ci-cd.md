@@ -15,7 +15,8 @@ make ci-cd   # every CI check, in order — exactly what the PR gates run
 ```
 
 `make ci-cd` runs: frontend quality (ESLint, Prettier, tsc) → frontend tests →
-frontend build → backend lint (ruff) → backend tests → security audits
+frontend build → backend lint (ruff) → backend tests → retrieval eval (skipped when its
+inputs match the published run) → security audits
 (npm audit + pip-audit) → Lighthouse budget.
 
 Each check also has its own target for debugging a single failure:
@@ -27,6 +28,7 @@ Each check also has its own target for debugging a single failure:
 | `make frontend-build` | `scripts/frontend-build.sh` | frontend-ci → build job |
 | `make backend-lint` | `scripts/backend-lint.sh` | backend-ci → lint job |
 | `make backend-test` | `scripts/backend-test.sh` | backend-ci → test job |
+| `make eval` | `scripts/backend-eval.sh` | retrieval-eval workflow (`EVAL_FORCE=1` measures even when the inputs are unchanged) |
 | `make security-audit` | `scripts/security-audit.sh all` | security → npm-audit + pip-audit jobs |
 | `make lighthouse` | `scripts/lighthouse.sh` | lighthouse workflow (needs Chrome) |
 | `make generation-gate` | `scripts/backend-generation-gate.sh` | generation-gate workflow (paid API calls; not part of `make ci-cd`) |
@@ -40,7 +42,8 @@ analyses inside `security.yml`. Everything else is script-for-script identical.
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
 | `frontend-ci.yml` | PRs and pushes to `main` touching `frontend/**`; manual dispatch | `scripts/frontend-quality.sh` (ESLint, Prettier, tsc), `frontend-test.sh` (Vitest), `frontend-build.sh` |
-| `backend-ci.yml` | PRs and pushes to `main` touching `backend/**`; manual dispatch | `scripts/backend-lint.sh` (`uv lock --check`, ruff check + format), `backend-test.sh` (pytest, ML models mocked), `backend-eval.sh` (retrieval gate; publishes the held-out Measured Run on `main`) |
+| `backend-ci.yml` | PRs and pushes to `main` touching `backend/**`; manual dispatch | `scripts/backend-lint.sh` (`uv lock --check`, ruff check + format), `backend-test.sh` (pytest, ML models mocked) |
+| `retrieval-eval.yml` | PRs and pushes to `main` touching retrieval inputs only (retrieval code, indexes and their build script, Corpus sources, retrieval harness, Golden Set, retrieval Floors record, `backend/uv.lock`); manual dispatch | `scripts/backend-eval.sh` — the retrieval gate over every Arm; publishes the held-out Measured Run on `main`. Skips the measurement, saying why, when the inputs hash to the fingerprint the published run recorded |
 | `generation-gate.yml` | PRs and pushes to `main` touching generation-relevant paths only (prompt and model config, retrieval code, indexes, Corpus sources, Golden Set, generation harness); manual dispatch | `scripts/backend-generation-gate.sh` — answers the Golden Set with the Shipped Arm, judges it, fails below the Faithfulness or Decline accuracy Floor in `backend/eval/floors/generation.json` (and fails first, before any paid call, with "Floors stale: Recalibrate" when that record no longer matches the Golden Set or the instrument); publishes the held-out results to `frontend/data/generationResults.json` on `main`. Paid: needs the `OPENAI_CI_API_KEY` and `JEV_CI_API_KEY` secrets |
 | `generation-comparison.yml` | Manual dispatch only | `scripts/backend-generation-comparison.sh` — answers the Golden Set on `dev` and `holdout` with every Candidate Arm (never a Reference Arm), judges it, and compares each Arm with the Shipped Arm by the sign test (ADR-0009). Uploads every judged run, `dev` included, as the `comparison-run` artifact; dispatched on `main`, publishes the held-out results as the `comparison` section of `frontend/data/generationResults.json`. Paid: same secrets as the generation gate |
 | `security.yml` | PRs, pushes to `main`, weekly cron | CodeQL (TS + Python), gitleaks secret scan, `scripts/security-audit.sh` (npm audit prod/high+, pip-audit), dependency review on PRs |
@@ -50,6 +53,17 @@ analyses inside `security.yml`. Everything else is script-for-script identical.
 Node is pinned by `frontend/.nvmrc` and read via `node-version-file:` in every
 workflow — CI must resolve `package-lock.json` with the same npm major that generated
 it, or `npm ci` fails on peer dependencies.
+
+**The retrieval eval's path filter is narrower than `backend-ci.yml`'s too, and is backed by
+a fingerprint.** Measuring every Arm takes about 4.5 minutes, so it runs only when an input
+can have changed. Its two path lists are identical, and must match `RETRIEVAL_INPUTS` in
+`backend/eval/inputs.py`; a test checks both. A path filter alone cannot skip a release
+merge: release-please rewrites the `backend` package's version in `backend/uv.lock`, the
+same file a real dependency bump changes. So `scripts/backend-eval.sh` hashes the inputs,
+with that version line stripped, and skips the measurement when the hash matches the
+`inputsFingerprint` in `frontend/data/evalResults.json`. A release merge therefore logs
+"Retrieval inputs unchanged … skipping the eval" and publishes nothing. See
+[evaluation.md](evaluation.md#when-the-eval-runs).
 
 **The generation gate's path filter is narrower than `backend-ci.yml`'s on purpose.** Every
 run calls OpenAI and TypeSafe's Jev, so dependency bumps (`uv.lock`, `pyproject.toml`) and
@@ -72,7 +86,7 @@ Required Facts or `answerable`, or to the instrument, makes the gate fail "Floor
 Recalibrate" until that study is rerun in the same change.
 
 uv is pinned the same way, for the same reason: `UV_VERSION` in `backend-ci.yml`,
-`generation-gate.yml` and `generation-comparison.yml` (and the `setup-uv` step in `security.yml`) matches the uv that last wrote `backend/uv.lock`, so CI
+`retrieval-eval.yml`, `generation-gate.yml` and `generation-comparison.yml` (and the `setup-uv` step in `security.yml`) matches the uv that last wrote `backend/uv.lock`, so CI
 and local development agree on the lockfile's format `revision`. Bump them together when
 you upgrade uv locally and re-lock.
 

@@ -194,7 +194,11 @@ after it is read, scrubbed and labelled
 ```bash
 make eval        # all arms (downloads ~1GB of models on first run: torch and ONNX)
 make eval-fast   # keyword arm only — no model download, runs in seconds
+EVAL_FORCE=1 make eval   # measure even when the inputs match the published run
 ```
+
+`make eval` skips the measurement when nothing it measures has changed since the
+published run; see [When the eval runs](#when-the-eval-runs).
 
 The models are an *evaluation* cost, not a production one. `faiss-cpu`,
 `sentence-transformers`, `onnxruntime`, `tokenizers` and `huggingface-hub` are in the `dev`
@@ -267,7 +271,7 @@ alternatives.
 ```
 push to main
    │
-   └─ Backend CI · Retrieval eval
+   └─ Retrieval eval (skipped when the inputs match the published fingerprint)
         ├─ run_eval.py --check              (all 111 questions — the gate)
         ├─ run_eval.py --split holdout --publish   (the 43 held-out — the report)
         │    ├─ writes frontend/data/evalResults.json
@@ -297,11 +301,45 @@ Two consequences worth knowing:
 
 ## CI gate
 
-`.github/workflows/backend-ci.yml` runs `scripts/backend-eval.sh` on every backend change.
-The job fails if the shipped arm falls below a Floor, so a change that degrades retrieval
+`.github/workflows/retrieval-eval.yml` runs `scripts/backend-eval.sh` whenever something
+the eval measures can have changed (below). The job fails if the shipped arm falls below a Floor, so a change that degrades retrieval
 cannot merge silently. The Floors live in one committed record,
 `backend/eval/floors/retrieval.json`, and nowhere in code. They are Floors, never
 targets — tuning a parameter until a Floor is cleared is fitting to the golden set.
+
+### When the eval runs
+
+Measuring every Arm twice takes about 4.5 minutes, and the eval is deterministic: the
+same inputs give the same numbers and the same verdict. So it runs in two cuts (#97).
+
+1. **A path filter.** `retrieval-eval.yml` triggers only on the retrieval code
+   (`backend/app/rag/**`), the indexes and `backend/scripts/build_index.py`, the Corpus
+   sources (`docs/resume.txt`, `docs/chatbot-questions.md`, `frontend/content/projects/**`),
+   the retrieval harness (`run_eval.py`, `publish.py`, `recalibration.py`, `inputs.py`,
+   `scripts/backend-eval.sh`), the Golden Set, `backend/eval/floors/retrieval.json`,
+   `backend/uv.lock`, and the workflow itself. Lint and Pytest stay in `backend-ci.yml`.
+2. **An input fingerprint.** The filter has to include `uv.lock`, because a real dependency
+   bump (sentence-transformers, onnxruntime, tokenizers) can move results. But every
+   release rewrites the `backend` package's own version in that file too. So
+   `scripts/backend-eval.sh` first runs `eval/inputs.py`, which hashes every input above,
+   with `uv.lock` hashed minus that one version line, and compares the hash with the
+   `inputsFingerprint` the published run recorded in `frontend/data/evalResults.json`. On
+   a match it skips the measurement, gate included, and logs why:
+
+   ```
+   Retrieval inputs unchanged since the published Measured Run at 8699e89 (sha256:…): skipping the eval.
+   ```
+
+   On a pull request the comparison is with the published run on the branch's base, so a
+   PR that changes no input skips too.
+
+The skip is safe only because the published fingerprint always comes from a run that
+passed the gate: CI records it only on `main`, where publishing follows a passing `--check`
+in the same job. A local `--publish` gates nothing, so it records no fingerprint
+(ADR-0001, 2026-10-13 amendment). A run with new inputs republishes even when no number
+moved, so the fingerprint on `main` stays current. A full `make eval` skips the same way;
+`make eval-fast`, any run naming Arms, and `EVAL_FORCE=1` always measure. If the check
+itself fails, the eval measures.
 
 ### How the Floors are derived
 
