@@ -561,7 +561,7 @@ class TestPublishedLatencyBands:
         path = tmp_path / "evalResults.json"
         write_results_document(_document(), path)
         bands = published_latency_bands(path)
-        assert set(bands) == {"bm25", "rerank"}
+        assert set(bands) == {"bm25", "bm25+onnx-rerank-20"}
         assert bands["bm25"] == {"warm": "~1ms", "load": "~1ms"}
 
     def test_no_file_means_no_bands(self, tmp_path):

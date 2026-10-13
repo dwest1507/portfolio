@@ -155,7 +155,7 @@ bands the spec named because loading both the embedding model and the cross-enco
 rewrites the published results. The raw p50/p95 and load time appear in the CLI's latency
 table and in `--json` output only.
 
-An arm near a cut would flip bands between runs: `bm25+rerank`'s warm p95 has measured both
+An arm near a cut would flip bands between runs: the retired `bm25+rerank`'s warm p95 measured both
 29.6ms and 38ms, either side of 31.6ms, and `onnx-dense` and `onnx-hybrid` load in about
 0.25–0.35s, either side of 316ms, from a single cold-load sample. A flip is a changed
 measured key, so it published a commit, a production deployment and a round of CI on a
