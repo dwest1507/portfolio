@@ -78,6 +78,11 @@ export interface EvalRun {
   commit: string
   /** The CI job that produced the numbers, when a run produced them. */
   runUrl: string | null
+  /**
+   * Hash of everything the run measured (`backend/eval/inputs.py`). The eval skips a run
+   * whose inputs match it. Recorded by CI runs only; not rendered.
+   */
+  inputsFingerprint?: string | null
   corpusChunks: number
   /** How many questions this run measured — the size of `split`, not of the whole set. */
   goldenQuestions: number

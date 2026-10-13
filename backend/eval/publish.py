@@ -317,12 +317,18 @@ def build_results_document(
     gating_metric: str,
     split: str = "all",
     category_counts: dict[str, int] | None = None,
+    inputs_fingerprint: str | None = None,
     published_bands: dict[str, dict[str, str]] | None = None,
 ) -> dict:
     """Assemble the published measured run from raw per-arm harness output.
 
     Metric names travel with the document rather than being assumed by the reader, so a
     run at a different cutoff publishes hit@10 without a frontend change.
+
+    `inputs_fingerprint` (eval/inputs.py) is recorded only for a CI run, one with a
+    `runUrl`. A run whose inputs match it is skipped, gate included, so the fingerprint
+    must only ever come from a run that passed the gate first: CI publishes only after
+    `--check` passes in the same job, while a developer's local `--publish` gates nothing.
 
     `published_bands` holds each Arm's currently published Latency Bands (see
     published_latency_bands); a timing near a cut keeps the band it already has.
@@ -394,11 +400,13 @@ def build_results_document(
             }
         )
 
+    run_url = _run_url()
     return {
         "schemaVersion": SCHEMA_VERSION,
         "generatedAt": datetime.now(UTC).replace(microsecond=0).isoformat(),
         "commit": _git_commit(),
-        "runUrl": _run_url(),
+        "runUrl": run_url,
+        "inputsFingerprint": inputs_fingerprint if run_url else None,
         "corpusChunks": corpus_chunks,
         "goldenQuestions": golden_questions,
         "split": split,
@@ -453,6 +461,12 @@ def write_results_document(document: dict, path: Path) -> tuple[dict, bool]:
     measurement — the replacement has a `runUrl` of its own — so the "nothing to commit"
     branch stays reachable.
 
+    A run whose `inputsFingerprint` differs from the file's is written too, even when
+    nothing measured changed. The published fingerprint is what lets a later run with the
+    same inputs skip measuring (eval/inputs.py); keeping a stale one would make every run
+    after an input change measure again, until some number happened to move. A run with no
+    fingerprint (a local one) never counts as new on that account.
+
     A file that cannot be parsed is treated as absent and overwritten; a corrupt
     published document is not worth preserving.
     """
@@ -467,6 +481,7 @@ def write_results_document(document: dict, path: Path) -> tuple[dict, bool]:
             existing is not None
             and not attests
             and _measurement(existing) == _measurement(document)
+            and document.get("inputsFingerprint") in (None, existing.get("inputsFingerprint"))
         ):
             return existing, False
 

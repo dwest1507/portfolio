@@ -52,7 +52,7 @@ jobs:
         run: uv sync --frozen
         working-directory: backend
 
-      # The ONNX Arms download their models on first use. Same cache as backend-ci.yml's
+      # The ONNX Arms download their models on first use. Same cache as retrieval-eval.yml's
       # retrieval eval, so a run after one on the same lockfile downloads nothing.
       - name: Cache Hugging Face models
         uses: actions/cache@v6

@@ -57,3 +57,28 @@ table.
 - **Considered:** a personal access token (expires, bypasses every rule, and credits the
   owner with generated commits) and results pull requests (each publish would wait for an
   approval).
+
+## Amendment (2026-10-13)
+
+- **The retrieval eval runs from its own workflow and skips unchanged inputs** (#97). It
+  moved from `backend-ci.yml` to `retrieval-eval.yml`, whose path filter covers only what
+  can move a retrieval measurement. Its publish commit still touches only
+  `frontend/data/**` and `docs/evaluation.md`, outside that filter, so it still cannot
+  retrigger the job.
+- **The published run records an input fingerprint**, `inputsFingerprint`: a hash of the
+  Corpus and index files, retrieval code, harness, Golden Set, retrieval Floors record and
+  `backend/uv.lock` with the `backend` package's own version stripped
+  (`backend/eval/inputs.py`). A run whose inputs match it skips the measurement, gate and
+  publish both, and logs why. The release merge #95 cost 4m53s of measuring and published a
+  false result (#96); a version bump cannot move a metric.
+- **A changed fingerprint is published even when no number moved.** Otherwise the record
+  keeps a stale fingerprint, and every later run measures again until a number happens to
+  move. This adds a publish commit after an input change that measured the same numbers, an
+  exception to "the commit history records the runs where a number moved".
+- **Only a CI run records a fingerprint.** Skipping is safe only because the fingerprint
+  comes from a run that passed the gate, and on `main` CI publishes only after `--check`
+  passes in the same job. A local `--publish` gates nothing, so it records none, and a run
+  without a fingerprint never replaces one for that reason alone.
+- **Considered:** a path filter alone, which cannot tell a release-please version bump in
+  `uv.lock` from a dependency bump in the same file; and a skip condition in the workflow on
+  the commit author or message, which would also skip a release that carried a real change.

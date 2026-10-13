@@ -66,6 +66,10 @@ _Avoid_: Ground truth, gold label, answer key
 One execution of the harness over the Golden Set, carrying its metrics, the corpus it was measured against, and the commit it was measured at. A metric is only meaningful alongside the run that produced it.
 _Avoid_: Result, snapshot, benchmark
 
+**Input Fingerprint**:
+A hash of everything a retrieval Measured Run depends on: the Corpus and index files, the retrieval code, the harness, the Golden Set, the retrieval Floors record and the locked dependencies, minus the project's own version. Two runs with the same Input Fingerprint measure the same numbers, so a run whose fingerprint matches the published one is skipped rather than repeated. Distinct from a Floors record's fingerprint, which covers only the cases a Floor depends on.
+_Avoid_: Cache key, checksum
+
 **Latency Band**:
 The order-of-magnitude cost of answering a query with an Arm, published in place of a raw timing because raw timings vary between runs and machines. Only a change of band is a change in what was measured.
 _Avoid_: Latency, speed, response time, performance

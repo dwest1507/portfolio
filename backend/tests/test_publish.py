@@ -276,6 +276,44 @@ class TestResultsDocument:
         assert path.read_text(encoding="utf-8") == before
         assert document == json.loads(before)
 
+    def test_records_the_inputs_fingerprint_only_for_a_ci_run(self, monkeypatch):
+        """A run with matching inputs skips the gate, so only a gated CI run may record one."""
+        for var in ("GITHUB_SERVER_URL", "GITHUB_REPOSITORY", "GITHUB_RUN_ID"):
+            monkeypatch.delenv(var, raising=False)
+        assert _document(inputs_fingerprint="sha256:abc")["inputsFingerprint"] is None
+
+        monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+        monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+        monkeypatch.setenv("GITHUB_RUN_ID", "7")
+        assert _document(inputs_fingerprint="sha256:abc")["inputsFingerprint"] == "sha256:abc"
+
+    def test_new_inputs_are_published_even_when_nothing_moved(self, tmp_path):
+        """Otherwise the stale fingerprint makes every later run measure again."""
+        path = tmp_path / "evalResults.json"
+        first = _document()
+        first["runUrl"], first["inputsFingerprint"] = "https://example.test/run/1", "sha256:a"
+        write_results_document(first, path)
+
+        rerun = _document()
+        rerun["runUrl"], rerun["inputsFingerprint"] = "https://example.test/run/2", "sha256:b"
+        _, written = write_results_document(rerun, path)
+
+        assert written is True
+        assert json.loads(path.read_text(encoding="utf-8"))["inputsFingerprint"] == "sha256:b"
+
+    def test_a_local_run_never_replaces_a_ci_run_for_its_missing_fingerprint(self, tmp_path):
+        path = tmp_path / "evalResults.json"
+        from_ci = _document()
+        from_ci["runUrl"], from_ci["inputsFingerprint"] = "https://example.test/run/1", "sha256:a"
+        write_results_document(from_ci, path)
+
+        local = _document()
+        local["runUrl"], local["inputsFingerprint"] = None, None
+        _, written = write_results_document(local, path)
+
+        assert written is False
+        assert json.loads(path.read_text(encoding="utf-8"))["inputsFingerprint"] == "sha256:a"
+
     def test_a_ci_run_replaces_a_local_one_even_when_nothing_moved(self, tmp_path):
         """Otherwise a developer's local --publish freezes its own provenance forever.
 
