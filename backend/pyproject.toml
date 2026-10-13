@@ -24,20 +24,19 @@ dependencies = [
 ]
 
 [dependency-groups]
-# faiss-cpu and sentence-transformers are here, not above, because the only code that
-# reaches them is scripts/build_index.py and the evaluation harness. The Dockerfile
-# installs with --no-dev, so the production image carries neither them, nor the torch
-# and CUDA wheels sentence-transformers pulls in, nor the ~500MB of model weights it
-# downloads — 17.2GB of image down to 544MB. app/rag/pipeline.py imports both lazily so
-# the arms they implement stay measurable without returning to the serving path.
-# onnxruntime, tokenizers and huggingface-hub run the same models without torch for the
-# Candidate Arms (app/rag/onnx_models.py), and stay here until one is chosen to ship.
+# onnxruntime, tokenizers and huggingface-hub are here, not above, because the only code
+# that reaches them is scripts/build_index.py and the evaluation harness. They run the
+# embedding model and the cross-encoder for the Candidate Arms (app/rag/onnx_models.py)
+# without torch, and stay here until one of those Arms is chosen to ship. The Dockerfile
+# installs with --no-dev, so the production image carries neither them nor the model
+# weights they download. app/rag/pipeline.py imports them lazily so the arms they
+# implement stay measurable without returning to the serving path.
+# The torch-based Reference Arms, and the sentence-transformers and faiss-cpu they needed,
+# were retired once ONNX Runtime had reproduced them (ADR-0013).
 dev = [
-    "faiss-cpu>=1.15.1",
     "huggingface-hub>=1.28.0",
     "onnxruntime>=1.31.0",
     "ruff>=0.16.10",
-    "sentence-transformers>=6.1.0",
     "tokenizers>=0.22.2",
 ]
 

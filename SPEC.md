@@ -32,8 +32,10 @@ A modern portfolio website for David West, an AI Engineer with 5+ years of data 
 > **Superseded in part.** This document is the original specification and is kept as the
 > record of what was planned. The RAG design it describes — hybrid FAISS + BM25 search with
 > cross-encoder re-ranking — was built, then measured against plain BM25 by the evaluation
-> harness added later, and lost on every metric. Production retrieval is now BM25 alone; the
-> other configurations remain implemented and measured, but are not served. Where this
+> harness added later, and lost on every metric. Production retrieval is now BM25 alone;
+> semantic search, fusion and re-ranking remain implemented and measured on ONNX Runtime,
+> but are not served, and the FAISS and sentence-transformers versions were retired
+> (docs/adr/0013-torch-reference-arms-retired.md). Where this
 > document and [docs/evaluation.md](docs/evaluation.md) or
 > [docs/architecture.md](docs/architecture.md) disagree about the pipeline, those describe
 > what is running and this describes what was intended.
@@ -567,7 +569,7 @@ Deploys use the platforms' native git integrations — both Vercel and Railway w
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-access-log` (the Dockerfile's `CMD`; no access log, so a logged question cannot be matched to a client address — ADR-0010)
 - Python version: 3.14
 - Production deploy: Push to `main` (Railway git integration), gated on the `/api/health` healthcheck before the new container takes traffic
-- Pre-processing: Run `python scripts/build_index.py` locally before deploying to generate FAISS/BM25 indexes (committed, copied into the image)
+- Pre-processing: Run `python scripts/build_index.py` locally before deploying to generate the BM25 index and Corpus embeddings (committed, copied into the image)
 
 ---
 

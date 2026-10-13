@@ -42,7 +42,7 @@ analyses inside `security.yml`. Everything else is script-for-script identical.
 | `frontend-ci.yml` | PRs and pushes to `main` touching `frontend/**`; manual dispatch | `scripts/frontend-quality.sh` (ESLint, Prettier, tsc), `frontend-test.sh` (Vitest), `frontend-build.sh` |
 | `backend-ci.yml` | PRs and pushes to `main` touching `backend/**`; manual dispatch | `scripts/backend-lint.sh` (`uv lock --check`, ruff check + format), `backend-test.sh` (pytest, ML models mocked), `backend-eval.sh` (retrieval gate; publishes the held-out Measured Run on `main`) |
 | `generation-gate.yml` | PRs and pushes to `main` touching generation-relevant paths only (prompt and model config, retrieval code, indexes, Corpus sources, Golden Set, generation harness); manual dispatch | `scripts/backend-generation-gate.sh` — answers the Golden Set with the Shipped Arm, judges it, fails below the Faithfulness or Decline accuracy Floor in `backend/eval/floors/generation.json` (and fails first, before any paid call, with "Floors stale: Recalibrate" when that record no longer matches the Golden Set or the instrument); publishes the held-out results to `frontend/data/generationResults.json` on `main`. Paid: needs the `OPENAI_CI_API_KEY` and `JEV_CI_API_KEY` secrets |
-| `generation-comparison.yml` | Manual dispatch only | `scripts/backend-generation-comparison.sh` — answers the Golden Set on `dev` and `holdout` with every Candidate Arm (never a Reference Arm), judges it, and compares each Arm with the Shipped Arm by the sign test (ADR-0009). Uploads every judged run, `dev` included, as the `comparison-run` artifact; dispatched on `main`, publishes the held-out results as the `comparison` section of `frontend/data/generationResults.json`. Paid: same secrets as the generation gate |
+| `generation-comparison.yml` | Manual dispatch only | `scripts/backend-generation-comparison.sh` — answers the Golden Set on `dev` and `holdout` with every Candidate Arm (never a Reference Arm, should one be added), judges it, and compares each Arm with the Shipped Arm by the sign test (ADR-0009). Uploads every judged run, `dev` included, as the `comparison-run` artifact; dispatched on `main`, publishes the held-out results as the `comparison` section of `frontend/data/generationResults.json`. Paid: same secrets as the generation gate |
 | `security.yml` | PRs, pushes to `main`, weekly cron | CodeQL (TS + Python), gitleaks secret scan, `scripts/security-audit.sh` (npm audit prod/high+, pip-audit), dependency review on PRs |
 | `lighthouse.yml` | PRs touching `frontend/**` | `scripts/lighthouse.sh` — Lighthouse CI against the production build; asserts ≥ 0.9 on accessibility / best-practices / SEO (performance warns) per `frontend/lighthouserc.json` |
 | `release.yml` | Pushes to `main` | [Release Please](https://github.com/googleapis/release-please) — maintains the release PR, then tags and publishes the GitHub Release when it merges |
@@ -121,11 +121,12 @@ would install dependencies and download models at runtime. Build and deploy sett
 live in the dashboard; see [deployment.md](deployment.md#step-2--deploy-the-backend-railway):
 
 - `python:3.14-slim` + `uv sync --frozen --no-dev` from `uv.lock`
-- **No ML stack.** Retrieval is BM25, so the image carries neither `faiss-cpu` nor
-  `sentence-transformers` — they are in the `dev` group, which `--no-dev` skips. That took
-  the built image from 17.2GB to 544MB: 535MB of baked model weights, and far more than
-  that in `torch`'s CUDA wheels. See [evaluation.md](evaluation.md) for why the stages that
-  needed them were removed
+- **No ML stack.** Retrieval is BM25, so the image carries no ML runtime: `onnxruntime`,
+  `tokenizers` and `huggingface-hub` are in the `dev` group, which `--no-dev` skips.
+  Dropping the torch stack that used to be here took the built image from 17.2GB to
+  544MB: 535MB of baked model weights, and far more than that in `torch`'s CUDA wheels.
+  See [evaluation.md](evaluation.md) for why the stages that needed them were removed.
+  Since ADR-0013 the `dev` group carries no torch either, so CI never installs it
 - Indexes are copied from `backend/indexes/` (build them with `make build-index` and commit
   before deploying)
 - Runs as a non-root user; Railway health-checks `/api/health` with a 300s startup budget

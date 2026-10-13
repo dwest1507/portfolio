@@ -31,7 +31,7 @@ and none of them won, so they were removed from production. They are still imple
 | Project Content | MDX (`@next/mdx`) |
 | Backend Framework | Python FastAPI |
 | RAG Pipeline (served) | BM25 over a stemmed, stopword-filtered index. No model weights. |
-| RAG Pipeline (measured) | Also FAISS + sentence-transformers, weighted reciprocal-rank fusion, and cross-encoder re-ranking (Reference Arms), and the same models on ONNX Runtime (Candidate Arms) — eval-only, `dev` dependency group |
+| RAG Pipeline (measured) | Also semantic search, weighted reciprocal-rank fusion and cross-encoder re-ranking on ONNX Runtime (Candidate Arms) — eval-only, `dev` dependency group. The torch/FAISS Reference Arms were retired (ADR-0013) |
 | Retrieval Eval | 111 answerable golden questions split 68 dev / 43 held-out (plus 20 Out-of-Scope Cases the harness skips) across three query categories (`direct`, `paraphrase`, `conceptual`); hit@5 / recall@5 / MRR / nDCG@5, gated in CI on the shipped arm |
 | LLM API | OpenAI (`OPENAI_MODEL`, default `gpt-6-luna`) |
 | Streaming | Vercel AI SDK (`useChat` hook) |
@@ -96,7 +96,7 @@ backend/
 │       └── health.py              GET /api/health
 ├── scripts/build_index.py         Offline index builder
 ├── eval/                          Golden set, retrieval + generation harnesses, Judge, publishing, baselines
-└── indexes/                       BM25 model, chunks JSON, FAISS index (eval-only)
+└── indexes/                       BM25 model, chunks JSON, ONNX Corpus embeddings (eval-only)
 ```
 
 ## Data Flow: Chat Request
