@@ -1,9 +1,9 @@
 """The embedding model and the cross-encoder, run on ONNX Runtime instead of torch.
 
-The Candidate Arms (ADR-0009) use these. They are the same two models the torch-based
-Reference Arms load through sentence-transformers, exported to ONNX by their publishers,
-so a production image could serve either without torch: ONNX Runtime, a tokenizer and the
-weights, and nothing GPU-oriented.
+The Candidate Arms (ADR-0009) use these. They are the same two models the retired
+torch-based Reference Arms loaded through sentence-transformers (ADR-0013), exported to
+ONNX by their publishers, so a production image could serve either without torch: ONNX
+Runtime, a tokenizer and the weights, and nothing GPU-oriented.
 
 Nothing here is on the serving path yet. onnxruntime, tokenizers and huggingface_hub are
 in the `dev` dependency group until an Arm built on them is chosen to ship, so each is

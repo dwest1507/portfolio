@@ -63,25 +63,6 @@ class TestArmRegistry:
         harness cannot run, which surfaces only when someone selects it."""
         assert set(retrievers_for_arms(MagicMock(), top_k=5)) == set(ARMS)
 
-    def test_bm25_rerank_skips_the_dense_stage_entirely(self):
-        """The arm that decided #23. If it ever routes through hybrid_search it is
-        measuring the thing it exists to be the control for."""
-        pipeline = MagicMock()
-        pipeline.sparse_search.return_value = [3, 1, 2]
-        pipeline.rerank.return_value = [1, 3]
-
-        assert retrievers_for_arms(pipeline, top_k=5)["bm25+rerank"]("q") == [1, 3]
-        pipeline.sparse_search.assert_called_once_with("q", top_k=10)
-        pipeline.dense_search.assert_not_called()
-        pipeline.hybrid_search.assert_not_called()
-
-    def test_reranking_arms_hand_the_cross_encoder_twice_the_cutoff(self):
-        """Re-ranking five candidates into five slots can only reorder, never rescue, so
-        a re-ranking arm has to be handed more candidates than it returns."""
-        pipeline = MagicMock()
-        retrievers_for_arms(pipeline, top_k=5)["rerank"]("q")
-        pipeline.hybrid_search.assert_called_once_with("q", top_k=10)
-
     def test_the_rerank_over_20_arm_hands_the_onnx_cross_encoder_20_candidates(self):
         """A pool of 2×k can only recover the top 10; this Arm exists to recover more."""
         pipeline = MagicMock()
@@ -92,7 +73,8 @@ class TestArmRegistry:
         assert retrievers_for_arms(pipeline, top_k=5)["bm25+onnx-rerank-20"]("q") == [7, 3]
         pipeline.sparse_search.assert_called_once_with("q", top_k=20)
         pipeline.onnx_rerank.assert_called_once_with("q", candidates, top_k=5)
-        pipeline.rerank.assert_not_called()
+        pipeline.onnx_dense_search.assert_not_called()
+        pipeline.onnx_hybrid_search.assert_not_called()
 
     def test_the_rerank_over_20_pool_does_not_follow_the_cutoff(self):
         """20 is the Arm's definition, not a multiple of k: a changed pool is a new Arm."""
@@ -104,21 +86,24 @@ class TestArmRegistry:
         ("arm", "method"),
         [("onnx-dense", "onnx_dense_search"), ("onnx-hybrid", "onnx_hybrid_search")],
     )
-    def test_the_onnx_arms_retrieve_without_touching_torch(self, arm, method):
+    def test_the_dense_arms_retrieve_at_the_cutoff(self, arm, method):
         pipeline = MagicMock()
         getattr(pipeline, method).return_value = [4, 2]
 
         assert retrievers_for_arms(pipeline, top_k=5)[arm]("q") == [4, 2]
         getattr(pipeline, method).assert_called_once_with("q", top_k=5)
-        pipeline.dense_search.assert_not_called()
-        pipeline.hybrid_search.assert_not_called()
 
-    def test_a_candidate_arm_loads_no_torch_model(self):
-        """What makes an Arm a Candidate (ADR-0009): nothing it loads needs torch."""
-        torch_models = {"embedder", "cross_encoder", "faiss_index"}
+    def test_every_arm_is_a_candidate_arm(self):
+        """The torch-based Reference Arms were retired (ADR-0013); what remains could ship."""
+        assert {ARM_SPEC_BY_ID[arm].eligibility for arm in ARMS} == {"candidate"}
+
+    def test_every_arm_loads_only_what_the_pipeline_provides(self):
+        """A load naming an attribute the pipeline lacks fails only when timed; catch it here."""
+        from app.rag.pipeline import RAGPipeline
+
         for arm in ARMS:
-            if ARM_SPEC_BY_ID[arm].eligibility == "candidate":
-                assert not torch_models & set(_ARM_LOADS[arm]), arm
+            for attribute in _ARM_LOADS[arm]:
+                assert isinstance(getattr(RAGPipeline, attribute), property), (arm, attribute)
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +156,7 @@ class TestGate:
 
     def test_a_run_that_gates_nothing_fails(self, capsys):
         """An ungated arm on its own is not a passing build; it is no build at all."""
-        assert _gate([_result("dense")]) == 1
+        assert _gate([_result("onnx-dense")]) == 1
         out = capsys.readouterr().out
         assert "NOT GATED" in out and "gated nothing" in out
 
@@ -513,7 +498,10 @@ class TestLatencyTable:
         table = format_latency_table(
             [
                 {"arm": "bm25", "latency": {"p50": 0.000_13, "p95": 0.000_21, "load": 0.0019}},
-                {"arm": "bm25+rerank", "latency": {"p50": 0.0287, "p95": 0.0304, "load": 4.15}},
+                {
+                    "arm": "bm25+onnx-rerank-20",
+                    "latency": {"p50": 0.0287, "p95": 0.0304, "load": 4.15},
+                },
             ]
         )
         lines = table.splitlines()
@@ -538,8 +526,8 @@ class TestLatencyTable:
             "~1ms",
             "~1ms",
         ]
-        assert next(line for line in lines if line.startswith("bm25+rerank")).split() == [
-            "bm25+rerank",
+        assert next(line for line in lines if line.startswith("bm25+onnx-rerank-20")).split() == [
+            "bm25+onnx-rerank-20",
             "28.70",
             "30.40",
             "4.150",
@@ -552,9 +540,6 @@ class _LazyPipeline:
     """Loads cost what a real pipeline's do: construction is cheap, each model is not."""
 
     COSTS: ClassVar[dict[str, float]] = {
-        "faiss_index": 0.1,
-        "embedder": 2.0,
-        "cross_encoder": 3.0,
         "onnx_embeddings": 0.01,
         "onnx_embedder": 1.0,
         "onnx_cross_encoder": 0.5,
@@ -576,10 +561,6 @@ class TestLoadTime:
         ("arm", "seconds"),
         [
             ("bm25", 0.002),
-            ("dense", 2.102),
-            ("hybrid", 2.102),
-            ("rerank", 5.102),
-            ("bm25+rerank", 3.002),
             ("onnx-dense", 1.012),
             ("onnx-hybrid", 1.012),
             ("bm25+onnx-rerank-20", 0.502),

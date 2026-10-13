@@ -11,6 +11,7 @@ import json
 
 import pytest
 
+from eval.publish import ARM_SPEC_BY_ID, REFERENCE, Arm
 from eval.publish_generation import (
     SCHEMA_VERSION,
     build_comparison_section,
@@ -336,9 +337,22 @@ class TestComparisonSection:
         assert rows["bm25"]["metrics"]["faithfulness"] == 0.9
         assert rows["bm25"]["costPerAnswerUsd"] == 0.0002
 
-    def test_refuses_a_reference_arm(self):
-        """Reference Arms are never run through generation, so never published (story 55)."""
-        with pytest.raises(ValueError, match="rerank"):
+    def test_refuses_a_reference_arm(self, monkeypatch):
+        """Reference Arms are never run through generation, so never published (story 55).
+        None is measured at present (ADR-0013), so the test registers one."""
+        ceiling = Arm(
+            id="ceiling",
+            label="Quality ceiling",
+            description="An Arm too heavy to ship, kept to show what is possible.",
+            technical="A stand-in for a deliberately added Reference Arm.",
+            eligibility=REFERENCE,
+        )
+        monkeypatch.setitem(ARM_SPEC_BY_ID, ceiling.id, ceiling)
+        with pytest.raises(ValueError, match="Reference Arm.*ceiling"):
+            _comparison({**_candidate_runs(), "ceiling": _run()})
+
+    def test_refuses_an_arm_missing_from_the_registry(self):
+        with pytest.raises(ValueError, match="rerank.*ARM_SPECS"):
             _comparison({**_candidate_runs(), "rerank": _run()})
 
     def test_refuses_a_run_without_the_shipped_arm(self):

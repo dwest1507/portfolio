@@ -101,8 +101,8 @@ jobs:
         run: uv sync --frozen
         working-directory: backend
 
-      # The embedding + cross-encoder weights, torch and ONNX, are ~1GB. Cache them so only the
-      # first run on a given lockfile pays the download.
+      # The ONNX embedding + cross-encoder weights. Cache them so only the first run on a
+      # given lockfile pays the download.
       - name: Cache Hugging Face models
         uses: actions/cache@v6
         with:
