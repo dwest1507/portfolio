@@ -1,12 +1,12 @@
 uvicorn[standard]>=0.54.0
-fastapi>=0.142.2
+fastapi>=0.143.3
 python-dotenv>=1.2.4
-pydantic>=2.13.5
-pydantic-settings>=2.0.0
+pydantic>=2.14.1
+pydantic-settings>=2.16.0
 groq>=1.7.0
 rank-bm25>=0.2.2
 snowballstemmer>=3.1.1
-numpy>=2.5.3
+numpy>=2.5.4
 slowapi>=0.1.9
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
@@ -17,5 +17,5 @@ httpx>=0.27.0
 # `uv sync --no-dev` leaves them out of the production image. Listed here so Dependabot
 # still watches them.
 onnxruntime>=1.31.0
-tokenizers>=0.22.2
-huggingface-hub>=1.28.0
+tokenizers>=0.23.3
+huggingface-hub>=2.2.0
