@@ -55,7 +55,7 @@ REPO_ROOT = BACKEND_ROOT.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
 from eval.publish import (  # (needs the sys.path line above)
-    ARM_SPEC_BY_ID,
+    ARM_SPECS,
     build_results_document,
     latency_band,
     published_latency_bands,
@@ -75,7 +75,7 @@ GOLDEN_SET_PATH = Path(__file__).resolve().parent / "golden_set.json"
 
 # Every arm the harness can run, in publication order. Derived from the specs so an arm
 # is added or retired in one place.
-ARMS: tuple[str, ...] = tuple(ARM_SPEC_BY_ID)
+ARMS: tuple[str, ...] = tuple(a.id for a in ARM_SPECS)
 
 # Where a published run lands. Both are committed by CI; see
 # docs/adr/0001-generated-eval-results.md.
