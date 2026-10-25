@@ -127,8 +127,6 @@ ARM_SPECS: tuple[Arm, ...] = (
     ),
 )
 
-ARMS: tuple[str, ...] = tuple(a.id for a in ARM_SPECS)
-
 ARM_SPEC_BY_ID: dict[str, Arm] = {a.id: a for a in ARM_SPECS}
 
 

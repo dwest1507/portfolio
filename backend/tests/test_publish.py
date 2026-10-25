@@ -14,7 +14,6 @@ import pytest
 from eval.publish import (
     ARM_SPEC_BY_ID,
     ARM_SPECS,
-    ARMS,
     BAND_HYSTERESIS,
     BEGIN_MARKER,
     END_MARKER,
@@ -130,9 +129,6 @@ class TestArmSpecs:
         for arm in ARM_SPECS:
             assert arm.description and arm.technical
             assert arm.description != arm.technical
-
-    def test_arms_tuple_is_derived_from_the_specs(self):
-        assert ARMS == tuple(ARM_SPEC_BY_ID)
 
     def test_every_arm_is_a_candidate_or_a_reference(self):
         assert {a.eligibility for a in ARM_SPECS} <= {"candidate", "reference"}
