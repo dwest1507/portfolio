@@ -21,6 +21,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
 from run_eval import (
     _ARM_LOADS,
+    ARMS,
     GATED_SPLIT,
     GOLDEN_SET_PATH,
     PUBLISHED_SPLIT,
@@ -37,7 +38,7 @@ from run_eval import (
     select_cases,
 )
 
-from eval.publish import ARM_SPEC_BY_ID, ARMS, shipped_arm_id
+from eval.publish import ARM_SPEC_BY_ID, shipped_arm_id
 from eval.recalibration import retrieval_fingerprint
 
 GOLDEN = json.loads(GOLDEN_SET_PATH.read_text(encoding="utf-8"))
