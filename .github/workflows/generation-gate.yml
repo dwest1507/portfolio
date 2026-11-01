@@ -110,7 +110,7 @@ jobs:
       # Every answer, judgment and Contradiction, to review what the gate measured.
       - name: Upload the judged run
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: generation-run
           path: ${{ runner.temp }}/generation-run.json
