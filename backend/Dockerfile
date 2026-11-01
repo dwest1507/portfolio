@@ -9,7 +9,7 @@
 # here, the ML runtime wheels, the Hugging Face cache directory, and the model-loading step
 # from container start.
 
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 # uv for fast, reproducible installs from uv.lock
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
